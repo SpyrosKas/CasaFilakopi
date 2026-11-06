@@ -1,5 +1,5 @@
 import type { Tables } from "@/lib/db/types";
-import type { Cents, IsoDate, PromoRejection } from "./contracts";
+import type { Cents, IsoDate } from "./contracts";
 import { basisPointsOf } from "./money";
 
 export type PromoRow = Pick<
@@ -21,6 +21,15 @@ export type PromoRow = Pick<
  * guests are always discounted; taxes and fees never are.
  */
 export const PROMO_DISCOUNTS_CLEANING = true;
+
+/** For Admin and server logs. Guests only ever see that a code failed. */
+export type PromoRejection =
+  | "not_found"
+  | "inactive"
+  | "not_yet_valid"
+  | "expired"
+  | "room_not_eligible"
+  | "exhausted";
 
 export type PromoCheck =
   { ok: true; promo: PromoRow } | { ok: false; reason: PromoRejection };

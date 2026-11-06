@@ -51,14 +51,6 @@ export interface PriceLine {
   totalCents: Cents;
 }
 
-export type PromoRejection =
-  | "not_found"
-  | "inactive"
-  | "not_yet_valid"
-  | "expired"
-  | "room_not_eligible"
-  | "exhausted";
-
 /** Stored in bookings.price_breakdown. All amounts are whole cents. */
 export interface PriceBreakdown {
   currency: "EUR";
@@ -70,12 +62,13 @@ export interface PriceBreakdown {
   balanceDueOn: IsoDate | null;
   promoCode: string | null;
   /** Set when the guest typed a code that could not be applied. */
-  promoRejection?: PromoRejection;
+  promoRejected?: true;
 }
 
 // Rules Yorgos edits in Admin (D6). Copied onto each booking.
 
-export type PaymentMode = "full" | "deposit" | "on_arrival";
+/** A balanceDaysBefore of 0 means the balance is paid on arrival. */
+export type PaymentMode = "full" | "deposit";
 
 export type DepositRule =
   { kind: "percent"; percent: number } | { kind: "fixed"; amountCents: Cents };
@@ -127,6 +120,8 @@ export interface PricingService {
 export interface CancellationOutcome {
   refundCents: Cents;
   retainedCents: Cents;
+  /** The part of the cancellation charge not covered by what was paid. */
+  stillOwedCents: Cents;
   appliedTier: CancellationTier | null;
 }
 
@@ -135,8 +130,18 @@ export type CalculateRefund = (input: {
   rules: CancellationRules;
   checkIn: IsoDate;
   cancelledOn: IsoDate;
+  /** The booking's total. Tiers are a percentage of this. */
+  totalCents: Cents;
+  /** Paid so far, net of earlier refunds. */
   paidCents: Cents;
 }) => CancellationOutcome;
+
+// Checkout (Track ENGINE, prepareCheckout).
+
+export type CheckoutRejection = StayRejection | "promo_unavailable";
+
+/** Passed to confirm_booking as p_kind. */
+export type CheckoutPaymentKind = "full" | "deposit";
 
 // Database operations (supabase/migrations/20261107000005_rpc.sql).
 

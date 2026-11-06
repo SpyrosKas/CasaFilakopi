@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildPriceBreakdown, splitPayment } from "@/lib/domain";
+import { buildPriceBreakdown, paymentKindOf, splitPayment } from "@/lib/domain";
 import type { PaymentRules } from "@/lib/domain/contracts";
 import { breakdownInput, DEPOSIT_30, FULL, stay } from "./fixtures";
 
 const CHECK_IN = "2027-07-15";
+// With DEPOSIT_30 the balance falls due on 1 July, 14 days before.
 const split = (
   rules: PaymentRules,
   totalCents = 100000,
@@ -15,13 +16,11 @@ const fixedDeposit = (amountCents: number): PaymentRules => ({
   deposit: { kind: "fixed", amountCents },
 });
 
+const IN_FULL = { dueNowCents: 100000, balanceCents: 0, balanceDueOn: null };
+
 describe("full payment", () => {
   it("takes everything now", () => {
-    expect(split(FULL)).toEqual({
-      dueNowCents: 100000,
-      balanceCents: 0,
-      balanceDueOn: null,
-    });
+    expect(split(FULL)).toEqual(IN_FULL);
   });
 });
 
@@ -53,48 +52,26 @@ describe("deposit", () => {
   });
 
   it("caps a fixed deposit at the total, leaving no balance", () => {
-    expect(split(fixedDeposit(250000))).toEqual({
-      dueNowCents: 100000,
-      balanceCents: 0,
-      balanceDueOn: null,
-    });
+    expect(split(fixedDeposit(250000))).toEqual(IN_FULL);
   });
 
-  it("clears the due date when a 100% deposit leaves no balance", () => {
-    const rules: PaymentRules = {
-      ...DEPOSIT_30,
-      deposit: { kind: "percent", percent: 100 },
-    };
-    expect(split(rules)).toEqual({
-      dueNowCents: 100000,
-      balanceCents: 0,
-      balanceDueOn: null,
-    });
-  });
-
-  it("keeps the split when the balance falls due tomorrow", () => {
-    expect(split(DEPOSIT_30, 100000, "2027-06-30")).toMatchObject({
+  it("keeps the split the day before the balance falls due", () => {
+    expect(split(DEPOSIT_30, 100000, "2027-06-30")).toEqual({
       dueNowCents: 30000,
+      balanceCents: 70000,
       balanceDueOn: "2027-07-01",
     });
   });
 
-  it("keeps the split when the balance falls due today", () => {
-    expect(split(DEPOSIT_30, 100000, "2027-07-01")).toMatchObject({
-      dueNowCents: 30000,
-      balanceDueOn: "2027-07-01",
-    });
+  it("takes everything when booking on the due date", () => {
+    expect(split(DEPOSIT_30, 100000, "2027-07-01")).toEqual(IN_FULL);
   });
 
-  it("takes everything now once the due date has passed", () => {
-    expect(split(DEPOSIT_30, 100000, "2027-07-02")).toEqual({
-      dueNowCents: 100000,
-      balanceCents: 0,
-      balanceDueOn: null,
-    });
+  it("takes everything when booking after the due date", () => {
+    expect(split(DEPOSIT_30, 100000, "2027-07-02")).toEqual(IN_FULL);
   });
 
-  it("does not need a deposit rule once the due date has passed", () => {
+  it("does not need a deposit rule once the due date has come", () => {
     expect(
       splitPayment({
         totalCents: 1000,
@@ -125,28 +102,28 @@ describe("deposit", () => {
   });
 });
 
-describe("on arrival", () => {
-  const rules: PaymentRules = { ...FULL, mode: "on_arrival" };
+describe("a balance paid on arrival", () => {
+  const onArrival: PaymentRules = { ...DEPOSIT_30, balanceDaysBefore: 0 };
 
-  it("takes nothing now, with the balance due at check-in", () => {
-    expect(split(rules)).toEqual({
-      dueNowCents: 0,
-      balanceCents: 100000,
+  it("falls due on the check-in date", () => {
+    expect(split(onArrival)).toEqual({
+      dueNowCents: 30000,
+      balanceCents: 70000,
       balanceDueOn: CHECK_IN,
     });
   });
 
-  it("ignores a stored deposit rule", () => {
-    expect(split({ ...DEPOSIT_30, mode: "on_arrival" }).dueNowCents).toBe(0);
+  it("holds the day before arrival", () => {
+    expect(split(onArrival, 100000, "2027-07-14").dueNowCents).toBe(30000);
   });
 
-  it("holds on the day of arrival", () => {
-    expect(split(rules, 1000, CHECK_IN).dueNowCents).toBe(0);
+  it("does not hold for a same-day booking, which pays in full", () => {
+    expect(split(onArrival, 100000, CHECK_IN)).toEqual(IN_FULL);
   });
 });
 
 describe("a free stay", () => {
-  it("owes nothing in any mode", () => {
+  it("owes nothing", () => {
     expect(split(DEPOSIT_30, 0)).toEqual({
       dueNowCents: 0,
       balanceCents: 0,
@@ -155,12 +132,28 @@ describe("a free stay", () => {
   });
 });
 
+describe("paymentKindOf", () => {
+  it("is deposit only while a balance remains", () => {
+    expect(paymentKindOf(split(DEPOSIT_30))).toBe("deposit");
+    expect(paymentKindOf(split(FULL))).toBe("full");
+  });
+
+  it("is full in deposit mode once everything is due now", () => {
+    expect(paymentKindOf(split(DEPOSIT_30, 100000, "2027-07-01"))).toBe("full");
+    expect(paymentKindOf(split(fixedDeposit(250000)))).toBe("full");
+  });
+
+  it("is full for a free stay", () => {
+    expect(paymentKindOf(split(DEPOSIT_30, 0))).toBe("full");
+  });
+});
+
 describe("in the breakdown", () => {
-  it("uses the Athens date to decide the due date has passed", () => {
-    // Balance due 2027-06-01. Late on 1 June UTC it is already 2 June in Athens.
+  it("uses the Athens date to decide the due date has come", () => {
+    // Balance due 2 June. Late on 1 June UTC it is already 2 June in Athens.
     const input = (now: Date) =>
       breakdownInput({
-        stay: stay({ checkIn: "2027-06-15", checkOut: "2027-06-17" }),
+        stay: stay({ checkIn: "2027-06-16", checkOut: "2027-06-18" }),
         payment: DEPOSIT_30,
         now,
       });
@@ -168,8 +161,8 @@ describe("in the breakdown", () => {
     const after = buildPriceBreakdown(input(new Date("2027-06-01T21:00:00Z")));
 
     expect(before.dueNowCents).toBe(8400);
-    expect(before.balanceDueOn).toBe("2027-06-01");
-    expect(after.dueNowCents).toBe(after.totalCents);
+    expect(before.balanceDueOn).toBe("2027-06-02");
+    expect(after.dueNowCents).toBe(28000);
     expect(after.balanceDueOn).toBeNull();
   });
 });

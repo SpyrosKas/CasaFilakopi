@@ -87,7 +87,19 @@ export function effectiveRestrictions(
   };
 }
 
-const isHeadcount = (value: number) => Number.isInteger(value) && value >= 0;
+type RoomLimits = Pick<RoomCapacity, "max_adults" | "max_children">;
+
+/** Capacity has a floor too: a stay needs at least one adult. */
+export function fitsRoom(stay: StayRequest, room: RoomLimits): boolean {
+  return (
+    Number.isInteger(stay.adults) &&
+    Number.isInteger(stay.children) &&
+    stay.adults >= 1 &&
+    stay.children >= 0 &&
+    stay.adults <= room.max_adults &&
+    stay.children <= room.max_children
+  );
+}
 
 /** Well-formed dates in the right order. Says nothing about today. */
 export function hasValidDates(stay: StayRequest): boolean {
@@ -149,16 +161,7 @@ export function checkStayRules({
   if (stay.checkIn < today) return reject("invalid_dates");
   if (!room?.is_active) return reject("room_inactive");
 
-  // Capacity has a floor too: a stay needs at least one adult.
-  if (
-    !isHeadcount(stay.adults) ||
-    !isHeadcount(stay.children) ||
-    stay.adults < 1 ||
-    stay.adults > room.max_adults ||
-    stay.children > room.max_children
-  ) {
-    return reject("over_capacity");
-  }
+  if (!fitsRoom(stay, room)) return reject("over_capacity");
 
   if (!meetsLeadTime(stay.checkIn, today, now, booking)) {
     return reject("lead_time_not_met");

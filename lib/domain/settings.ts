@@ -7,8 +7,22 @@ import type { CancellationTier, PaymentRules } from "./contracts";
 /** Friday and Saturday nights. 0 is Sunday. */
 export const DEFAULT_WEEKEND_DAYS = [5, 6];
 
+/** Used when the payment setting, or any key in it, is missing (D6). */
+export const DEFAULT_PAYMENT_RULES: PaymentRules = {
+  mode: "full",
+  deposit: null,
+  balanceDaysBefore: 0,
+};
+
+/** Money rounds on basis points, so a finer percentage could not be honoured. */
+const hasTwoDecimalsAtMost = (value: number) =>
+  Math.abs(value * 100 - Math.round(value * 100)) < 1e-9;
+
+const twoDecimals = { message: "At most two decimals" };
+
 const bookingSettingsSchema = z.object({
-  holdMinutes: z.number().int().positive(),
+  /** create_hold refuses less, as a Checkout Session lives 30 minutes. */
+  holdMinutes: z.number().int().min(31),
   checkoutSessionMinutes: z.number().int().positive(),
   /** Same-day arrival is refused from this hour on, Athens time. */
   sameDayCutoffHour: z.number().int().min(0).max(24),
@@ -26,7 +40,7 @@ export type BookingSettings = z.output<typeof bookingSettingsSchema>;
 const depositSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("percent"),
-    percent: z.number().gt(0).max(100),
+    percent: z.number().gt(0).lt(100).refine(hasTwoDecimalsAtMost, twoDecimals),
   }),
   z.object({
     kind: z.literal("fixed"),
@@ -36,27 +50,51 @@ const depositSchema = z.discriminatedUnion("kind", [
 
 const paymentRulesSchema = z
   .object({
-    mode: z.enum(["full", "deposit", "on_arrival"]),
-    deposit: depositSchema.nullable().default(null),
-    balanceDaysBefore: z.number().int().min(0),
+    mode: z.enum(["full", "deposit"]).default(DEFAULT_PAYMENT_RULES.mode),
+    deposit: depositSchema.nullable().default(DEFAULT_PAYMENT_RULES.deposit),
+    balanceDaysBefore: z
+      .number()
+      .int()
+      .min(0)
+      .default(DEFAULT_PAYMENT_RULES.balanceDaysBefore),
   })
   .refine((rules) => rules.mode !== "deposit" || rules.deposit !== null, {
     message: "Deposit mode needs a deposit rule",
   });
 
-const tiersSchema = z.array(
-  z.object({
-    daysBefore: z.number().int(),
-    refundPercent: z.number().min(0).max(100),
-  }),
-);
+const byDaysDescending = (tiers: CancellationTier[]) =>
+  [...tiers].sort((a, b) => b.daysBefore - a.daysBefore);
+
+const tiersSchema = z
+  .array(
+    z.object({
+      daysBefore: z.number().int().min(0),
+      refundPercent: z
+        .number()
+        .min(0)
+        .max(100)
+        .refine(hasTwoDecimalsAtMost, twoDecimals),
+    }),
+  )
+  .refine(
+    (tiers) => new Set(tiers.map((t) => t.daysBefore)).size === tiers.length,
+    { message: "Two tiers share the same days before check-in" },
+  )
+  .refine(
+    (tiers) =>
+      byDaysDescending(tiers).every(
+        (tier, i, sorted) =>
+          i === 0 || tier.refundPercent <= sorted[i - 1].refundPercent,
+      ),
+    { message: "A tier closer to check-in cannot refund more" },
+  );
 
 export function parseBookingSettings(value: unknown): BookingSettings {
   return bookingSettingsSchema.parse(value);
 }
 
 export function parsePaymentRules(value: unknown): PaymentRules {
-  return paymentRulesSchema.parse(value);
+  return paymentRulesSchema.parse(value ?? {});
 }
 
 export function parseCancellationTiers(value: unknown): CancellationTier[] {

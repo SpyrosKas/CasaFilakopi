@@ -18,21 +18,24 @@ const RULES: CancellationRules = {
 };
 
 const CHECK_IN = "2027-07-15";
+const TOTAL = 100000;
 
 const refund = (
   daysBefore: number,
-  paidCents = 100000,
+  paidCents = TOTAL,
   rules: CancellationRules = RULES,
   checkIn = CHECK_IN,
+  totalCents = TOTAL,
 ) =>
   calculateRefund({
     rules,
     checkIn,
     cancelledOn: addDays(checkIn, -daysBefore),
+    totalCents,
     paidCents,
   });
 
-describe("tier boundaries", () => {
+describe("tier boundaries, paid in full", () => {
   it.each([
     [31, 100000, TIER_30],
     [30, 100000, TIER_30],
@@ -45,64 +48,160 @@ describe("tier boundaries", () => {
   ])("%i days before refunds %i", (days, refundCents, appliedTier) => {
     expect(refund(days)).toEqual({
       refundCents,
-      retainedCents: 100000 - refundCents,
+      retainedCents: TOTAL - refundCents,
+      stillOwedCents: 0,
       appliedTier,
     });
   });
 
   it("does not depend on tier order", () => {
     const rules = { ...RULES, tiers: [TIER_0, TIER_30, TIER_14] };
-    expect(refund(14, 100000, rules).appliedTier).toEqual(TIER_14);
-    expect(refund(30, 100000, rules).appliedTier).toEqual(TIER_30);
+    expect(refund(14, TOTAL, rules).appliedTier).toEqual(TIER_14);
+    expect(refund(30, TOTAL, rules).appliedTier).toEqual(TIER_30);
   });
 
   it("refunds nothing after check-in", () => {
     expect(refund(-1)).toEqual({
       refundCents: 0,
-      retainedCents: 100000,
+      retainedCents: TOTAL,
+      stillOwedCents: 0,
       appliedTier: null,
     });
   });
 
   it("refunds nothing when no tier reaches that close to check-in", () => {
     const rules = { ...RULES, tiers: [TIER_30] };
-    expect(refund(29, 100000, rules)).toEqual({
+    expect(refund(29, TOTAL, rules)).toEqual({
       refundCents: 0,
-      retainedCents: 100000,
+      retainedCents: TOTAL,
+      stillOwedCents: 0,
       appliedTier: null,
     });
   });
 
   it("refunds nothing with no tiers", () => {
-    expect(refund(90, 100000, { ...RULES, tiers: [] }).refundCents).toBe(0);
+    expect(refund(90, TOTAL, { ...RULES, tiers: [] }).refundCents).toBe(0);
   });
 });
 
-describe("the seed policy", () => {
-  const seed: CancellationRules = {
-    isNonRefundable: false,
-    tiers: [TIER_30, TIER_0],
-  };
+describe("tiers are a percentage of the booking, not of what was paid", () => {
+  it("50% tier with a 30% deposit paid: nothing back, 200.00 still owed", () => {
+    expect(refund(14, 30000)).toEqual({
+      refundCents: 0,
+      retainedCents: 30000,
+      stillOwedCents: 20000,
+      appliedTier: TIER_14,
+    });
+  });
 
-  it("is free until 30 days out, then nothing", () => {
-    expect(refund(30, 5000, seed).refundCents).toBe(5000);
-    expect(refund(29, 5000, seed).refundCents).toBe(0);
+  it("50% tier paid in full: half back", () => {
+    expect(refund(14, TOTAL)).toMatchObject({
+      refundCents: 50000,
+      retainedCents: 50000,
+      stillOwedCents: 0,
+    });
+  });
+
+  it("50% tier with exactly the charge paid: nothing either way", () => {
+    expect(refund(14, 50000)).toMatchObject({
+      refundCents: 0,
+      retainedCents: 50000,
+      stillOwedCents: 0,
+    });
+  });
+
+  it("50% tier with more than the charge paid: the excess back", () => {
+    expect(refund(14, 70000)).toMatchObject({
+      refundCents: 20000,
+      retainedCents: 50000,
+      stillOwedCents: 0,
+    });
+  });
+
+  it("100% tier returns a part payment in full", () => {
+    expect(refund(30, 30000)).toEqual({
+      refundCents: 30000,
+      retainedCents: 0,
+      stillOwedCents: 0,
+      appliedTier: TIER_30,
+    });
+  });
+
+  it("0% tier charges the whole booking", () => {
+    expect(refund(5, 30000)).toEqual({
+      refundCents: 0,
+      retainedCents: 30000,
+      stillOwedCents: 70000,
+      appliedTier: TIER_0,
+    });
+  });
+
+  it("nothing paid leaves the whole charge owed", () => {
+    expect(refund(14, 0)).toMatchObject({
+      refundCents: 0,
+      retainedCents: 0,
+      stillOwedCents: 50000,
+    });
+  });
+
+  it("the seed policy: free to 30 days, then the whole booking", () => {
+    const seed = { isNonRefundable: false, tiers: [TIER_30, TIER_0] };
+    expect(refund(30, 30000, seed).refundCents).toBe(30000);
+    expect(refund(29, 30000, seed)).toMatchObject({
+      refundCents: 0,
+      stillOwedCents: 70000,
+    });
   });
 });
 
 describe("non-refundable", () => {
-  it("refunds nothing, however early", () => {
-    expect(refund(365, 100000, { ...RULES, isNonRefundable: true })).toEqual({
+  const rules = { ...RULES, isNonRefundable: true };
+
+  it("charges the whole booking, however early", () => {
+    expect(refund(365, TOTAL, rules)).toEqual({
       refundCents: 0,
-      retainedCents: 100000,
+      retainedCents: TOTAL,
+      stillOwedCents: 0,
+      appliedTier: null,
+    });
+  });
+
+  it("leaves the rest owed on a part payment", () => {
+    expect(refund(365, 30000, rules)).toEqual({
+      refundCents: 0,
+      retainedCents: 30000,
+      stillOwedCents: 70000,
       appliedTier: null,
     });
   });
 });
 
+describe("repeating the calculation", () => {
+  it.each([
+    ["paid in full", 14, TOTAL],
+    ["overpaid", 14, 70000],
+    ["full refund tier", 30, 30000],
+  ])("refunds nothing the second time: %s", (_, days, paid) => {
+    const first = refund(days, paid);
+    expect(first.refundCents).toBeGreaterThan(0);
+
+    const second = refund(days, paid - first.refundCents);
+    expect(second).toMatchObject({
+      refundCents: 0,
+      retainedCents: first.retainedCents,
+      stillOwedCents: 0,
+    });
+  });
+
+  it("does not change what is owed when nothing was refunded", () => {
+    expect(refund(14, 30000)).toEqual(refund(14, 30000));
+  });
+});
+
 describe("amounts", () => {
-  it("rounds half up, and retained is the remainder", () => {
-    expect(refund(14, 1005)).toMatchObject({
+  it("rounds the refundable share half up, in the guest's favour", () => {
+    // 50% of 10.05 is 5.03 refundable, so the charge is 5.02.
+    expect(refund(14, 1005, RULES, CHECK_IN, 1005)).toMatchObject({
       refundCents: 503,
       retainedCents: 502,
     });
@@ -113,7 +212,7 @@ describe("amounts", () => {
       ...RULES,
       tiers: [{ daysBefore: 0, refundPercent: 33.33 }],
     };
-    expect(refund(5, 100000, rules).refundCents).toBe(33330);
+    expect(refund(5, TOTAL, rules).refundCents).toBe(33330);
   });
 
   it("never refunds more than was paid, even with a corrupt tier", () => {
@@ -121,9 +220,10 @@ describe("amounts", () => {
       ...RULES,
       tiers: [{ daysBefore: 0, refundPercent: 150 }],
     };
-    expect(refund(5, 100000, rules)).toMatchObject({
-      refundCents: 100000,
+    expect(refund(5, 30000, rules)).toMatchObject({
+      refundCents: 30000,
       retainedCents: 0,
+      stillOwedCents: 0,
     });
   });
 
@@ -132,49 +232,57 @@ describe("amounts", () => {
       ...RULES,
       tiers: [{ daysBefore: 0, refundPercent: -20 }],
     };
-    expect(refund(5, 100000, rules).refundCents).toBe(0);
+    expect(refund(5, TOTAL, rules).refundCents).toBe(0);
   });
 
-  it("handles nothing paid", () => {
-    expect(refund(30, 0)).toMatchObject({ refundCents: 0, retainedCents: 0 });
+  it("handles a free booking", () => {
+    expect(refund(30, 0, RULES, CHECK_IN, 0)).toMatchObject({
+      refundCents: 0,
+      retainedCents: 0,
+      stillOwedCents: 0,
+    });
   });
 
-  it("refuses a fractional or negative amount paid", () => {
+  it("refuses a fractional or negative amount", () => {
     expect(() => refund(30, 10.5)).toThrow(RangeError);
     expect(() => refund(30, -1)).toThrow(RangeError);
+    expect(() => refund(30, 100, RULES, CHECK_IN, 10.5)).toThrow(RangeError);
+    expect(() => refund(30, 100, RULES, CHECK_IN, -1)).toThrow(RangeError);
   });
 });
 
 describe("dates", () => {
   it("counts across a leap day", () => {
-    expect(
+    const tierFor = (checkIn: string, cancelledOn: string) =>
       calculateRefund({
         rules: RULES,
-        checkIn: "2028-03-01",
-        cancelledOn: "2028-01-31",
+        checkIn,
+        cancelledOn,
+        totalCents: 1000,
         paidCents: 1000,
-      }).appliedTier,
-    ).toEqual(TIER_30);
-    expect(
-      calculateRefund({
-        rules: RULES,
-        checkIn: "2027-03-01",
-        cancelledOn: "2027-01-31",
-        paidCents: 1000,
-      }).appliedTier,
-    ).toEqual(TIER_14);
+      }).appliedTier;
+    expect(tierFor("2028-03-01", "2028-01-31")).toEqual(TIER_30);
+    expect(tierFor("2027-03-01", "2027-01-31")).toEqual(TIER_14);
   });
 
   it("counts across a year boundary", () => {
-    expect(refund(30, 1000, RULES, "2028-01-10").appliedTier).toEqual(TIER_30);
-    expect(refund(29, 1000, RULES, "2028-01-10").appliedTier).toEqual(TIER_14);
+    expect(refund(30, 1000, RULES, "2028-01-10", 1000).appliedTier).toEqual(
+      TIER_30,
+    );
+    expect(refund(29, 1000, RULES, "2028-01-10", 1000).appliedTier).toEqual(
+      TIER_14,
+    );
   });
 
   it.each(["2027-04-15", "2027-11-15"])(
     "keeps the boundary exact when DST falls inside the window before %s",
     (checkIn) => {
-      expect(refund(30, 1000, RULES, checkIn).appliedTier).toEqual(TIER_30);
-      expect(refund(29, 1000, RULES, checkIn).appliedTier).toEqual(TIER_14);
+      expect(refund(30, 1000, RULES, checkIn, 1000).appliedTier).toEqual(
+        TIER_30,
+      );
+      expect(refund(29, 1000, RULES, checkIn, 1000).appliedTier).toEqual(
+        TIER_14,
+      );
     },
   );
 
@@ -185,6 +293,7 @@ describe("dates", () => {
         rules: RULES,
         checkIn: CHECK_IN,
         cancelledOn: athensDate(new Date(iso)),
+        totalCents: 1000,
         paidCents: 1000,
       }).refundCents;
     expect(on("2027-06-15T20:59:59Z")).toBe(1000);
@@ -197,6 +306,7 @@ describe("dates", () => {
         rules: RULES,
         checkIn: "2028-01-30",
         cancelledOn: athensDate(new Date(iso)),
+        totalCents: 1000,
         paidCents: 1000,
       }).refundCents;
     expect(on("2027-12-31T21:59:59Z")).toBe(1000);
@@ -218,6 +328,7 @@ describe("snapshot", () => {
         rules: snapshot.cancellation,
         checkIn: CHECK_IN,
         cancelledOn: "2027-06-15",
+        totalCents: 2000,
         paidCents: 2000,
       }).refundCents,
     ).toBe(2000);

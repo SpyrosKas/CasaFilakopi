@@ -1,4 +1,9 @@
-import type { Cents, IsoDate, PaymentRules } from "./contracts";
+import type {
+  Cents,
+  CheckoutPaymentKind,
+  IsoDate,
+  PaymentRules,
+} from "./contracts";
 import { addDays } from "./dates";
 import { percentOf } from "./money";
 
@@ -24,27 +29,19 @@ function depositCents(totalCents: Cents, rules: PaymentRules): Cents {
   return Math.min(deposit, totalCents);
 }
 
-/** The balance is derived, so dueNow + balance always equals the total. */
-function split(
-  totalCents: Cents,
-  dueNowCents: Cents,
-  dueOn: IsoDate,
-): PaymentSplit {
-  const balanceCents = totalCents - dueNowCents;
-  return {
-    dueNowCents,
-    balanceCents,
-    balanceDueOn: balanceCents > 0 ? dueOn : null,
-  };
-}
+const payInFull = (totalCents: Cents): PaymentSplit => ({
+  dueNowCents: totalCents,
+  balanceCents: 0,
+  balanceDueOn: null,
+});
 
 /**
  * - full: everything now.
  * - deposit: the deposit now, the rest balanceDaysBefore days before check-in.
- *   If that date is before today, everything is due now. A balance due today
- *   has not passed, so it stays a balance.
- * - on_arrival: nothing now, everything on the check-in date. A deposit rule
- *   is ignored in this mode, matching confirm_without_payment.
+ *   0 days means the balance is paid on arrival. Booking on or after that date
+ *   pays everything now.
+ *
+ * The balance is derived, so dueNow + balance always equals the total.
  */
 export function splitPayment({
   totalCents,
@@ -52,10 +49,21 @@ export function splitPayment({
   checkIn,
   today,
 }: PaymentSplitInput): PaymentSplit {
-  if (rules.mode === "on_arrival") return split(totalCents, 0, checkIn);
-  if (rules.mode === "full") return split(totalCents, totalCents, checkIn);
+  if (rules.mode === "full") return payInFull(totalCents);
 
   const dueOn = addDays(checkIn, -rules.balanceDaysBefore);
-  if (dueOn < today) return split(totalCents, totalCents, dueOn);
-  return split(totalCents, depositCents(totalCents, rules), dueOn);
+  if (today >= dueOn) return payInFull(totalCents);
+
+  const dueNowCents = depositCents(totalCents, rules);
+  if (dueNowCents === totalCents) return payInFull(totalCents);
+  return {
+    dueNowCents,
+    balanceCents: totalCents - dueNowCents,
+    balanceDueOn: dueOn,
+  };
+}
+
+/** What this booking's payment is: nothing left to pay later means full. */
+export function paymentKindOf(split: PaymentSplit): CheckoutPaymentKind {
+  return split.balanceCents === 0 ? "full" : "deposit";
 }

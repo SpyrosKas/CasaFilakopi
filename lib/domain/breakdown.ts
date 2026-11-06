@@ -1,4 +1,9 @@
-import { hasValidDates, MAX_STAY_NIGHTS } from "./availability";
+import {
+  fitsRoom,
+  hasValidDates,
+  MAX_STAY_NIGHTS,
+  type RoomCapacity,
+} from "./availability";
 import type {
   PaymentRules,
   PriceBreakdown,
@@ -8,7 +13,6 @@ import type {
 } from "./contracts";
 import { athensDate, daysBetween } from "./dates";
 import { feeLines, type TaxFeeRow } from "./fees";
-import { assertCents } from "./money";
 import { splitPayment } from "./payments";
 import {
   LINE_LABELS,
@@ -36,7 +40,7 @@ export class QuoteError extends Error {
 
 export interface BreakdownInput {
   stay: StayRequest;
-  room: RoomRates;
+  room: RoomRates & Pick<RoomCapacity, "max_adults" | "max_children">;
   seasons: SeasonRow[];
   overrides: RateOverrideRow[];
   fees: TaxFeeRow[];
@@ -73,8 +77,7 @@ export function buildPriceBreakdown(input: BreakdownInput): PriceBreakdown {
   if (daysBetween(stay.checkIn, stay.checkOut) > MAX_STAY_NIGHTS) {
     throw new QuoteError("above_max_stay");
   }
-  assertCents(stay.adults, "adults");
-  assertCents(stay.children, "children");
+  if (!fitsRoom(stay, room)) throw new QuoteError("over_capacity");
 
   const nights = nightlyPrices(input);
   const today = athensDate(now);
@@ -115,8 +118,6 @@ export function buildPriceBreakdown(input: BreakdownInput): PriceBreakdown {
       today,
     }),
     promoCode: promo?.code ?? null,
-    ...(promoCheck && !promoCheck.ok
-      ? { promoRejection: promoCheck.reason }
-      : {}),
+    ...(promoCheck && !promoCheck.ok ? { promoRejected: true } : {}),
   };
 }

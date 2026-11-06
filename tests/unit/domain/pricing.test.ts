@@ -3,18 +3,9 @@ import {
   buildPriceBreakdown,
   checkPromo,
   findPromo,
-  linesTotal,
   QuoteError,
 } from "@/lib/domain";
-import {
-  breakdownInput,
-  fee,
-  NOW,
-  promo,
-  ROOM,
-  ROOM_ID,
-  stay,
-} from "./fixtures";
+import { breakdownInput, fee, promo, ROOM, ROOM_ID, stay } from "./fixtures";
 
 const season = {
   start_date: "2027-07-01",
@@ -425,13 +416,13 @@ describe("promo codes", () => {
     const breakdown = quote(promo({ valid_to: "2027-05-31" }));
     expect(breakdown.totalCents).toBe(40600);
     expect(breakdown.promoCode).toBeNull();
-    expect(breakdown.promoRejection).toBe("expired");
+    expect(breakdown.promoRejected).toBe(true);
     expect(breakdown.lines.some((l) => l.kind === "discount")).toBe(false);
   });
 
   it("reports nothing when no code was typed", () => {
     const breakdown = buildPriceBreakdown(breakdownInput({ promoCode: "   " }));
-    expect(breakdown).not.toHaveProperty("promoRejection");
+    expect(breakdown).not.toHaveProperty("promoRejected");
     expect(breakdown.promoCode).toBeNull();
   });
 
@@ -474,16 +465,21 @@ describe("guarding the breakdown", () => {
     ).toThrow(new QuoteError("above_max_stay"));
   });
 
-  it("refuses a negative guest count", () => {
+  it.each([
+    ["negative", { adults: -1 }],
+    ["fractional", { adults: 1.5 }],
+    ["no adult", { adults: 0 }],
+    ["above capacity", { adults: 5 }],
+    ["absurd", { children: 2 ** 53 }],
+  ])("refuses a guest count that is %s", (_, overrides) => {
     expect(() =>
-      buildPriceBreakdown(breakdownInput({ stay: stay({ adults: -1 }) })),
-    ).toThrow(RangeError);
+      buildPriceBreakdown(breakdownInput({ stay: stay(overrides) })),
+    ).toThrow(new QuoteError("over_capacity"));
   });
 
-  it("totals exactly the lines", () => {
-    const breakdown = buildPriceBreakdown(
-      breakdownInput({ fees: [fee()], now: NOW }),
-    );
-    expect(linesTotal(breakdown.lines)).toBe(breakdown.totalCents);
+  it("totals the fixture to the cent", () => {
+    // 3 nights at 120.00, 40.00 cleaning, 3 nights of a 2.00 fee.
+    const breakdown = buildPriceBreakdown(breakdownInput({ fees: [fee()] }));
+    expect(breakdown.totalCents).toBe(40600);
   });
 });
