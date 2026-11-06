@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** Wave 1: ENGINE and ADMIN merged; WEB is fixing review findings. Staging exists (ref `iecsohriashrdbqcelkl`) but the Supabase CLI is logged in to a different account, so T2.23 waits for YOU to log it in as `host@miloscasa.com`. YOU also: accountant sheet (D4).
+**Status:** Wave 1: ENGINE and ADMIN merged; WEB is fixing review findings. Staging database live (ref `iecsohriashrdbqcelkl`). After WEB: restart local Supabase, switch seed to full payment, push auth config and seed to staging, connect Vercel keys. YOU: accountant sheet (D4).
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
@@ -82,7 +82,7 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 |---|---|---|---|---|
 | A0 | Start Docker Desktop | Phase 1 | YOU | [x] |
 | A1 | Set up `host@miloscasa.com` | Phase 2 end | YOU | [x] |
-| A2 | Supabase staging project | Phase 2 end | YOU | [ ] |
+| A2 | Supabase staging project | Phase 2 end | YOU | [x] |
 | A3 | Vercel project | Phase 2 end | YOU | [x] |
 | A4 | Domain and DNS access | Wave 1 | YOU/HOST | [ ] |
 | A5 | Resend | Wave 1 | YOU | [ ] |
@@ -200,7 +200,7 @@ Security and tooling:
 - [x] T2.20 RLS tests for anon, token, staff, owner (`QA-03`)
 - [x] T2.21 Domain function signatures in `lib/domain` (types only)
 - [x] T2.22 Independent reviewer agent audits schema, RPCs and RLS. 5 high and 9 medium findings fixed, each with a regression test (`tests/db/review-regressions.test.ts`)
-- [ ] T2.23 A1, A2, A3: staging live; CI applies migrations to staging (`PLT-01`, `PLT-02`, `PLT-04`)
+- [ ] T2.23 A1, A2, A3: staging live; CI applies migrations to staging (`PLT-01`, `PLT-02`, `PLT-04`). Done: staging project linked, 7 migrations pushed, schema and privileges verified on hosted. Left: auth config, seed, Vercel keys, CI migration step
 
 **Gate 2, contract freeze:** concurrency and RLS tests green, review findings closed, YOU sign off. Parallel work starts here.
 
