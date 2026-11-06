@@ -94,7 +94,7 @@ describe("payment rules", () => {
     expect(parsePaymentRules({ balanceDaysBefore: 7 }).mode).toBe("full");
   });
 
-  it.each([12.5, 33.33, 0.01, 99.99])("accepts a %d%% deposit", (percent) => {
+  it.each([12.5, 33.33, 1, 99.99])("accepts a %d%% deposit", (percent) => {
     const deposit = { kind: "percent", percent };
     expect(parsePaymentRules({ ...SEED_PAYMENT, deposit }).deposit).toEqual(
       deposit,
@@ -169,5 +169,30 @@ describe("cancellation tiers", () => {
     ],
   ])("refuses %s", (_, tiers) => {
     expect(() => parseCancellationTiers(tiers)).toThrow();
+  });
+});
+
+describe("limits that stop a typing slip breaking checkout", () => {
+  const deposit = (percent: number, balanceDaysBefore = 14) => ({
+    mode: "deposit",
+    deposit: { kind: "percent", percent },
+    balanceDaysBefore,
+  });
+
+  it("refuses an absurd balance timing", () => {
+    expect(() => parsePaymentRules(deposit(30, 101000000))).toThrow();
+    expect(() => parsePaymentRules(deposit(30, 366))).toThrow();
+    expect(parsePaymentRules(deposit(30, 365)).balanceDaysBefore).toBe(365);
+  });
+
+  it("refuses a deposit under 1%", () => {
+    expect(() => parsePaymentRules(deposit(0.01))).toThrow();
+    expect(parsePaymentRules(deposit(1)).mode).toBe("deposit");
+  });
+
+  it("refuses an absurd tier", () => {
+    expect(() =>
+      parseCancellationTiers([{ daysBefore: 10000000, refundPercent: 50 }]),
+    ).toThrow();
   });
 });

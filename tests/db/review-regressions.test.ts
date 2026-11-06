@@ -613,3 +613,128 @@ describe("remaining findings", () => {
     expect(rows).toHaveLength(1);
   });
 });
+
+describe("admin hardening (ADMIN security review)", () => {
+  const addVerifiedFactor = (userId: string) =>
+    db.query(
+      `insert into auth.mfa_factors (id, user_id, factor_type, status, created_at, updated_at, friendly_name)
+       values ($1, $2, 'totp', 'verified', now(), now(), $3)`,
+      [randomUUID(), userId, randomUUID()],
+    );
+
+  const canReadBookings = async (id: string, aal: "aal1" | "aal2") => {
+    const { rows } = await admin(id, aal, (c) =>
+      c.query(`select public.is_admin() as ok`),
+    );
+    return rows[0].ok as boolean;
+  };
+
+  it("staff who enabled MFA have no access at aal1 (finding 2)", async () => {
+    const staff = await createAdmin("staff");
+    expect(await canReadBookings(staff.id, "aal1")).toBe(true);
+
+    await addVerifiedFactor(staff.id);
+    expect(await canReadBookings(staff.id, "aal1")).toBe(false);
+    expect(await canReadBookings(staff.id, "aal2")).toBe(true);
+  });
+
+  it("an unverified factor does not lock staff out", async () => {
+    const staff = await createAdmin("staff");
+    await db.query(
+      `insert into auth.mfa_factors (id, user_id, factor_type, status, created_at, updated_at, friendly_name)
+       values ($1, $2, 'totp', 'unverified', now(), now(), $3)`,
+      [randomUUID(), staff.id, randomUUID()],
+    );
+    expect(await canReadBookings(staff.id, "aal1")).toBe(true);
+  });
+
+  it("nobody reaches login attempts through the API", async () => {
+    const owner = await createAdmin("owner");
+    await expect(
+      admin(owner.id, "aal2", (c) =>
+        c.query(`select * from public.admin_attempts`),
+      ),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      admin(owner.id, "aal2", (c) =>
+        c.query(`select public.save_rules('{}', '[]', false)`),
+      ),
+    ).rejects.toThrow(/permission denied/);
+  });
+
+  it("purges old attempts only", async () => {
+    const scope = randomUUID();
+    await db.query(
+      `insert into public.admin_attempts (scope, key_hash, created_at)
+       values ($1, 'old', now() - interval '8 days'), ($1, 'new', now())`,
+      [scope],
+    );
+    await db.query(`select public.purge_admin_attempts()`);
+    const { rows } = await db.query(
+      `select key_hash from public.admin_attempts where scope = $1`,
+      [scope],
+    );
+    expect(rows).toEqual([{ key_hash: "new" }]);
+    await db.query(`delete from public.admin_attempts where scope = $1`, [
+      scope,
+    ]);
+  });
+
+  describe("save_rules", () => {
+    const read = async () => {
+      const payment = await db.query(
+        `select value from public.settings where key = 'payment'`,
+      );
+      const policy = await db.query(
+        `select tiers, is_non_refundable from public.cancellation_policies where is_default`,
+      );
+      return { payment: payment.rows[0].value, policy: policy.rows[0] };
+    };
+
+    it("rolls both tables back when one write fails (finding 7)", async () => {
+      const before = await read();
+      await expect(
+        db.query(`select public.save_rules($1::jsonb, null, false)`, [
+          JSON.stringify({ mode: "full", deposit: null, balanceDaysBefore: 1 }),
+        ]),
+      ).rejects.toThrow();
+      expect(await read()).toEqual(before);
+    });
+
+    it("saves both, names the actor, and restores afterwards", async () => {
+      const before = await read();
+      const owner = await createAdmin("owner");
+      await db.query(`select public.save_rules($1::jsonb, $2::jsonb, $3, $4)`, [
+        JSON.stringify({ mode: "full", deposit: null, balanceDaysBefore: 3 }),
+        JSON.stringify([{ daysBefore: 5, refundPercent: 100 }]),
+        false,
+        owner.id,
+      ]);
+      const after = await read();
+      expect(after.payment.balanceDaysBefore).toBe(3);
+      expect(after.policy.tiers).toEqual([
+        { daysBefore: 5, refundPercent: 100 },
+      ]);
+
+      const { rows } = await db.query(
+        `select actor_id from public.audit_log
+         where entity = 'settings' and entity_id = 'payment' order by id desc limit 1`,
+      );
+      expect(rows[0].actor_id).toBe(owner.id);
+
+      await db.query(`select public.save_rules($1::jsonb, $2::jsonb, $3)`, [
+        JSON.stringify(before.payment),
+        JSON.stringify(before.policy.tiers),
+        before.policy.is_non_refundable,
+      ]);
+    });
+  });
+
+  it("audits property changes", async () => {
+    await db.query(`update public.property set phone = phone`);
+    const { rows } = await db.query(
+      `select after from public.audit_log where entity = 'property' order by id desc limit 1`,
+    );
+    expect(rows[0].after).not.toBeNull();
+  });
+});

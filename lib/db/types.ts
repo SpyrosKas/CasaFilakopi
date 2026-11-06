@@ -23,7 +23,21 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "admin_profiles": {
+            "admin_attempts": {
+                  Row: {
+                    "created_at": string,"id": number,"key_hash": string,"scope": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: never,"key_hash": string,"scope": string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: never,"key_hash"?: string,"scope"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"admin_profiles": {
                   Row: {
                     "created_at": string,"display_name": string,"id": string,"role": Database["public"]['Enums']["admin_role"],"updated_at": string
                   }
@@ -848,6 +862,9 @@ isOneToOne: false
               "is_available": boolean,"night": string
             }[]
                            },
+"purge_admin_attempts":
+{ Args: { "p_older_than"?: string }; Returns: number
+                           },
 "record_payment":
 { Args: { "p_amount_cents": number,"p_booking_id": string,"p_kind": Database["public"]['Enums']["payment_kind"],"p_method": Database["public"]['Enums']["payment_method"],"p_note"?: string,"p_payment_intent_id"?: string,"p_recorded_by"?: string }; Returns: string
                            },
@@ -868,6 +885,9 @@ isOneToOne: false
                            },
 "reserve_refund":
 { Args: { "p_actor"?: string,"p_amount_cents": number,"p_booking_id": string,"p_payment_id": string,"p_reason"?: string }; Returns: string
+                           },
+"save_rules":
+{ Args: { "p_actor"?: string,"p_is_non_refundable": boolean,"p_payment": Json,"p_tiers": Json }; Returns: undefined
                            },
 "secure_claim":
 { Args: { "p_booking": Omit<Database["public"]['Tables']["bookings"]['Row'], Database["public"]['Tables']["bookings"]['ComputedFields']> }; Returns: boolean
