@@ -132,7 +132,7 @@ test("the screen shows the stored rules and says they apply to new bookings", as
     page.getByText("Changes apply to new bookings only."),
   ).toBeVisible();
   await expect(
-    page.getByText("You pay 30% of the price when you book."),
+    page.getByText("You pay 30% of the booking price when you book."),
   ).toBeVisible();
   await page.context().close();
 });
@@ -146,22 +146,43 @@ test("saving rules changes the settings but never an existing booking", async ({
   await signInOwner(page, owner);
   await page.goto("/admin/rules");
 
-  await page.getByLabel("A fixed amount").check();
-  await page.getByLabel("Deposit in euros").fill("150.50");
+  // Only a percentage and a number of days: no fixed amount any more.
+  await expect(page.getByText("fixed amount")).toHaveCount(0);
+  await expect(
+    page.getByText("0 means the guest pays the rest on arrival."),
+  ).toBeVisible();
+
+  // A comma is what a Greek phone keyboard types.
+  await page.getByLabel(/^Deposit, as a percentage/).fill("25,5");
   await page.getByLabel("Days before arrival the rest is due").fill("10");
 
   await page.getByRole("button", { name: "Add a line" }).click();
   await page.getByLabel("Days before arrival, or more").last().fill("7");
-  await page.getByLabel("Percent refunded").last().fill("50");
+  await page
+    .getByLabel(/^Percent of the booking price/)
+    .last()
+    .fill("50");
 
   // The preview follows what is typed, before anything is saved.
   const preview = page.locator(".preview");
-  await expect(preview).toContainText("You pay €150.50 when you book.");
   await expect(preview).toContainText(
-    "The rest is due 10 days before you arrive.",
+    "You pay 25.5% of the booking price when you book.",
   );
   await expect(preview).toContainText(
-    "If you cancel 7 to 29 days before you arrive, you get 50% of your money back.",
+    "You pay the rest 10 days before you arrive.",
+  );
+  await expect(preview).toContainText(
+    "If you cancel 7 to 29 days before you arrive, we refund 50% of the booking price.",
+  );
+  await expect(preview).toContainText("Example: a booking of \u20ac1,000");
+  await expect(preview).toContainText(
+    "7 to 29 days before you arrive: you get \u20ac500 back and we keep \u20ac500.",
+  );
+  await expect(preview).toContainText(
+    "If you have paid only the deposit (\u20ac255)",
+  );
+  await expect(preview).toContainText(
+    "7 to 29 days before you arrive: we keep the \u20ac255 and you still owe \u20ac245.",
   );
 
   await page.getByRole("button", { name: "Save", exact: true }).click();
@@ -172,7 +193,7 @@ test("saving rules changes the settings but never an existing booking", async ({
   const stored = await readRules();
   expect(stored.payment).toEqual({
     mode: "deposit",
-    deposit: { kind: "fixed", amountCents: 15050 },
+    deposit: { kind: "percent", percent: 25.5 },
     balanceDaysBefore: 10,
   });
   expect(stored.policy).toEqual({
@@ -196,7 +217,7 @@ test("saving rules changes the settings but never an existing booking", async ({
   expect(audit.rows[0].actor_id).toBe(owner.id);
 
   await page.reload();
-  await expect(page.locator(".preview")).toContainText("€150.50");
+  await expect(page.locator(".preview")).toContainText("25.5%");
 });
 
 test("switching to full payment and no refunds saves the contract shape", async ({
@@ -204,10 +225,14 @@ test("switching to full payment and no refunds saves the contract shape", async 
 }) => {
   await signInOwner(page, owner);
   await page.goto("/admin/rules");
-  await page.getByLabel("Full price when they book").check();
+  await page.getByRole("radio", { name: /^Full payment/ }).check();
+  await expect(page.getByLabel(/^Deposit, as a percentage/)).toHaveCount(0);
+  await expect(
+    page.getByLabel("Days before arrival the rest is due"),
+  ).toHaveCount(0);
   await page.getByLabel("No refunds, ever").check();
   await expect(page.locator(".preview")).toContainText(
-    "If you cancel, you get no refund.",
+    "If you cancel any time before you arrive, we refund nothing.",
   );
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("Saved.");
@@ -222,6 +247,38 @@ test("switching to full payment and no refunds saves the contract shape", async 
   expect(await readSnapshot()).toEqual(bookingSnapshot);
 });
 
+test("Deposit with no percentage is refused, as it would stop checkout", async ({
+  page,
+}) => {
+  await signInOwner(page, owner);
+  await page.goto("/admin/rules");
+  const before = await readRules();
+  expect(before.payment.mode).toBe("full");
+
+  await page.getByRole("radio", { name: /^Deposit/ }).check();
+  await expect(page.getByLabel(/^Deposit, as a percentage/)).toHaveValue("");
+  await expect(page.locator(".preview")).toContainText(
+    "Please type the deposit percentage.",
+  );
+
+  const save = page.getByRole("button", { name: "Save", exact: true });
+  await save.click();
+  await expect(page.locator(notice)).toContainText("Please fix");
+  await expect(page.locator("fieldset .field-error")).toContainText(
+    "Please type the deposit percentage.",
+  );
+  expect(await readRules()).toEqual(before);
+
+  for (const percent of ["0", "100", "120", "12.345"]) {
+    await page.getByLabel(/^Deposit, as a percentage/).fill(percent);
+    await save.click();
+    await expect(page.locator("fieldset .field-error")).toContainText(
+      "above 0 and below 100",
+    );
+    expect(await readRules()).toEqual(before);
+  }
+});
+
 test("rules that make no sense are refused and nothing is saved", async ({
   page,
 }) => {
@@ -232,10 +289,16 @@ test("rules that make no sense are refused and nothing is saved", async ({
 
   await page.getByRole("button", { name: "Add a line" }).click();
   await page.getByLabel("Days before arrival, or more").last().fill("30");
-  await page.getByLabel("Percent refunded").last().fill("20");
+  await page
+    .getByLabel(/^Percent of the booking price/)
+    .last()
+    .fill("20");
   await page.getByRole("button", { name: "Add a line" }).click();
   await page.getByLabel("Days before arrival, or more").last().fill("0");
-  await page.getByLabel("Percent refunded").last().fill("90");
+  await page
+    .getByLabel(/^Percent of the booking price/)
+    .last()
+    .fill("90");
 
   // The preview warns first, and the server refuses it anyway.
   await expect(page.locator(".preview")).toContainText("closer to arrival");
@@ -244,7 +307,18 @@ test("rules that make no sense are refused and nothing is saved", async ({
   await expect(page.locator("fieldset .field-error")).toContainText(
     "closer to arrival",
   );
+  expect(await readRules()).toEqual(before);
 
+  // Two lines for the same day.
+  await page.getByLabel("Days before arrival, or more").last().fill("30");
+  await page
+    .getByLabel(/^Percent of the booking price/)
+    .last()
+    .fill("10");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.locator("fieldset .field-error")).toContainText(
+    "same number of days",
+  );
   expect(await readRules()).toEqual(before);
 });
 

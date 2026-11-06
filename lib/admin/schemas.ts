@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MIN_HOLD_MINUTES, MIN_PASSWORD_LENGTH } from "@/lib/admin/config";
 import { t } from "@/lib/admin/strings";
+import { parseBookingSettings } from "@/lib/domain/settings";
 
 // Server-side validation for every admin form except the rules screen, which
 // has its own file. Form values arrive as strings.
@@ -110,12 +111,37 @@ export const houseSchema = z
     { path: ["base_occupancy"], message: v.baseGuestsTooHigh },
   );
 
+// lib/domain/settings.ts sets the limits that matter, such as the 31 minute
+// hold. These upper limits only catch a slip of the finger.
 export const bookingSettingsSchema = z.object({
-  holdMinutes: wholeNumber(
-    MIN_HOLD_MINUTES,
-    240,
-    v.holdMinutes(MIN_HOLD_MINUTES),
-  ),
-  sameDayCutoffHour: wholeNumber(0, 23, v.cutoffHour),
-  horizonMonths: wholeNumber(1, 36, v.horizonMonths),
+  holdMinutes: wholeNumber(0, 240, v.holdMinutes(MIN_HOLD_MINUTES)),
+  sameDayCutoffHour: wholeNumber(0, 24, v.cutoffHour),
+  horizonMonths: wholeNumber(0, 36, v.horizonMonths),
 });
+
+const BOOKING_MESSAGES: Record<string, string> = {
+  holdMinutes: v.holdMinutes(MIN_HOLD_MINUTES),
+  sameDayCutoffHour: v.cutoffHour,
+  horizonMonths: v.horizonMonths,
+};
+
+/**
+ * Runs the whole stored setting through the domain's own check, so a save can
+ * never leave something that would stop checkout. Null when it passes.
+ */
+export function bookingSettingsErrors(
+  value: unknown,
+): Record<string, string> | null {
+  try {
+    parseBookingSettings(value);
+    return null;
+  } catch (error) {
+    if (!(error instanceof z.ZodError)) throw error;
+    const errors: Record<string, string> = {};
+    for (const issue of error.issues) {
+      const field = String(issue.path[0]);
+      errors[field] = BOOKING_MESSAGES[field] ?? t.common.somethingWrong;
+    }
+    return errors;
+  }
+}

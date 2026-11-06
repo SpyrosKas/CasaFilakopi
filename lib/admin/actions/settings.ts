@@ -11,6 +11,7 @@ import {
 } from "@/lib/admin/form-state";
 import { rulesSchema } from "@/lib/admin/rules";
 import {
+  bookingSettingsErrors,
   bookingSettingsSchema,
   houseSchema,
   propertySchema,
@@ -112,10 +113,16 @@ export async function saveBookingSettings(
   if (!parsed.success) return fromZodError(parsed.error);
 
   const stored = await loadBookingSettings(admin);
+  const value = { ...stored, ...parsed.data };
+  const fieldErrors = bookingSettingsErrors(value);
+  if (fieldErrors) {
+    return { status: "error", message: t.common.fixErrors, fieldErrors };
+  }
+
   const { error } = await admin.supabase.from("settings").upsert({
     key: "booking",
     is_public: false,
-    value: { ...stored, ...parsed.data },
+    value,
   });
   if (error) return errorState(t.common.somethingWrong);
 
@@ -142,7 +149,7 @@ export async function saveRules(
   const { supabase } = admin;
   const { data: oldPolicy, error: readError } = await supabase
     .from("cancellation_policies")
-    .select("id, tiers, is_non_refundable")
+    .select("id, tiers, is_non_refundable, is_active")
     .eq("is_default", true)
     .maybeSingle();
   if (readError) return errorState(t.common.somethingWrong);
@@ -150,6 +157,8 @@ export async function saveRules(
   const policy = {
     tiers: cancellation.tiers as unknown as NonNullable<Json>,
     is_non_refundable: cancellation.isNonRefundable,
+    // Checkout only reads an active policy, and fails without one.
+    is_active: true,
   };
   const { error: policyError } = oldPolicy
     ? await supabase
@@ -178,6 +187,7 @@ export async function saveRules(
         .update({
           tiers: oldPolicy.tiers,
           is_non_refundable: oldPolicy.is_non_refundable,
+          is_active: oldPolicy.is_active,
         })
         .eq("id", oldPolicy.id);
     }

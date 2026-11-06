@@ -10,6 +10,7 @@ import {
   IDLE_TIMEOUT_SECONDS,
 } from "@/lib/admin/config";
 import {
+  bookingSettingsErrors,
   bookingSettingsSchema,
   houseSchema,
   loginSchema,
@@ -144,11 +145,29 @@ describe("form validation", () => {
     expect(parsed.email).toBe("a@b.test");
   });
 
-  it("refuses a hold of 30 minutes and allows 31", () => {
-    const short = { ...booking, holdMinutes: "30" };
-    expect(bookingSettingsSchema.safeParse(short).success).toBe(false);
-    const ok = { ...booking, holdMinutes: "31" };
-    expect(bookingSettingsSchema.parse(ok).holdMinutes).toBe(31);
+  it("uses the domain's limit for the hold: 30 refused, 31 allowed", () => {
+    const stored = { checkoutSessionMinutes: 30 };
+    const settings = (holdMinutes: string) => ({
+      ...stored,
+      ...bookingSettingsSchema.parse({ ...booking, holdMinutes }),
+    });
+    expect(bookingSettingsErrors(settings("30"))?.holdMinutes).toMatch(/31/);
+    expect(bookingSettingsErrors(settings("31"))).toBeNull();
+  });
+
+  it("accepts the domain's cutoff of 24, and nothing past it", () => {
+    const at = (sameDayCutoffHour: string) =>
+      bookingSettingsSchema.safeParse({ ...booking, sameDayCutoffHour });
+    expect(at("24").success).toBe(true);
+    expect(at("25").success).toBe(false);
+  });
+
+  it("refuses zero months through the domain", () => {
+    const value = {
+      checkoutSessionMinutes: 30,
+      ...bookingSettingsSchema.parse({ ...booking, horizonMonths: "0" }),
+    };
+    expect(bookingSettingsErrors(value)?.horizonMonths).toBeTruthy();
   });
 
   it("refuses a hold that is not a whole number", () => {

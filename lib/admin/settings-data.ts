@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { DEFAULT_RULES, rulesSchema, type RulesInput } from "@/lib/admin/rules";
+import { DEFAULT_RULES, rulesSchema, type Rules } from "@/lib/admin/rules";
 import type { AdminContext } from "@/lib/admin/session";
 import type { Json } from "@/lib/db/types";
 
@@ -55,7 +55,9 @@ export async function loadBookingSettings(admin: AdminContext) {
 }
 
 /** The rules as stored, or the starting values if none are saved yet. */
-export async function loadRules(admin: AdminContext): Promise<RulesInput> {
+export async function loadRules(
+  admin: AdminContext,
+): Promise<{ rules: Rules; unreadable: boolean }> {
   const payment = await loadSetting(admin, "payment");
   const { data: policy, error } = await admin.supabase
     .from("cancellation_policies")
@@ -70,5 +72,7 @@ export async function loadRules(admin: AdminContext): Promise<RulesInput> {
       ? { isNonRefundable: policy.is_non_refundable, tiers: policy.tiers }
       : DEFAULT_RULES.cancellation,
   });
-  return parsed.success ? parsed.data : DEFAULT_RULES;
+  return parsed.success
+    ? { rules: parsed.data, unreadable: false }
+    : { rules: DEFAULT_RULES, unreadable: true };
 }

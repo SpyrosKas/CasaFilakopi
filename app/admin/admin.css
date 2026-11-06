@@ -408,6 +408,23 @@
   background: var(--paper);
 }
 
+.preview-subhead {
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+.preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.choice-hint {
+  display: block;
+}
+
 /* Home and account */
 
 .link-list {

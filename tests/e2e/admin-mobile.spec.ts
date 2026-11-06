@@ -200,8 +200,10 @@ for (const width of WIDTHS) {
       await checkWithMenu(page, "rules");
 
       await page.reload();
-      await page.getByLabel("A deposit when they book").check();
-      await page.getByLabel("A fixed amount").check();
+      await page.getByRole("radio", { name: /^Deposit/ }).check();
+      await page.getByLabel(/^Deposit, as a percentage/).fill("30");
+      await check(page, "rules-preview");
+      await page.getByLabel(/^Deposit, as a percentage/).fill("");
       await page.getByLabel("No refunds, ever").uncheck();
       await page.getByRole("button", { name: "Add a line" }).click();
       await check(page, "rules-tiers");

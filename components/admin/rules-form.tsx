@@ -4,17 +4,10 @@ import { useActionState, useState, useTransition, type FormEvent } from "react";
 import { FormMessage } from "@/components/admin/form";
 import { saveRules } from "@/lib/admin/actions/settings";
 import { idleState } from "@/lib/admin/form-state";
-import {
-  centsToEuros,
-  describeRules,
-  eurosToCents,
-  rulesSchema,
-  type RulesInput,
-} from "@/lib/admin/rules";
+import { describeRules, rulesSchema, type Rules } from "@/lib/admin/rules";
 import { t } from "@/lib/admin/strings";
 import type {
   CancellationRules,
-  DepositRule,
   PaymentMode,
   PaymentRules,
 } from "@/lib/domain/contracts";
@@ -27,26 +20,37 @@ interface TierRow {
   percent: string;
 }
 
-/** A box being typed in may not hold a number yet. -1 fails the checks. */
+/**
+ * A box being typed in may not hold a number yet: -1 fails the checks. Greek
+ * phone keyboards type a comma for the decimal point.
+ */
 function toNumber(text: string): number {
-  const value = text.trim() === "" ? NaN : Number(text);
+  const value = text.trim() === "" ? NaN : Number(text.replace(",", "."));
   return Number.isNaN(value) ? -1 : value;
 }
 
-export function RulesForm({ initial }: { initial: RulesInput }) {
+function PreviewList({ heading, lines }: { heading: string; lines: string[] }) {
+  return (
+    <>
+      <p className="preview-subhead">{heading}</p>
+      <ul className="preview-list">
+        {lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+export function RulesForm({ initial }: { initial: Rules }) {
   const [state, formAction, pending] = useActionState(saveRules, idleState);
   const [, startTransition] = useTransition();
 
   const deposit = initial.payment.deposit;
   const [mode, setMode] = useState<PaymentMode>(initial.payment.mode);
-  const [depositKind, setDepositKind] = useState<DepositRule["kind"]>(
-    deposit?.kind ?? "percent",
-  );
+  // Left empty when none is saved, so saving Deposit means choosing a number.
   const [percent, setPercent] = useState(
-    deposit?.kind === "percent" ? String(deposit.percent) : "30",
-  );
-  const [euros, setEuros] = useState(
-    deposit?.kind === "fixed" ? centsToEuros(deposit.amountCents) : "",
+    deposit?.kind === "percent" ? String(deposit.percent) : "",
   );
   const [balanceDays, setBalanceDays] = useState(
     String(initial.payment.balanceDaysBefore),
@@ -63,14 +67,12 @@ export function RulesForm({ initial }: { initial: RulesInput }) {
   );
   const [nextKey, setNextKey] = useState(initial.cancellation.tiers.length);
 
-  const depositRule: DepositRule =
-    depositKind === "percent"
-      ? { kind: "percent", percent: toNumber(percent) }
-      : { kind: "fixed", amountCents: eurosToCents(euros) ?? -1 };
-
   const payment: PaymentRules = {
     mode,
-    deposit: mode === "deposit" ? depositRule : null,
+    deposit:
+      mode === "deposit" && percent.trim() !== ""
+        ? { kind: "percent", percent: toNumber(percent) }
+        : null,
     balanceDaysBefore: toNumber(balanceDays),
   };
   const cancellation: CancellationRules = {
@@ -89,10 +91,9 @@ export function RulesForm({ initial }: { initial: RulesInput }) {
     ? describeRules(check.data.payment, check.data.cancellation)
     : null;
   const errors = state.fieldErrors ?? {};
-  const depositError =
-    errors["payment.deposit"] ??
-    errors["payment.deposit.percent"] ??
-    errors["payment.deposit.amountCents"];
+  const depositError = Object.entries(errors).find(([key]) =>
+    key.startsWith("payment.deposit"),
+  )?.[1];
   const tierError = Object.entries(errors).find(([key]) =>
     key.startsWith("cancellation.tiers"),
   )?.[1];
@@ -112,10 +113,9 @@ export function RulesForm({ initial }: { initial: RulesInput }) {
     startTransition(() => formAction(data));
   };
 
-  const modes: { value: PaymentMode; label: string }[] = [
-    { value: "full", label: r.modeFull },
-    { value: "deposit", label: r.modeDeposit },
-    { value: "on_arrival", label: r.modeOnArrival },
+  const modes: { value: PaymentMode; label: string; hint: string }[] = [
+    { value: "full", label: r.modeFull, hint: r.modeFullHint },
+    { value: "deposit", label: r.modeDeposit, hint: r.modeDepositHint },
   ];
 
   return (
@@ -133,56 +133,30 @@ export function RulesForm({ initial }: { initial: RulesInput }) {
               checked={mode === option.value}
               onChange={() => setMode(option.value)}
             />
-            <span>{option.label}</span>
+            <span>
+              {option.label}
+              <span className="hint choice-hint">{option.hint}</span>
+            </span>
           </label>
         ))}
       </fieldset>
 
       {mode === "deposit" && (
         <fieldset>
-          <legend>{r.depositHeading}</legend>
-          <label className="choice">
+          <legend>{r.modeDeposit}</legend>
+          <div className="field">
+            <label htmlFor="deposit-percent">{r.depositPercentField}</label>
             <input
-              type="radio"
-              name="depositKind"
-              checked={depositKind === "percent"}
-              onChange={() => setDepositKind("percent")}
+              id="deposit-percent"
+              inputMode="decimal"
+              value={percent}
+              onChange={(event) => setPercent(event.target.value)}
             />
-            <span>{r.depositPercent}</span>
-          </label>
-          <label className="choice">
-            <input
-              type="radio"
-              name="depositKind"
-              checked={depositKind === "fixed"}
-              onChange={() => setDepositKind("fixed")}
-            />
-            <span>{r.depositFixed}</span>
-          </label>
-          {depositKind === "percent" ? (
-            <div className="field">
-              <label htmlFor="deposit-percent">{r.depositPercentField}</label>
-              <input
-                id="deposit-percent"
-                inputMode="numeric"
-                value={percent}
-                onChange={(event) => setPercent(event.target.value)}
-              />
-            </div>
-          ) : (
-            <div className="field">
-              <label htmlFor="deposit-euros">{r.depositAmountField}</label>
-              <input
-                id="deposit-euros"
-                inputMode="decimal"
-                value={euros}
-                onChange={(event) => setEuros(event.target.value)}
-              />
-            </div>
-          )}
+          </div>
           {depositError && <p className="field-error">{depositError}</p>}
           <div className="field">
             <label htmlFor="balance-days">{r.balanceField}</label>
+            <p className="hint">{r.balanceHint}</p>
             <input
               id="balance-days"
               inputMode="numeric"
@@ -233,7 +207,7 @@ export function RulesForm({ initial }: { initial: RulesInput }) {
                     </label>
                     <input
                       id={`tier-percent-${row.key}`}
-                      inputMode="numeric"
+                      inputMode="decimal"
                       value={row.percent}
                       onChange={(event) =>
                         updateRow(row.key, { percent: event.target.value })
@@ -276,7 +250,11 @@ export function RulesForm({ initial }: { initial: RulesInput }) {
             {preview.cancellation.map((line) => (
               <p key={line}>{line}</p>
             ))}
-            {mode === "on_arrival" && <p className="hint">{r.onArrivalNote}</p>}
+            <h3>{preview.example.heading}</h3>
+            <PreviewList {...preview.example.paidInFull} />
+            {preview.example.depositOnly && (
+              <PreviewList {...preview.example.depositOnly} />
+            )}
           </>
         ) : (
           <p className="field-error">

@@ -163,7 +163,7 @@ export const t = {
     holdHint: (min: number) =>
       `The dates stay reserved for this long. The lowest allowed is ${min} minutes.`,
     cutoff: "Last hour to book for the same day",
-    cutoffHint: "Use 0 to 23, Greek time. 12 means noon.",
+    cutoffHint: "Use 0 to 24, Greek time. 12 means noon. 24 means no limit.",
     horizon: "How many months ahead guests can book",
   },
   rules: {
@@ -171,76 +171,82 @@ export const t = {
     intro: "Choose how guests pay and what they get back if they cancel.",
     newOnly:
       "Changes apply to new bookings only. Bookings already made keep the rules they were made with.",
+    unreadable:
+      "The saved rules could not be read, so the starting values are shown. Please check them and save.",
     paymentHeading: "How guests pay",
-    modeFull: "Full price when they book",
-    modeDeposit: "A deposit when they book, the rest later",
-    modeOnArrival: "Nothing online, they pay when they arrive",
-    depositHeading: "Deposit",
-    depositPercent: "A percentage of the price",
-    depositFixed: "A fixed amount",
-    depositPercentField: "Deposit in percent",
-    depositAmountField: "Deposit in euros",
+    modeFull: "Full payment",
+    modeFullHint: "Guests pay everything when they book.",
+    modeDeposit: "Deposit",
+    modeDepositHint: "Guests pay part when they book and the rest later.",
+    depositPercentField: "Deposit, as a percentage of the booking price",
     balanceField: "Days before arrival the rest is due",
+    balanceHint: "0 means the guest pays the rest on arrival.",
     cancelHeading: "If a guest cancels",
     nonRefundable: "No refunds, ever",
     tierIntro:
-      "Each line says how much a guest gets back when they cancel at least that many days before arrival. You need one line for 0 days.",
+      "Each line says what part of the booking price a guest gets back when they cancel at least that many days before arrival.",
     tierDays: "Days before arrival, or more",
-    tierPercent: "Percent refunded",
+    tierPercent: "Percent of the booking price refunded",
     tierLine: (n: number) => `Line ${n}`,
     addTier: "Add a line",
     removeTier: (n: number) => `Remove line ${n}`,
     previewHeading: "What a guest will read",
     previewPayment: "Payment",
     previewCancellation: "Cancellation",
-    onArrivalNote:
-      "Guests pay nothing online, so these refunds only matter if you take money some other way.",
     saved:
       "Saved. New bookings will use these rules. Existing bookings have not changed.",
     errors: {
       paymentMode: "Please choose how guests pay.",
       depositPercent:
-        "The deposit must be a whole number from 1 to 99 percent.",
-      depositAmount: "The deposit must be between 1 and 10,000 euros.",
-      depositRequired: "Please set the deposit.",
+        "The deposit must be above 0 and below 100 percent, with at most 2 decimals.",
+      depositRequired: "Please type the deposit percentage.",
       depositNotAllowed: "A deposit can only be set when guests pay a deposit.",
-      balanceDays: "Days before arrival must be a whole number from 0 to 365.",
-      tierDays: "Days must be a whole number from 0 to 365.",
-      tierPercent: "Percent must be a whole number from 0 to 100.",
+      balanceDays: "Days before arrival must be a whole number, 0 or more.",
+      tierDays: "Days must be a whole number, 0 or more.",
+      tierPercent: "Percent must be from 0 to 100, with at most 2 decimals.",
+      tiersInvalid: "Please check the refund lines.",
       tooManyTiers: "Please use 10 lines or fewer.",
       nonRefundableTiers:
-        "Remove the refund lines, or untick “No refunds, ever”.",
-      noTiers: "Add at least one line, or tick “No refunds, ever”.",
+        "Remove the refund lines, or untick \u201cNo refunds, ever\u201d.",
+      noTiers: "Add at least one line, or tick \u201cNo refunds, ever\u201d.",
       duplicateDays: "Two lines have the same number of days.",
-      needZeroTier:
-        "You need a line for 0 days, so late cancellations are covered.",
       refundOrder:
-        "The closer to arrival a guest cancels, the less they should get back. Check the percent on each line.",
+        "A guest cannot get more back by cancelling closer to arrival. Check the percent on each line.",
     },
     guest: {
       payFull: "You pay the full price when you book.",
-      payOnArrival: "You pay nothing now. You pay when you arrive.",
       depositPercent: (percent: number) =>
-        `You pay ${percent}% of the price when you book.`,
-      depositFixed: (euros: string) => `You pay €${euros} when you book.`,
-      depositMissing: "You pay a deposit when you book.",
+        `You pay ${percent}% of the booking price when you book.`,
       balance: (days: number) =>
-        days === 0
-          ? "The rest is due on the day you arrive."
-          : `The rest is due ${dayWord(days)} before you arrive.`,
-      nonRefundable: "If you cancel, you get no refund.",
-      refundFull: "you get all your money back",
-      refundNone: "you get nothing back",
-      refundPart: (percent: number) => `you get ${percent}% of your money back`,
-      anyTime: (refund: string) => `If you cancel at any time, ${refund}.`,
-      orMore: (days: number, refund: string) =>
-        `If you cancel ${dayWord(days)} or more before you arrive, ${refund}.`,
-      between: (from: number, to: number, refund: string) =>
+        `You pay the rest ${dayWord(days)} before you arrive.`,
+      balanceOnArrival: "You pay the rest when you arrive.",
+      lateBooking:
+        "If you book later than that, you pay the full price when you book.",
+      refundFull: "we refund the full booking price",
+      refundNone: "we refund nothing",
+      refundPart: (percent: number) =>
+        `we refund ${percent}% of the booking price`,
+      sentence: (when: string, refund: string) =>
+        `If you cancel ${when}, ${refund}.`,
+      anyTime: "any time before you arrive",
+      orMore: (days: number) => `${dayWord(days)} or more before you arrive`,
+      between: (from: number, to: number) =>
         from === to
-          ? `If you cancel ${dayWord(from)} before you arrive, ${refund}.`
-          : `If you cancel ${from} to ${to} days before you arrive, ${refund}.`,
-      lessThan: (days: number, refund: string) =>
-        `If you cancel less than ${dayWord(days)} before you arrive, ${refund}.`,
+          ? `${dayWord(from)} before you arrive`
+          : `${from} to ${to} days before you arrive`,
+      lessThan: (days: number) =>
+        `less than ${dayWord(days)} before you arrive`,
+      exampleHeading: (price: string) => `Example: a booking of ${price}`,
+      examplePaidFull: (paid: string) =>
+        `If you have paid everything (${paid})`,
+      exampleDepositOnly: (paid: string) =>
+        `If you have paid only the deposit (${paid})`,
+      back: (amount: string) => `you get ${amount} back`,
+      backAndKeep: (back: string, kept: string) =>
+        `you get ${back} back and we keep ${kept}`,
+      keep: (kept: string) => `we keep the ${kept}`,
+      keepAndOwe: (kept: string, owed: string) =>
+        `we keep the ${kept} and you still owe ${owed}`,
     },
   },
   validation: {
@@ -258,7 +264,7 @@ export const t = {
     baseGuestsTooHigh:
       "This cannot be more than the adults and children added together.",
     holdMinutes: (min: number) => `Must be a whole number from ${min} to 240.`,
-    cutoffHour: "Must be a whole number from 0 to 23.",
+    cutoffHour: "Must be a whole number from 0 to 24.",
     horizonMonths: "Must be a whole number from 1 to 36.",
   },
 } as const;
