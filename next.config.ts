@@ -6,15 +6,18 @@ const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 const nextConfig: NextConfig = {
   // Keeps the app portable to any Docker host (T1.12).
   output: "standalone",
-  // proxy.ts skips URLs with a dot, so /old-page.html reaches [locale] with a
-  // bogus locale and a blank 404. Real files win before this; the rest get the
-  // styled 404 through the catch-all route.
+  // proxy.ts skips dotted URLs and anything that merely starts with api, admin
+  // or _next, so /old.html or /apiary reach [locale] with a bogus locale, whose
+  // 404 has no layout and renders blank. This sends them to the styled 404.
+  // afterFiles runs after real files and static routes, before dynamic routes;
+  // api, admin and _next are excluded so their dynamic routes keep working.
   async rewrites() {
     return {
       beforeFiles: [],
       afterFiles: [
         {
-          source: "/:first([^/]*\\.[^/]*)/:rest*",
+          source:
+            "/:first((?!(?:en|el|api|admin|_next|_vercel)(?:/|$))[^/]+)/:rest*",
           destination: "/en/:first/:rest*",
         },
       ],

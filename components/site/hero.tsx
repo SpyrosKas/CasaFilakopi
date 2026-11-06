@@ -25,14 +25,14 @@ export function Hero({
       <div className="container">
         <div className="row site-hero-inner justify-content-center align-items-center">
           <div className="col-md-10 text-center">
-            <div className="heading" data-reveal="fade-up">
+            <div className="heading" data-reveal-load="fade-up">
               <h1>
                 {welcome && <span className="welcome">{welcome}</span>}
                 <span className="main">{title}</span>
               </h1>
             </div>
             <br />
-            <p data-reveal="fade-up" data-reveal-delay="100">
+            <p data-reveal-load="fade-up" data-reveal-load-delay="100">
               {action}
             </p>
           </div>
@@ -72,7 +72,7 @@ export function PageHero({ image, title }: { image: string; title: string }) {
       <div className="container">
         <div className="row site-hero-inner justify-content-center align-items-center">
           <div className="col-md-10 text-center">
-            <div className="heading" data-reveal="fade-up">
+            <div className="heading" data-reveal-load="fade-up">
               <h1>
                 <span className="main">{title}</span>
               </h1>

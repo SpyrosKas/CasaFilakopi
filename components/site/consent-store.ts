@@ -45,10 +45,20 @@ function getSnapshot(): ConsentState {
   return state;
 }
 
+// A choice made in another tab applies here too, e.g. withdrawing consent must
+// remove the map from every open tab.
+function onStorage(event: StorageEvent) {
+  if (event.key !== CONSENT_STORAGE_KEY && event.key !== null) return;
+  stored = readStored();
+  update({ choice: stored?.choice ?? null, bannerOpen: !stored });
+}
+
 function subscribe(listener: () => void) {
+  if (listeners.size === 0) window.addEventListener("storage", onStorage);
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
+    if (listeners.size === 0) window.removeEventListener("storage", onStorage);
   };
 }
 

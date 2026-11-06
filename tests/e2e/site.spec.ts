@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { CONSENT_STORAGE_KEY } from "../../content/consent";
+import {
+  CONSENT_STORAGE_KEY,
+  COOKIE_POLICY_VERSION,
+} from "../../content/consent";
 import { skipCookieBanner } from "./helpers";
 
 test.describe("menu", () => {
@@ -17,6 +20,29 @@ test.describe("menu", () => {
     await expect(page.locator("#main")).not.toHaveAttribute("inert", "");
     await expect(page.getByRole("button", { name: "Open menu" })).toBeFocused();
     await expect(nav.getByRole("link", { name: "Home" })).toBeHidden();
+  });
+
+  test("Tab stays inside the open menu, both ways", async ({ page }) => {
+    await skipCookieBanner(page);
+    await page.goto("/en/host");
+    await page.getByRole("button", { name: "Open menu" }).click();
+    const inMenu = () =>
+      page.evaluate(() => {
+        const active = document.activeElement;
+        return (
+          active?.closest("#site-navbar") !== null ||
+          active?.classList.contains("site-menu-toggle")
+        );
+      });
+
+    for (let i = 0; i < 25; i++) {
+      await page.keyboard.press("Tab");
+      expect(await inMenu(), `Tab ${i}`).toBe(true);
+    }
+    for (let i = 0; i < 25; i++) {
+      await page.keyboard.press("Shift+Tab");
+      expect(await inMenu(), `Shift+Tab ${i}`).toBe(true);
+    }
   });
 
   test("links navigate and close the menu", async ({ page }) => {
@@ -152,17 +178,59 @@ test.describe("not found", () => {
       page.getByRole("heading", { name: "Page not found" }),
     ).toBeVisible();
   });
+
+  for (const path of [
+    "/foo/bar.html",
+    "/img/nope.jpg",
+    "/apiary",
+    "/administrator",
+    "/adminfoo",
+    "/_nextfoo",
+    "/a/b/c/d",
+  ]) {
+    test(`${path} gets the styled 404`, async ({ page }) => {
+      await skipCookieBanner(page);
+      const response = await page.goto(path);
+      expect(response?.status()).toBe(404);
+      await expect(
+        page.getByRole("heading", { name: "Page not found" }),
+      ).toBeVisible();
+      await expect(page).toHaveTitle("Page not found | Casa Filakopi");
+      await expect(page.locator(".footer-section")).toBeVisible();
+    });
+  }
+
+  test("the tab title is translated", async ({ page }) => {
+    await page.goto("/el/no-such-page");
+    await expect(page).toHaveTitle("Η σελίδα δεν βρέθηκε | Casa Filakopi");
+  });
+
+  test("real files and routes are not caught by the 404 rewrite", async ({
+    request,
+  }) => {
+    for (const path of [
+      "/img/casa-icon-1.png",
+      "/fonts/roboto-latin-100-normal.woff2",
+      "/favicon.ico",
+      "/api/health",
+      "/admin",
+      "/en/host",
+    ]) {
+      expect((await request.get(path)).status(), path).toBe(200);
+    }
+  });
 });
 
 test.describe("cookie consent", () => {
-  const google = /google\.|gstatic\.|fontawesome\.com/;
-
-  test("nothing third party loads before consent", async ({ page }) => {
-    const thirdParty: string[] = [];
+  test("only this site is contacted before consent", async ({
+    page,
+    baseURL,
+  }) => {
+    const elsewhere: string[] = [];
     page.on("request", (request) => {
-      if (google.test(new URL(request.url()).host)) {
-        thirdParty.push(request.url());
-      }
+      const url = new URL(request.url());
+      if (url.protocol === "data:" || url.protocol === "blob:") return;
+      if (url.origin !== baseURL) elsewhere.push(request.url());
     });
 
     await page.goto("/en/contact");
@@ -179,7 +247,7 @@ test.describe("cookie consent", () => {
     await page.reload();
     await page.waitForLoadState("networkidle");
     await expect(page.locator("iframe")).toHaveCount(0);
-    expect(thirdParty).toEqual([]);
+    expect(elsewhere).toEqual([]);
   });
 
   test("declining is as easy as accepting", async ({ page }) => {
@@ -236,25 +304,49 @@ test.describe("cookie consent", () => {
     expect(stored).toContain(body.subject);
   });
 
-  test("consent API refuses other origins and bad input", async ({
-    request,
-    baseURL,
-  }) => {
+  test.describe("consent API", () => {
     const data = {
-      granted: true,
-      policyVersion: "test",
+      granted: false,
+      policyVersion: COOKIE_POLICY_VERSION,
       subject: "00000000-0000-4000-8000-000000000000",
     };
-    const crossSite = await request.post("/api/consent", {
-      data,
-      headers: { origin: "https://example.com" },
-    });
-    expect(crossSite.status()).toBe(403);
 
-    const badBody = await request.post("/api/consent", {
-      data: { granted: "yes" },
-      headers: { origin: baseURL! },
+    test("refuses other origins and bad input", async ({
+      request,
+      baseURL,
+    }) => {
+      const crossSite = await request.post("/api/consent", {
+        data,
+        headers: { origin: "https://example.com" },
+      });
+      expect(crossSite.status()).toBe(403);
+
+      const badBody = await request.post("/api/consent", {
+        data: { ...data, granted: "yes" },
+        headers: { origin: baseURL! },
+      });
+      expect(badBody.status()).toBe(400);
     });
-    expect(badBody.status()).toBe(400);
+
+    test("refuses a body over 1 KB", async ({ request, baseURL }) => {
+      const response = await request.post("/api/consent", {
+        data: { ...data, padding: "x".repeat(5000) },
+        headers: { origin: baseURL! },
+      });
+      expect(response.status()).toBe(413);
+    });
+
+    test("stores a valid choice", async ({ request, baseURL }) => {
+      const response = await request.post("/api/consent", {
+        data,
+        headers: {
+          origin: baseURL!,
+          "x-forwarded-for": `198.51.100.${Date.now() % 250}`,
+        },
+      });
+      // CI's check job has no database; tests/unit covers both answers there.
+      test.skip(response.status() === 503, "no database here");
+      expect(response.status()).toBe(204);
+    });
   });
 });

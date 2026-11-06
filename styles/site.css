@@ -49,12 +49,59 @@
   src: url("/fonts/mukta-mahee-latin-400-normal.woff2") format("woff2");
 }
 
-/* Scroll reveal: same offsets and timing as the old AOS setup. */
+/*
+ * Scroll reveal: same offsets and timing as the old AOS setup.
+ *
+ * Failsafe: if the scripts never run, this animation shows the element anyway.
+ * RevealObserver cancels it (data-reveal-active) as soon as it takes over, well
+ * before the delay on a normal load, so normal visitors see no flash.
+ */
 [data-reveal] {
   opacity: 0;
   transition:
     opacity 1s ease,
     transform 1s ease;
+  animation: reveal-failsafe 1ms linear 2.5s forwards;
+}
+
+html[data-reveal-active] [data-reveal] {
+  animation: none;
+}
+
+@keyframes reveal-failsafe {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * First-view content (header, hero) plays on load from CSS alone: it needs
+ * neither JavaScript nor scrolling, whatever the screen height.
+ */
+[data-reveal-load] {
+  animation: reveal-in-fade 1s ease both;
+}
+
+[data-reveal-load="fade-up"] {
+  animation-name: reveal-in-up;
+}
+
+[data-reveal-load-delay="100"] {
+  animation-delay: 0.1s;
+}
+
+@keyframes reveal-in-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes reveal-in-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 100px, 0);
+  }
 }
 
 [data-reveal="fade-up"] {
@@ -111,10 +158,13 @@
 }
 
 @media (prefers-reduced-motion: reduce), (scripting: none) {
-  [data-reveal] {
+  [data-reveal],
+  [data-reveal-load],
+  html[data-reveal-active] [data-reveal] {
     opacity: 1;
     transform: none;
     transition: none;
+    animation: none;
   }
 }
 
@@ -249,6 +299,11 @@ html[lang="el"] .site-navbar nav .menu li a {
 }
 
 /* Heroes */
+/* Legacy left this out, so "Scroll down" was placed from the screen bottom. */
+.site-hero {
+  position: relative;
+}
+
 .site-hero .heading h1 {
   margin-bottom: 0;
 }
@@ -282,6 +337,52 @@ html[lang="el"] .site-navbar nav .menu li a {
 
   .site-hero-inner .heading .main {
     font-size: clamp(44px, 14vw, 70px);
+  }
+}
+
+/*
+ * Short screens (phone in landscape, small phones). The legacy 700 px minimum
+ * pushed the title and button below the fold, so the hero fits the screen.
+ */
+@media (max-height: 699.98px) {
+  .site-header {
+    padding: 20px 0;
+  }
+
+  .site-hero:not(.page-hero),
+  .site-hero:not(.page-hero) .site-hero-inner {
+    height: 100vh;
+    height: 100svh;
+    min-height: 340px;
+  }
+
+  .site-hero:not(.page-hero) .site-hero-inner {
+    padding-top: 70px;
+  }
+
+  .site-hero:not(.page-hero).overlay:before {
+    height: 100%;
+    min-height: 0;
+  }
+}
+
+@media (max-height: 500px) {
+  /* No room for it beside the title, and the page visibly continues. */
+  .site-hero .scroll-down {
+    display: none;
+  }
+
+  .site-hero-inner .heading .main {
+    font-size: 44px;
+  }
+
+  .site-hero-inner .heading + br {
+    display: none;
+  }
+
+  .site-hero p {
+    margin-top: 8px;
+    margin-bottom: 0;
   }
 }
 
@@ -358,7 +459,8 @@ html[lang="el"] .site-navbar nav .menu li a {
 }
 
 .site-dialog .modal-body {
-  padding: 2.5rem 1.25rem 1.25rem;
+  /* The gutter keeps the sticky Close button off the text. */
+  padding: 2.5rem 52px 1.25rem 1.25rem;
 }
 
 .site-dialog .quote {
@@ -366,11 +468,18 @@ html[lang="el"] .site-navbar nav .menu li a {
   color: #17a2b8;
 }
 
+/* Zero height, so it scrolls with the dialog without taking any space. */
+.site-dialog__bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: 0;
+}
+
 .site-dialog__close {
   position: absolute;
   top: 8px;
   right: 8px;
-  z-index: 20;
   width: 36px;
   height: 36px;
   padding: 0;
@@ -423,8 +532,8 @@ html[lang="el"] .site-navbar nav .menu li a {
 
 .carousel-toggle {
   position: absolute;
-  bottom: 28px;
-  right: 8px;
+  top: 8px;
+  left: 8px;
   z-index: 16;
   padding: 2px 10px;
   border: 0;
@@ -483,6 +592,37 @@ html[lang="el"] .site-navbar nav .menu li a {
 
 .footer-section .footer-extra button:hover {
   color: #fff;
+}
+
+/* Fingers need a 44 px target; desktop keeps the legacy footer spacing. */
+@media (max-width: 991.98px), (pointer: coarse) {
+  .footer-section .link a,
+  .footer-section .footer-extra a,
+  .footer-section .footer-extra button,
+  .site-navbar .extra-info a,
+  .page-content a:not(.btn),
+  .map-placeholder a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .footer-section .link li {
+    margin-bottom: 0;
+  }
+
+  .footer-section .footer-extra {
+    gap: 0 20px;
+  }
+
+  .footer-section .social a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
 }
 
 /* Map stand-in shown until consent */

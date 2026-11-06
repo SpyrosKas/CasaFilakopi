@@ -5,7 +5,7 @@ import { use } from "react";
 import { PageHero } from "@/components/site/hero";
 import { GalleryGrid } from "@/components/site/photo-buttons";
 import { ReserveBand } from "@/components/site/reserve-band";
-import { heroImages, houseSections } from "@/content/house";
+import { heroImages, houseSections, photoKey } from "@/content/house";
 
 type Props = { params: Promise<{ locale: string }> };
 
@@ -20,7 +20,7 @@ export default function GalleryPage({ params }: Props) {
   setRequestLocale(locale);
   const t = useTranslations("Gallery");
   const tHome = useTranslations("Home");
-  const tCommon = useTranslations("Common");
+  const tPhotos = useTranslations("Photos");
 
   return (
     <>
@@ -29,19 +29,18 @@ export default function GalleryPage({ params }: Props) {
         <div className="container">
           {houseSections.map(({ key, photo, slides }) => {
             const title = tHome(`sections.${key}.title`);
-            const sources = [photo, ...slides];
             return (
               <div className="gallery-group" key={key}>
                 <h2>{title}</h2>
                 <GalleryGrid
                   title={title}
-                  photos={sources.map((src, index) => ({
-                    src,
-                    alt: `${title}: ${tCommon("photoStatus", {
-                      number: index + 1,
-                      total: sources.length,
-                    })}`,
-                  }))}
+                  photos={[
+                    { src: photo, alt: tHome(`sections.${key}.alt`) },
+                    ...slides.map((src) => ({
+                      src,
+                      alt: tPhotos(photoKey(src)),
+                    })),
+                  ]}
                 />
               </div>
             );

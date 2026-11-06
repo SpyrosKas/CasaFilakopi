@@ -105,6 +105,11 @@ export const houseSections: HouseSection[] = [
   },
 ];
 
+/** Message key in the Photos namespace: the file name without its extension. */
+export function photoKey(src: string) {
+  return src.slice(src.lastIndexOf("/") + 1, src.lastIndexOf("."));
+}
+
 export const heroImages = {
   home: photo("_DSC1162_opt.jpg"),
   host: photo("_DSC1148.jpg"),

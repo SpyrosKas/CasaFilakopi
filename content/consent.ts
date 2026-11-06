@@ -1,7 +1,7 @@
 /** Bump when the cookie policy changes: everyone is asked again. */
 export const COOKIE_POLICY_VERSION = "draft-1";
 
-export const CONSENT_STORAGE_KEY = "casa-milos-cookie-consent";
+export const CONSENT_STORAGE_KEY = "casa-filakopi-cookie-consent";
 
 export type ConsentChoice = "accepted" | "declined";
 

@@ -22,7 +22,7 @@ import { routing } from "@/i18n/routing";
 const clientNamespaces = ["Common", "Nav", "Consent", "Map", "Error"] as const;
 
 export const metadata: Metadata = {
-  title: { default: "Casa Milos", template: "%s | Casa Milos" },
+  title: { default: "Casa Filakopi", template: "%s | Casa Filakopi" },
   icons: { icon: "/img/casa-icon-1.png" },
 };
 

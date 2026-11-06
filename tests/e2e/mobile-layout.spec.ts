@@ -6,103 +6,37 @@ import {
   skipCookieBanner,
   waitForPhotos,
 } from "./helpers";
+import {
+  findFirstViewProblems,
+  findLayoutProblems,
+  findOverflow,
+  freezeMotion,
+} from "./layout-checks";
 
 // T3.1c. The real complaint behind this test: a round photo sat on the text in
 // every house section on phones, and pages scrolled sideways.
-const widths = [320, 375, 414, 768];
 
-type Problem = string;
+const portraitWidths = [320, 375, 414, 768];
+const greekWidths = [360, 390, 820, 991];
+const shortScreens = [
+  { width: 667, height: 375 },
+  { width: 844, height: 390 },
+  { width: 568, height: 320 },
+  { width: 375, height: 553 },
+  { width: 375, height: 600 },
+  { width: 320, height: 568 },
+  { width: 1280, height: 600 },
+];
+const shortScreenPaths = [
+  "",
+  "/host",
+  "/directions",
+  "/contact",
+  "/faq",
+  "/no-such-page",
+];
 
-/** Sideways scrolling, or anything with text sticking out past the screen. */
-async function findOverflow(page: Page): Promise<Problem[]> {
-  return page.evaluate(() => {
-    const problems: string[] = [];
-    const root = document.documentElement;
-    if (root.scrollWidth > root.clientWidth) {
-      problems.push(
-        `page is ${root.scrollWidth}px wide on a ${root.clientWidth}px screen`,
-      );
-    }
-    window.scrollTo(50, 0);
-    if (window.scrollX !== 0) problems.push("page scrolled sideways");
-    window.scrollTo(0, 0);
-    return problems;
-  });
-}
-
-/**
- * Compares every line of visible text with every visible image. Geometry only:
- * it does not care which one is painted on top, and CSS background photos do
- * not count because the heroes are meant to have text over them.
- */
-async function findTextProblems(page: Page): Promise<Problem[]> {
-  return page.evaluate(() => {
-    const isVisible = (element: Element) => {
-      if (element.closest("dialog:not([open])")) return false;
-      if (element.closest(".sr-only, .skip-link")) return false;
-      for (let e: Element | null = element; e; e = e.parentElement) {
-        const style = getComputedStyle(e);
-        if (
-          style.display === "none" ||
-          style.visibility === "hidden" ||
-          Number(style.opacity) === 0
-        ) {
-          return false;
-        }
-      }
-      return true;
-    };
-
-    const images = [...document.querySelectorAll("img")]
-      .filter(isVisible)
-      .map((image) => ({
-        rect: image.getBoundingClientRect(),
-        name: image.getAttribute("src") ?? "",
-      }))
-      .filter(({ rect }) => rect.width > 0 && rect.height > 0);
-
-    const problems: string[] = [];
-    const walker = document.createTreeWalker(
-      document.body,
-      NodeFilter.SHOW_TEXT,
-    );
-    const screenWidth = document.documentElement.clientWidth;
-
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const text = node.textContent?.trim();
-      const parent = node.parentElement;
-      if (!text || !parent || parent.closest("script, style, noscript")) {
-        continue;
-      }
-      if (!isVisible(parent)) continue;
-
-      const range = document.createRange();
-      range.selectNodeContents(node);
-      const lines = [...range.getClientRects()].filter(
-        (line) => line.width > 0 && line.height > 0,
-      );
-      const label = text.slice(0, 40);
-
-      for (const line of lines) {
-        if (line.left < -1 || line.right > screenWidth + 1) {
-          problems.push(`"${label}" runs off the screen`);
-        }
-        for (const { rect, name } of images) {
-          const width =
-            Math.min(line.right, rect.right) - Math.max(line.left, rect.left);
-          const height =
-            Math.min(line.bottom, rect.bottom) - Math.max(line.top, rect.top);
-          if (width > 1 && height > 1) {
-            problems.push(`"${label}" is covered by ${name}`);
-          }
-        }
-      }
-    }
-    return [...new Set(problems)];
-  });
-}
-
-/** Reveals everything visible, then runs both checks on the final layout. */
+/** Reveals everything visible, then checks the final layout. */
 async function expectCleanLayout(page: Page) {
   await scrollThroughPage(page);
   await waitForPhotos(page);
@@ -120,38 +54,63 @@ async function expectCleanLayout(page: Page) {
       { message: "every element revealed" },
     )
     .toBe(0);
-  // Longest transition: 1s plus a 1s delay.
-  await page.waitForTimeout(2100);
+  await freezeMotion(page);
 
   expect(await findOverflow(page), "after reveal").toEqual([]);
-  expect(await findTextProblems(page)).toEqual([]);
+  expect(await findLayoutProblems(page)).toEqual([]);
+}
+
+async function checkPage(
+  page: Page,
+  url: string,
+  size: { width: number; height: number },
+) {
+  await page.setViewportSize(size);
+  await skipCookieBanner(page);
+  await page.goto(url);
+
+  // Before anything has been scrolled to. This is what the legacy site got
+  // wrong: 475 px wide until each element had been scrolled past.
+  await page.waitForLoadState("load");
+  expect(await findOverflow(page), "before reveal").toEqual([]);
+
+  // What a visitor sees first, with no scrolling, once the hero has played.
+  await page.waitForTimeout(1200);
+  expect(await findFirstViewProblems(page), "first view").toEqual([]);
+  expect(
+    await findLayoutProblems(page, { firstViewOnly: true }),
+    "first view layout",
+  ).toEqual([]);
+
+  await expectCleanLayout(page);
+
+  if (url.endsWith("/directions")) {
+    // The second route is collapsed until asked for.
+    await page
+      .locator(".accordion .card")
+      .nth(1)
+      .locator("button")
+      .first()
+      .click();
+    await expectCleanLayout(page);
+  }
 }
 
 for (const locale of locales) {
   for (const path of publicPaths) {
-    for (const width of widths) {
+    for (const width of portraitWidths) {
       test(`/${locale}${path} at ${width}px`, async ({ page }) => {
-        await page.setViewportSize({ width, height: 800 });
-        await skipCookieBanner(page);
-        await page.goto(`/${locale}${path}`);
+        await checkPage(page, `/${locale}${path}`, { width, height: 800 });
+      });
+    }
+  }
 
-        // First with animations still waiting: this is what the legacy site
-        // got wrong, 475 px wide until each element had been scrolled past.
-        await page.waitForLoadState("load");
-        expect(await findOverflow(page), "before reveal").toEqual([]);
-
-        await expectCleanLayout(page);
-
-        if (path === "/directions") {
-          // The second route is collapsed until asked for.
-          await page
-            .locator(".accordion .card")
-            .nth(1)
-            .locator("button")
-            .first()
-            .click();
-          await expectCleanLayout(page);
-        }
+  for (const path of shortScreenPaths) {
+    for (const size of shortScreens) {
+      test(`/${locale}${path} at ${size.width}x${size.height}`, async ({
+        page,
+      }) => {
+        await checkPage(page, `/${locale}${path}`, size);
       });
     }
   }
@@ -159,35 +118,88 @@ for (const locale of locales) {
   // The round photo must clear the text at any width, not only on phones.
   for (const width of [992, 1100, 1199, 1200, 1280]) {
     test(`/${locale} at ${width}px`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 800 });
-      await skipCookieBanner(page);
-      await page.goto(`/${locale}`);
-      await page.waitForLoadState("load");
-      await expectCleanLayout(page);
+      await checkPage(page, `/${locale}`, { width, height: 800 });
     });
   }
 
-  for (const width of widths) {
-    test(`/${locale} menu open at ${width}px`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 800 });
+  for (const size of [
+    { width: 320, height: 800 },
+    { width: 768, height: 800 },
+    { width: 1280, height: 800 },
+    { width: 667, height: 375 },
+  ]) {
+    const name = `${size.width}x${size.height}`;
+
+    test(`/${locale} menu open at ${name}`, async ({ page }) => {
+      await page.setViewportSize(size);
       await skipCookieBanner(page);
-      await page.goto(`/${locale}`);
+      await page.goto(`/${locale}/contact`);
       await page.locator(".site-menu-toggle").click();
-      await page.waitForTimeout(500);
+      await freezeMotion(page);
       const navbar = page.locator("#site-navbar");
       expect(
         await navbar.evaluate((el) => el.scrollWidth <= el.clientWidth),
       ).toBe(true);
+      expect(await findLayoutProblems(page, { root: "#site-navbar" })).toEqual(
+        [],
+      );
     });
 
-    test(`/${locale} cookie banner at ${width}px`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 800 });
+    test(`/${locale} cookie banner at ${name}`, async ({ page }) => {
+      await page.setViewportSize(size);
       await page.goto(`/${locale}`);
       await expect(page.locator(".cookie-banner")).toBeVisible();
+      await page.waitForTimeout(1200);
       expect(await findOverflow(page)).toEqual([]);
       const box = await page.locator(".cookie-banner").boundingBox();
-      expect(box!.y + box!.height).toBeLessThanOrEqual(800);
-      expect(box!.height).toBeLessThanOrEqual(800 * 0.6);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(size.height);
+      expect(box!.height).toBeLessThanOrEqual(size.height * 0.6);
+      expect(
+        await findLayoutProblems(page, { root: ".cookie-banner" }),
+      ).toEqual([]);
+      // The banner may sit over the button, but never over the page title.
+      await expect(page.locator(".site-hero h1")).toBeInViewport();
+    });
+
+    test(`/${locale} every dialog at ${name}`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await skipCookieBanner(page);
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.goto(`/${locale}`);
+      await page.waitForLoadState("load");
+
+      const openers = page.locator(".house-section .btn, .box .btn");
+      const total = await openers.count();
+      expect(total).toBe(8);
+
+      for (let i = 0; i < total; i++) {
+        await openers.nth(i).click();
+        const dialog = page.locator("dialog[open]");
+        await expect(dialog).toBeVisible();
+        await freezeMotion(page);
+        await waitForPhotos(page);
+        expect(
+          await findLayoutProblems(page, { root: "dialog[open]" }),
+          `dialog ${i}`,
+        ).toEqual([]);
+
+        // Long reviews scroll: Close must stay reachable at the bottom.
+        await dialog.evaluate((el) => {
+          el.scrollTop = el.scrollHeight;
+        });
+        const close = dialog.locator(".site-dialog__close");
+        await expect(close).toBeInViewport();
+        await close.click();
+        await expect(dialog).toHaveCount(0);
+      }
+    });
+  }
+}
+
+for (const path of publicPaths) {
+  for (const width of greekWidths) {
+    test(`Greek /el${path} at ${width}px`, async ({ page }) => {
+      await checkPage(page, `/el${path}`, { width, height: 800 });
     });
   }
 }

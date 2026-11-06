@@ -44,14 +44,16 @@ export function Dialog({
       }}
     >
       <div className="modal-content">
-        <button
-          type="button"
-          className="site-dialog__close"
-          aria-label={t("close")}
-          onClick={() => ref.current?.close()}
-        >
-          <span aria-hidden="true">&times;</span>
-        </button>
+        <div className="site-dialog__bar">
+          <button
+            type="button"
+            className="site-dialog__close"
+            aria-label={t("close")}
+            onClick={() => ref.current?.close()}
+          >
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
         {children}
       </div>
     </dialog>

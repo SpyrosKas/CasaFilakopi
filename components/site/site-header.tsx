@@ -16,6 +16,26 @@ const menuLinks = [
   { href: "/contact", key: "contact" },
 ] as const;
 
+/** Tab cycles through the close button and the menu, never the page behind. */
+function keepFocusInMenu(event: KeyboardEvent, toggle: HTMLElement | null) {
+  if (!toggle) return;
+  const items = [
+    toggle,
+    ...document.querySelectorAll<HTMLElement>(
+      "#site-navbar a, #site-navbar button, #site-navbar iframe",
+    ),
+  ];
+  const first = items[0];
+  const last = items[items.length - 1];
+  const active = document.activeElement as HTMLElement | null;
+  const outside = !active || !items.includes(active);
+
+  if (outside || (event.shiftKey ? active === first : active === last)) {
+    event.preventDefault();
+    (event.shiftKey && !outside ? last : first).focus();
+  }
+}
+
 export function SiteHeader() {
   const t = useTranslations("Nav");
   const tCommon = useTranslations("Common");
@@ -35,9 +55,12 @@ export function SiteHeader() {
     document.querySelector<HTMLElement>("#site-navbar a")?.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setOpen(false);
-      toggleRef.current?.focus();
+      if (event.key === "Escape") {
+        setOpen(false);
+        toggleRef.current?.focus();
+      } else if (event.key === "Tab") {
+        keepFocusInMenu(event, toggleRef.current);
+      }
     };
     document.addEventListener("keydown", onKeyDown);
 
@@ -55,7 +78,7 @@ export function SiteHeader() {
     <header className="site-header">
       <div className="container-fluid">
         <div className="row">
-          <div className="col-4 site-logo" data-reveal="fade">
+          <div className="col-4 site-logo" data-reveal-load="fade">
             {pathname !== "/" && <Link href="/">{tCommon("siteName")}</Link>}
           </div>
           <div className="col-8">
@@ -63,7 +86,7 @@ export function SiteHeader() {
               ref={toggleRef}
               type="button"
               className={`site-menu-toggle${open ? " open" : ""}`}
-              data-reveal="fade"
+              data-reveal-load="fade"
               aria-expanded={open}
               aria-controls="site-navbar"
               aria-label={open ? t("closeMenu") : t("openMenu")}

@@ -11,6 +11,7 @@ import { richTags } from "@/components/site/rich-text";
 import {
   heroImages,
   houseSections,
+  photoKey,
   reviews,
   type HouseSection,
 } from "@/content/house";
@@ -75,7 +76,7 @@ function HouseSectionBlock({
   id?: string;
 }) {
   const t = useTranslations("Home");
-  const tCommon = useTranslations("Common");
+  const tPhotos = useTranslations("Photos");
   const { key, photoSide, photo, round, slides } = section;
   const title = t(`sections.${key}.title`);
   const photoRight = photoSide === "right";
@@ -116,12 +117,9 @@ function HouseSectionBlock({
                 <PhotoModalButton
                   label={t("viewMore")}
                   title={title}
-                  photos={slides.map((src, index) => ({
+                  photos={slides.map((src) => ({
                     src,
-                    alt: `${title}: ${tCommon("photoStatus", {
-                      number: index + 1,
-                      total: slides.length,
-                    })}`,
+                    alt: tPhotos(photoKey(src)),
                   }))}
                 />
               </div>

@@ -121,7 +121,7 @@ function Route({
                   <Photo
                     className="img-responsive"
                     src={step.image}
-                    alt={t("picture", { number })}
+                    alt={t(`${key}.alt`)}
                     sizes="(min-width: 768px) 500px, 100vw"
                   />
                 </div>
