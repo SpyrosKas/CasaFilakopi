@@ -304,6 +304,7 @@ Security and tooling:
 - [ ] T5.5 myDATA adapter, retries (`INV-08`, `INV-09`, `JOB-06`)
 - [ ] T5.6 OTA booking invoices (`INV-10`)
 - [ ] T5.7 List, export, settings (`INV-11`, `INV-12`, `ADM-22`, `ADM-26`)
+- [ ] T5.7a Download one document, or select several or all matching a filter, as a PDF or a ZIP plus CSV. Marking as sent stays a separate step
 
 **Track OPS**
 - [ ] T5.8 Editable email templates, remaining emails (`EML-02`, `EML-03`, `EML-06`, `EML-09`, `ADM-27`)
