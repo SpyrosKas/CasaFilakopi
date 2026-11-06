@@ -9,6 +9,7 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     "legacy/**",
+    ".claude/**",
     ".next/**",
     "out/**",
     "build/**",
