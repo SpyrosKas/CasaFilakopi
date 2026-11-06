@@ -13,7 +13,7 @@ test("Greek home page renders in Greek", async ({ page }) => {
 
 test("admin is outside locale routing", async ({ page }) => {
   await page.goto("/admin");
-  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page).toHaveURL(/\/admin\/login$/);
 });
 
 test("health endpoint responds", async ({ request }) => {

@@ -1,0 +1,162 @@
+import "server-only";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { cache } from "react";
+import {
+  checkActivity,
+  createActivityValue,
+  readActivityValue,
+} from "@/lib/admin/activity";
+import { readClaims } from "@/lib/admin/claims";
+import { ACTIVITY_COOKIE, ADMIN_COOKIE_OPTIONS } from "@/lib/admin/config";
+import {
+  createAdminSessionClient,
+  type AdminSessionClient,
+} from "@/lib/admin/supabase";
+import type { Database } from "@/lib/db/types";
+import { getServerEnv } from "@/lib/env.server";
+
+export type AdminRole = Database["public"]["Enums"]["admin_role"];
+
+interface SignedIn {
+  supabase: AdminSessionClient;
+  userId: string;
+  email: string;
+  role: AdminRole;
+  displayName: string;
+  hasTotp: boolean;
+  /** True when this session came from a reset or invite link. */
+  fromEmailLink: boolean;
+}
+
+export type AdminContext = SignedIn;
+
+export type AdminSession =
+  /** No session, or the session is over. */
+  | { state: "anonymous"; expired: boolean }
+  /** A real login with no admin_profiles row. Never gets past sign-in. */
+  | { state: "not_admin"; supabase: AdminSessionClient }
+  /** The password is done but the session still needs its TOTP code. */
+  | ({ state: "needs_verify"; factorId: string } & SignedIn)
+  /** An Owner who has not set up TOTP yet. */
+  | ({ state: "needs_enrolment" } & SignedIn)
+  | ({ state: "ready" } & SignedIn);
+
+const EMAIL_LINK_METHODS = ["otp", "recovery", "invite"];
+
+/** Records a sign-in. Call from an action or route, where cookies can be set. */
+export async function markActive(accessToken: string): Promise<void> {
+  const { sessionId } = readClaims(accessToken);
+  if (!sessionId) return;
+  const store = await cookies();
+  store.set(
+    ACTIVITY_COOKIE,
+    createActivityValue(
+      sessionId,
+      Math.floor(Date.now() / 1000),
+      getServerEnv().SUPABASE_SECRET_KEY,
+    ),
+    ADMIN_COOKIE_OPTIONS,
+  );
+}
+
+export async function clearActive(): Promise<void> {
+  (await cookies()).delete(ACTIVITY_COOKIE);
+}
+
+/**
+ * Works out who is asking, from the server's view only. The token is checked
+ * with the auth server and the role comes from the database, so nothing the
+ * browser sends can raise it. Called on every page and server action.
+ */
+export const resolveAdminSession = cache(async (): Promise<AdminSession> => {
+  const supabase = await createAdminSessionClient();
+
+  // Only the token is read here, and getUser checks it on the next line.
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { state: "anonymous", expired: false };
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser(session.access_token);
+  if (error || !user) return { state: "anonymous", expired: false };
+
+  const claims = readClaims(session.access_token);
+  const store = await cookies();
+  const activity = checkActivity({
+    lastActive: claims.sessionId
+      ? readActivityValue(
+          store.get(ACTIVITY_COOKIE)?.value,
+          claims.sessionId,
+          getServerEnv().SUPABASE_SECRET_KEY,
+        )
+      : null,
+    signedInAt: claims.signedInAt,
+    now: Math.floor(Date.now() / 1000),
+  });
+  if (activity === "expired") return { state: "anonymous", expired: true };
+
+  // admin_profiles has a self-read policy, so this works before TOTP is done.
+  const { data: profile } = await supabase
+    .from("admin_profiles")
+    .select("role, display_name")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (!profile) return { state: "not_admin", supabase };
+
+  const totp = (user.factors ?? []).find(
+    (factor) => factor.factor_type === "totp" && factor.status === "verified",
+  );
+  const signedIn: SignedIn = {
+    supabase,
+    userId: user.id,
+    email: user.email ?? "",
+    role: profile.role,
+    displayName: profile.display_name,
+    hasTotp: Boolean(totp),
+    fromEmailLink: claims.methods.some((m) => EMAIL_LINK_METHODS.includes(m)),
+  };
+
+  if (totp && claims.aal !== "aal2") {
+    return { state: "needs_verify", factorId: totp.id, ...signedIn };
+  }
+  if (profile.role === "owner" && !totp) {
+    return { state: "needs_enrolment", ...signedIn };
+  }
+
+  // Only the database decides. current_admin_role() is null for an Owner
+  // without aal2, so a forged or stale state above cannot pass this.
+  const { data: role, error: roleError } =
+    await supabase.rpc("current_admin_role");
+  if (roleError || role !== profile.role) {
+    return { state: "not_admin", supabase };
+  }
+
+  return { state: "ready", ...signedIn };
+});
+
+/** Use first in every admin page and server action. */
+export async function requireAdmin(): Promise<AdminContext> {
+  const session = await resolveAdminSession();
+  switch (session.state) {
+    case "ready":
+      return session;
+    case "needs_verify":
+    case "needs_enrolment":
+      redirect("/admin/mfa");
+    case "anonymous":
+      redirect(session.expired ? "/admin/login?expired=1" : "/admin/login");
+    case "not_admin":
+      redirect("/admin/login");
+  }
+}
+
+/** Use first in every Owner page and server action. */
+export async function requireOwner(): Promise<AdminContext> {
+  const admin = await requireAdmin();
+  if (admin.role !== "owner") redirect("/admin/not-allowed");
+  return admin;
+}
