@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { writeAudit } from "@/lib/admin/audit";
+import { callAdminRpc } from "@/lib/admin/audit";
 import {
   errorState,
   formFields,
@@ -21,8 +21,9 @@ import { loadBookingSettings, loadHouse } from "@/lib/admin/settings-data";
 import { t } from "@/lib/admin/strings";
 import type { Json } from "@/lib/db/types";
 
-// Every write here runs through the Owner's own client, so RLS applies and the
-// database triggers name the Owner in the audit log.
+// Writes run through the Owner's own client, so RLS applies and the database
+// triggers name the Owner in the audit log. saveRules uses the one secret-key
+// call, because two tables must change together.
 
 function asObject(value: Json | undefined): Record<string, Json | undefined> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -39,10 +40,12 @@ export async function saveProperty(
   if (!parsed.success) return fromZodError(parsed.error);
   const { instagram, facebook, ...fields } = parsed.data;
 
-  const { data: before } = await admin.supabase
+  const { data: before, error: readError } = await admin.supabase
     .from("property")
-    .select("*")
+    .select("social_links")
     .maybeSingle();
+  // Saving after a failed read would wipe the links this screen does not show.
+  if (readError) return errorState(t.common.somethingWrong);
 
   // Keeps any other social links already stored.
   const social_links = {
@@ -51,21 +54,10 @@ export async function saveProperty(
     facebook,
   };
 
-  const { data: after, error } = await admin.supabase
+  const { error } = await admin.supabase
     .from("property")
-    .upsert({ id: true, ...fields, social_links })
-    .select()
-    .single();
-  if (error || !after) return errorState(t.common.somethingWrong);
-
-  // The property table has no audit trigger.
-  await writeAudit(admin, {
-    action: before ? "update" : "insert",
-    entity: "property",
-    entityId: "true",
-    before: before ?? null,
-    after,
-  });
+    .upsert({ id: true, ...fields, social_links });
+  if (error) return errorState(t.common.somethingWrong);
 
   revalidatePath("/admin/property");
   return okState(t.common.saved);
@@ -146,51 +138,13 @@ export async function saveRules(
   if (!parsed.success) return fromZodError(parsed.error);
   const { payment, cancellation } = parsed.data;
 
-  const { supabase } = admin;
-  const { data: oldPolicy, error: readError } = await supabase
-    .from("cancellation_policies")
-    .select("id, tiers, is_non_refundable, is_active")
-    .eq("is_default", true)
-    .maybeSingle();
-  if (readError) return errorState(t.common.somethingWrong);
-
-  const policy = {
-    tiers: cancellation.tiers as unknown as NonNullable<Json>,
-    is_non_refundable: cancellation.isNonRefundable,
-    // Checkout only reads an active policy, and fails without one.
-    is_active: true,
-  };
-  const { error: policyError } = oldPolicy
-    ? await supabase
-        .from("cancellation_policies")
-        .update(policy)
-        .eq("id", oldPolicy.id)
-    : await supabase.from("cancellation_policies").insert({
-        ...policy,
-        name: { en: "Standard", el: "Τυπική" },
-        is_default: true,
-      });
-  if (policyError) return errorState(t.common.somethingWrong);
-
-  const { error: paymentError } = await supabase.from("settings").upsert({
-    key: "payment",
-    is_public: false,
-    value: payment as unknown as NonNullable<Json>,
-  });
-
-  // Two tables cannot be saved in one step from here. Put the first one back
-  // so a failure never leaves half of Yorgos's change in force.
-  if (paymentError) {
-    if (oldPolicy) {
-      await supabase
-        .from("cancellation_policies")
-        .update({
-          tiers: oldPolicy.tiers,
-          is_non_refundable: oldPolicy.is_non_refundable,
-          is_active: oldPolicy.is_active,
-        })
-        .eq("id", oldPolicy.id);
-    }
+  try {
+    await callAdminRpc(admin, "save_rules", {
+      p_payment: payment as unknown as NonNullable<Json>,
+      p_tiers: cancellation.tiers as unknown as NonNullable<Json>,
+      p_is_non_refundable: cancellation.isNonRefundable,
+    });
+  } catch {
     return errorState(t.common.somethingWrong);
   }
 

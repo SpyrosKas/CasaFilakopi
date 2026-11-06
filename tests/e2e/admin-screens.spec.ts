@@ -2,7 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   createTestUser,
   db,
-  deleteTestUser,
+  deleteCreatedUsers,
+  lockSharedSettings,
+  releaseSharedSettings,
   newOwnerPage,
   type TestUser,
 } from "./admin-helpers";
@@ -18,6 +20,7 @@ let savedBooking: unknown;
 const HOUSE = "00000000-0000-4000-8000-000000000001";
 
 test.beforeAll(async ({ browser }) => {
+  await lockSharedSettings();
   owner = await createTestUser("owner");
   page = await newOwnerPage(browser, owner, { width: 375, height: 812 });
 
@@ -57,7 +60,8 @@ test.afterAll(async () => {
     [JSON.stringify(savedBooking)],
   );
   await page.context().close();
-  await deleteTestUser(owner);
+  await deleteCreatedUsers();
+  await releaseSharedSettings();
 });
 
 async function save() {

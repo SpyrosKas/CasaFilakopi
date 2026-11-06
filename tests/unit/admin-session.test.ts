@@ -1,14 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
+  attemptHash,
   checkActivity,
   createActivityValue,
+  createDeviceValue,
+  isFreshSignIn,
+  isKnownDevice,
   readActivityValue,
 } from "@/lib/admin/activity";
+import { pickClientAddress } from "@/lib/admin/client-address";
 import { readClaims } from "@/lib/admin/claims";
 import {
   ABSOLUTE_TIMEOUT_SECONDS,
+  ATTEMPT_LIMITS,
+  ENROL_MAX_SESSION_AGE_SECONDS,
   IDLE_TIMEOUT_SECONDS,
 } from "@/lib/admin/config";
+import { securityHeaders } from "@/lib/admin/headers";
 import {
   bookingSettingsErrors,
   bookingSettingsSchema,
@@ -88,6 +96,96 @@ describe("session timeout", () => {
     expect(checkActivity({ lastActive: NOW, signedInAt: null, now: NOW })).toBe(
       "expired",
     );
+  });
+});
+
+describe("adding a second factor", () => {
+  it("needs a recent password", () => {
+    const age = ENROL_MAX_SESSION_AGE_SECONDS;
+    expect(isFreshSignIn(NOW - age, NOW)).toBe(true);
+    expect(isFreshSignIn(NOW - age - 1, NOW)).toBe(false);
+    expect(isFreshSignIn(null, NOW)).toBe(false);
+  });
+});
+
+describe("known device cookie", () => {
+  it("is tied to the email and the secret", () => {
+    const value = createDeviceValue("a@b.test", SECRET);
+    expect(isKnownDevice(value, "a@b.test", SECRET)).toBe(true);
+    expect(isKnownDevice(value, "c@d.test", SECRET)).toBe(false);
+    expect(isKnownDevice(value, "a@b.test", "another")).toBe(false);
+    expect(isKnownDevice("junk", "a@b.test", SECRET)).toBe(false);
+    expect(isKnownDevice(undefined, "a@b.test", SECRET)).toBe(false);
+  });
+});
+
+describe("lockout limits", () => {
+  it("keeps the email ceiling out of reach of one address", () => {
+    expect(ATTEMPT_LIMITS.login_email).toBeGreaterThan(ATTEMPT_LIMITS.login_ip);
+    expect(ATTEMPT_LIMITS.reset_email).toBeGreaterThan(
+      ATTEMPT_LIMITS.reset_pair,
+    );
+  });
+
+  it("hashes so that no value can be read back", () => {
+    const hash = attemptHash(SECRET, "a@b.test");
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(hash).not.toBe(attemptHash("another", "a@b.test"));
+  });
+});
+
+describe("client address", () => {
+  const from =
+    (headers: Record<string, string>) =>
+    (name: string): string | undefined =>
+      headers[name];
+
+  it("trusts Vercel's header on Vercel, over anything else", () => {
+    const headers = from({
+      "x-vercel-forwarded-for": "203.0.113.9",
+      "x-forwarded-for": "1.1.1.1",
+    });
+    expect(pickClientAddress(headers, true)).toBe("203.0.113.9");
+  });
+
+  it("ignores that header off Vercel, where anyone can send it", () => {
+    const headers = from({
+      "x-vercel-forwarded-for": "1.1.1.1",
+      "x-forwarded-for": "203.0.113.9",
+    });
+    expect(pickClientAddress(headers, false)).toBe("203.0.113.9");
+  });
+
+  it("takes the last x-forwarded-for hop, which our proxy wrote", () => {
+    const headers = from({
+      "x-forwarded-for": "6.6.6.6, 7.7.7.7, 203.0.113.9",
+    });
+    expect(pickClientAddress(headers, false)).toBe("203.0.113.9");
+  });
+
+  it("has a fallback, and ignores x-real-ip", () => {
+    expect(pickClientAddress(from({}), false)).toBe("unknown");
+    expect(pickClientAddress(from({ "x-real-ip": "6.6.6.6" }), false)).toBe(
+      "unknown",
+    );
+  });
+});
+
+describe("security headers", () => {
+  const url = "https://abc.supabase.co/rest";
+
+  it("allows what the app needs and nothing more in production", () => {
+    const csp = securityHeaders(url, false)["Content-Security-Policy"];
+    expect(csp).toContain("connect-src 'self' https://abc.supabase.co;");
+    expect(csp).not.toContain("unsafe-eval");
+    expect(csp).not.toContain("ws:");
+    expect(csp).toContain("object-src 'none'");
+  });
+
+  it("adds only what hot reload needs in development", () => {
+    const csp = securityHeaders(url, true)["Content-Security-Policy"];
+    expect(csp).toContain("'unsafe-eval'");
+    expect(csp).toContain("ws:");
   });
 });
 

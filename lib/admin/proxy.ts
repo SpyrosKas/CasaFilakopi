@@ -11,6 +11,7 @@ import {
   ADMIN_COOKIE_OPTIONS,
   PUBLIC_ADMIN_PATHS,
 } from "@/lib/admin/config";
+import { securityHeaders } from "@/lib/admin/headers";
 import type { Database } from "@/lib/db/types";
 import { getPublicEnv } from "@/lib/env";
 
@@ -19,11 +20,13 @@ import { getPublicEnv } from "@/lib/env";
 // requireAdmin() or requireOwner() in lib/admin/session.ts.
 
 function applyHeaders(response: NextResponse): NextResponse {
-  response.headers.set("X-Robots-Tag", "noindex, nofollow");
-  response.headers.set("X-Frame-Options", "DENY");
-  response.headers.set("Referrer-Policy", "no-referrer");
-  response.headers.set("X-Content-Type-Options", "nosniff");
-  response.headers.set("Cache-Control", "private, no-store");
+  const headers = securityHeaders(
+    getPublicEnv().NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NODE_ENV === "development",
+  );
+  for (const [name, value] of Object.entries(headers)) {
+    response.headers.set(name, value);
+  }
   return response;
 }
 

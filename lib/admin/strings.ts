@@ -198,11 +198,11 @@ export const t = {
     errors: {
       paymentMode: "Please choose how guests pay.",
       depositPercent:
-        "The deposit must be above 0 and below 100 percent, with at most 2 decimals.",
+        "The deposit must be at least 1% and below 100%, with at most 2 decimals.",
       depositRequired: "Please type the deposit percentage.",
       depositNotAllowed: "A deposit can only be set when guests pay a deposit.",
-      balanceDays: "Days before arrival must be a whole number, 0 or more.",
-      tierDays: "Days must be a whole number, 0 or more.",
+      balanceDays: "Days before arrival must be a whole number from 0 to 365.",
+      tierDays: "Days must be a whole number from 0 to 3650.",
       tierPercent: "Percent must be from 0 to 100, with at most 2 decimals.",
       tiersInvalid: "Please check the refund lines.",
       tooManyTiers: "Please use 10 lines or fewer.",

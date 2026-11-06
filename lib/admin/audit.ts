@@ -3,12 +3,12 @@ import type { AdminContext } from "@/lib/admin/session";
 import { createAdminClient } from "@/lib/db/admin";
 import type { Database, Json } from "@/lib/db/types";
 
-// Database triggers record changes to most tables (ADM-04). Use this helper
-// for tables without one, such as property. The caller must already have
-// passed requireAdmin() or requireOwner().
+// Database triggers record table changes (ADM-04). Use this helper for what
+// they cannot see, such as a password change or a new second factor, which
+// happen inside Supabase Auth. The caller must already know who the user is.
 
 export async function writeAudit(
-  admin: AdminContext,
+  admin: Pick<AdminContext, "userId">,
   entry: {
     action: string;
     entity: string;

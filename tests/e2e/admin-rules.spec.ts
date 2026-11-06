@@ -3,7 +3,9 @@ import { expect, test } from "@playwright/test";
 import {
   createTestUser,
   db,
-  deleteTestUser,
+  deleteCreatedUsers,
+  lockSharedSettings,
+  releaseSharedSettings,
   newOwnerPage,
   signInOwner,
   signInWithPassword,
@@ -57,6 +59,7 @@ async function readSnapshot() {
 }
 
 test.beforeAll(async () => {
+  await lockSharedSettings();
   owner = await createTestUser("owner");
   staff = await createTestUser("staff");
 
@@ -116,8 +119,8 @@ test.afterAll(async () => {
   ]);
   await db.query(`delete from public.bookings where id = $1`, [bookingId]);
   await db.query(`delete from public.rooms where id = $1`, [roomId]);
-  await deleteTestUser(owner);
-  await deleteTestUser(staff);
+  await deleteCreatedUsers();
+  await releaseSharedSettings();
 });
 
 test("the screen shows the stored rules and says they apply to new bookings", async ({
@@ -269,14 +272,44 @@ test("Deposit with no percentage is refused, as it would stop checkout", async (
   );
   expect(await readRules()).toEqual(before);
 
-  for (const percent of ["0", "100", "120", "12.345"]) {
+  for (const percent of ["0", "0.5", "100", "120", "12.345"]) {
     await page.getByLabel(/^Deposit, as a percentage/).fill(percent);
     await save.click();
     await expect(page.locator("fieldset .field-error")).toContainText(
-      "above 0 and below 100",
+      "at least 1%",
     );
     expect(await readRules()).toEqual(before);
   }
+});
+
+test("days past the limits get a plain message", async ({ page }) => {
+  await signInOwner(page, owner);
+  await page.goto("/admin/rules");
+  const before = await readRules();
+  const save = page.getByRole("button", { name: "Save", exact: true });
+
+  await page.getByRole("radio", { name: /^Deposit/ }).check();
+  await page.getByLabel(/^Deposit, as a percentage/).fill("30");
+  await page.getByLabel("Days before arrival the rest is due").fill("366");
+  await save.click();
+  await expect(page.locator("fieldset .field-error")).toContainText(
+    "from 0 to 365",
+  );
+  expect(await readRules()).toEqual(before);
+
+  await page.getByLabel("Days before arrival the rest is due").fill("10");
+  await page.getByLabel("No refunds, ever").uncheck();
+  await page.getByRole("button", { name: "Add a line" }).click();
+  await page.getByLabel("Days before arrival, or more").last().fill("3651");
+  await page
+    .getByLabel(/^Percent of the booking price/)
+    .last()
+    .fill("0");
+  await save.click();
+  await expect(page.locator("fieldset .field-error")).toContainText(
+    "from 0 to 3650",
+  );
+  expect(await readRules()).toEqual(before);
 });
 
 test("rules that make no sense are refused and nothing is saved", async ({

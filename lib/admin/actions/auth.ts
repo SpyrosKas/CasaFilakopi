@@ -1,7 +1,14 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { createDeviceValue, isKnownDevice } from "@/lib/admin/activity";
+import { writeAudit } from "@/lib/admin/audit";
+import { emailAtAddress } from "@/lib/admin/client-address";
 import {
+  ADMIN_COOKIE_OPTIONS,
+  DEVICE_COOKIE,
+  DEVICE_COOKIE_MAX_AGE_SECONDS,
   LOCK_WINDOW_MINUTES,
   LOGIN_MIN_MS,
   RESET_MIN_MS,
@@ -14,12 +21,12 @@ import {
   type ActionState,
 } from "@/lib/admin/form-state";
 import {
+  claimAttempt,
+  clearAttempts,
   clientAddress,
   holdUntil,
-  claimAttempt,
   isLocked,
-  recordAttempt,
-  recordSuccess,
+  releaseAttempt,
 } from "@/lib/admin/rate-limit";
 import {
   confirmLinkSchema,
@@ -35,6 +42,20 @@ import {
 import { t } from "@/lib/admin/strings";
 import { createAdminSessionClient } from "@/lib/admin/supabase";
 import { getPublicEnv } from "@/lib/env";
+import { getServerEnv } from "@/lib/env.server";
+
+async function isKnownDeviceFor(email: string): Promise<boolean> {
+  const value = (await cookies()).get(DEVICE_COOKIE)?.value;
+  return isKnownDevice(value, email, getServerEnv().SUPABASE_SECRET_KEY);
+}
+
+async function rememberDevice(email: string): Promise<void> {
+  (await cookies()).set(
+    DEVICE_COOKIE,
+    createDeviceValue(email, getServerEnv().SUPABASE_SECRET_KEY),
+    { ...ADMIN_COOKIE_OPTIONS, maxAge: DEVICE_COOKIE_MAX_AGE_SECONDS },
+  );
+}
 
 export async function login(
   _previous: ActionState,
@@ -45,17 +66,22 @@ export async function login(
   if (!parsed.success) return fromZodError(parsed.error);
   const { email, password } = parsed.data;
   const address = await clientAddress();
-  const lockedMessage = errorState(t.login.locked(LOCK_WINDOW_MINUTES));
+  const pair = emailAtAddress(email, address);
+  const refuse = async () => {
+    await holdUntil(startedAt, LOGIN_MIN_MS);
+    return errorState(t.login.locked(LOCK_WINDOW_MINUTES));
+  };
 
   try {
-    // One try each, so the address is counted even if the email is locked.
-    const allowed = await Promise.all([
-      claimAttempt("login_email", email),
-      claimAttempt("login_ip", address),
-    ]);
-    if (allowed.includes(false)) {
-      await holdUntil(startedAt, LOGIN_MIN_MS);
-      return lockedMessage;
+    // In this order, so a locked address stops here and adds nothing else.
+    const addressClaim = await claimAttempt("login_ip", address);
+    if (addressClaim === null) return await refuse();
+    if ((await claimAttempt("login_pair", pair)) === null) {
+      return await refuse();
+    }
+    const emailClaim = await claimAttempt("login_email", email);
+    if (emailClaim === null && !(await isKnownDeviceFor(email))) {
+      return await refuse();
     }
 
     const supabase = await createAdminSessionClient();
@@ -87,15 +113,19 @@ export async function login(
     }
 
     if (!isAdmin) {
-      const nowLocked = await isLocked("login_email", email);
+      if (await isLocked("login_pair", pair)) return await refuse();
       await holdUntil(startedAt, LOGIN_MIN_MS);
-      return nowLocked ? lockedMessage : errorState(t.login.wrong);
+      return errorState(t.login.wrong);
     }
 
+    // Only this email and address start again. The other counts lose this
+    // one try, so a real login cannot wipe a stranger's failures.
     await Promise.all([
-      recordSuccess("login_email", email, data.user!.id),
-      recordSuccess("login_ip", address, data.user!.id),
+      clearAttempts("login_pair", pair),
+      releaseAttempt(addressClaim),
+      releaseAttempt(emailClaim),
     ]);
+    await rememberDevice(email);
   } catch {
     await holdUntil(startedAt, LOGIN_MIN_MS);
     return errorState(t.login.busy);
@@ -123,8 +153,17 @@ export async function requestPasswordReset(
 
   // Whatever happens below, the answer and its timing stay the same.
   try {
-    if (!(await isLocked("reset_email", email))) {
-      await recordAttempt("reset_email", email);
+    // In this order, so a locked address stops here. The email's own limit
+    // sits higher than the address's, so one stranger cannot use it up and
+    // stop the real owner asking for a link.
+    const address = await clientAddress();
+    const allowed =
+      (await claimAttempt("reset_ip", address)) !== null &&
+      (await claimAttempt("reset_pair", emailAtAddress(email, address))) !==
+        null &&
+      (await claimAttempt("reset_email", email)) !== null;
+
+    if (allowed) {
       const supabase = await createAdminSessionClient();
       // Taken from the environment, never the request, so a forged Host
       // header cannot put another site's address in the email.
@@ -179,6 +218,12 @@ export async function setNewPassword(
     password: parsed.data.password,
   });
   if (error) return errorState(t.newPassword.failed);
+
+  await writeAudit(session, {
+    action: "password_changed",
+    entity: "admin_user",
+    entityId: session.userId,
+  });
 
   // Anyone else signed in with the old password is signed out.
   await session.supabase.auth.signOut({ scope: "others" });

@@ -3,24 +3,40 @@ import { createClient } from "@supabase/supabase-js";
 import {
   authAdmin,
   clearAttempts,
+  countAttempts,
   createTestUser,
   db,
-  deleteTestUser,
+  deleteCreatedUsers,
   enrolOwner,
   latestMail,
+  rememberUser,
+  seedAttempts,
   signInOwner,
   signInWithPassword,
+  sweepAbandonedUsers,
+  testAddress,
+  testEmail,
   totpCode,
   type TestUser,
 } from "./admin-helpers";
+import { createActivityValue } from "@/lib/admin/activity";
+import { emailAtAddress } from "@/lib/admin/client-address";
 
 // Next.js adds an empty alert region of its own to every page.
 const alert = (page: Page) => page.locator('.notice[role="alert"]');
 
 const PHONE = { width: 375, height: 812 };
+const phone = (address = testAddress()) => ({
+  viewport: PHONE,
+  extraHTTPHeaders: { "x-forwarded-for": address },
+});
+
 test.describe.configure({ mode: "serial" });
 // Yorgos mostly uses a phone.
-test.use({ viewport: PHONE });
+test.use({
+  viewport: PHONE,
+  extraHTTPHeaders: { "x-forwarded-for": testAddress() },
+});
 
 const WRONG = "That email or password is not right.";
 const LOCKED = /Too many tries/;
@@ -32,7 +48,7 @@ let lockedOut: TestUser;
 let resetter: TestUser;
 
 test.beforeAll(async () => {
-  await clearAttempts();
+  await sweepAbandonedUsers();
   owner = await createTestUser("owner");
   staff = await createTestUser("staff");
   stranger = await createTestUser(null);
@@ -41,9 +57,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  for (const user of [owner, staff, stranger, lockedOut, resetter]) {
-    await deleteTestUser(user);
-  }
+  await deleteCreatedUsers();
   await clearAttempts();
 });
 
@@ -92,7 +106,7 @@ test("wrong password and unknown email get the same message", async ({
   await expect(alert(page)).toHaveText(WRONG);
 
   await signInWithPassword(page, {
-    email: "nobody-here@example.test",
+    email: testEmail(),
     password: "wrong",
   });
   await expect(alert(page)).toHaveText(WRONG);
@@ -132,7 +146,7 @@ test("login locks after repeated failures, even for the right password", async (
 test("an unknown email locks the same way, so locks reveal nothing", async ({
   page,
 }) => {
-  const email = "never-existed@example.test";
+  const email = testEmail();
   for (let i = 0; i < 5; i += 1) {
     await signInWithPassword(page, { email, password: "wrong" });
     await alert(page).waitFor();
@@ -140,14 +154,213 @@ test("an unknown email locks the same way, so locks reveal nothing", async ({
   await expect(alert(page)).toHaveText(LOCKED);
 });
 
-test("attempts are stored with no readable email", async () => {
+test("attempts are stored apart from the audit log, with no readable email", async () => {
   const { rows } = await db.query(
-    `select entity_id from public.audit_log where entity = 'admin_attempt'`,
+    `select scope, key_hash from public.admin_attempts order by id desc limit 50`,
   );
   expect(rows.length).toBeGreaterThan(0);
   for (const row of rows) {
-    expect(row.entity_id).toMatch(/^[a-z_]+:[0-9a-f]{64}$/);
+    expect(row.key_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(row)).not.toContain("@");
   }
+  const audit = await db.query(
+    `select count(*)::int as n from public.audit_log where entity = 'admin_attempt'`,
+  );
+  expect(audit.rows[0].n).toBe(0);
+});
+
+test("a stranger's failures do not lock the real user out", async ({
+  browser,
+}) => {
+  const victim = await createTestUser("staff");
+  const attacker = await (await browser.newContext(phone())).newPage();
+  for (let i = 0; i < 6; i += 1) {
+    await signInWithPassword(attacker, {
+      email: victim.email,
+      password: "wrong",
+    });
+    await alert(attacker).waitFor();
+  }
+  await expect(alert(attacker)).toHaveText(LOCKED);
+
+  const real = await (await browser.newContext(phone())).newPage();
+  await signInWithPassword(real, victim);
+  await expect(real).toHaveURL(/\/admin$/);
+});
+
+test("changing the left of x-forwarded-for does not dodge the lock", async ({
+  browser,
+}) => {
+  const hop = testAddress();
+  const spoofed = testAddress();
+  const email = testEmail();
+  const page = await (await browser.newContext(phone())).newPage();
+  for (let i = 0; i < 6; i += 1) {
+    await page.setExtraHTTPHeaders({
+      "x-forwarded-for": `${i === 0 ? spoofed : testAddress()}, ${hop}`,
+      // Plain client input anywhere but Vercel, so it must change nothing.
+      "x-vercel-forwarded-for": i === 0 ? spoofed : testAddress(),
+    });
+    await signInWithPassword(page, { email, password: "wrong" });
+    await alert(page).waitFor();
+  }
+  await expect(alert(page)).toHaveText(LOCKED);
+  expect(await countAttempts("login_pair", emailAtAddress(email, hop))).toBe(5);
+  expect(await countAttempts("login_ip", hop)).toBe(6);
+  expect(await countAttempts("login_ip", spoofed)).toBe(0);
+});
+
+test("a locked address is refused first and adds nothing else", async ({
+  browser,
+}) => {
+  const address = testAddress();
+  const user = await createTestUser("staff");
+  await seedAttempts("login_ip", address, 20);
+
+  const page = await (await browser.newContext(phone(address))).newPage();
+  await signInWithPassword(page, user);
+  await expect(alert(page)).toHaveText(LOCKED);
+
+  expect(await countAttempts("login_ip", address)).toBe(20);
+  expect(await countAttempts("login_email", user.email)).toBe(0);
+  expect(
+    await countAttempts("login_pair", emailAtAddress(user.email, address)),
+  ).toBe(0);
+});
+
+test("the address limit counts wrong passwords across emails", async ({
+  browser,
+}) => {
+  const address = testAddress();
+  await seedAttempts("login_ip", address, 19);
+  const page = await (await browser.newContext(phone(address))).newPage();
+  await signInWithPassword(page, { email: testEmail(), password: "wrong" });
+  await expect(alert(page)).toHaveText(WRONG);
+
+  await signInWithPassword(page, { email: testEmail(), password: "wrong" });
+  await expect(alert(page)).toHaveText(LOCKED);
+});
+
+test("a correct login does not wipe the address count", async ({ browser }) => {
+  const address = testAddress();
+  const user = await createTestUser("staff");
+  await seedAttempts("login_ip", address, 3);
+  const page = await (await browser.newContext(phone(address))).newPage();
+  await signInWithPassword(page, user);
+  await expect(page).toHaveURL(/\/admin$/);
+  expect(await countAttempts("login_ip", address)).toBe(3);
+});
+
+test("the email ceiling stops a crowd, except on a known device", async ({
+  browser,
+}) => {
+  const user = await createTestUser("staff");
+  const known = await browser.newContext(phone());
+  const knownPage = await known.newPage();
+  await signInWithPassword(knownPage, user);
+  await expect(knownPage).toHaveURL(/\/admin$/);
+  await known.clearCookies({ name: /auth-token|cf_admin_activity/ });
+
+  await seedAttempts("login_email", user.email, 50);
+
+  const unknown = await (await browser.newContext(phone())).newPage();
+  await signInWithPassword(unknown, user);
+  await expect(alert(unknown)).toHaveText(LOCKED);
+
+  const forged = await browser.newContext(phone());
+  await forged.addCookies([
+    {
+      name: "cf_admin_device",
+      value: "A".repeat(43),
+      url: test.info().project.use.baseURL!,
+    },
+  ]);
+  const forgedPage = await forged.newPage();
+  await signInWithPassword(forgedPage, user);
+  await expect(alert(forgedPage)).toHaveText(LOCKED);
+
+  await signInWithPassword(knownPage, user);
+  await expect(knownPage).toHaveURL(/\/admin$/);
+});
+
+test("reset requests are limited by address first", async ({ page }) => {
+  const address = testAddress();
+  const email = testEmail();
+  await page.setExtraHTTPHeaders({ "x-forwarded-for": address });
+  await seedAttempts("reset_ip", address, 10);
+
+  await page.goto("/admin/forgot-password");
+  await page.getByLabel("Email").fill(email);
+  await page.getByRole("button", { name: "Send the link" }).click();
+  await expect(page.getByRole("status")).toContainText("If that email has");
+
+  expect(await countAttempts("reset_ip", address)).toBe(10);
+  expect(await countAttempts("reset_email", email)).toBe(0);
+});
+
+test("one stranger using up reset links does not block the real user", async ({
+  page,
+}) => {
+  const email = testEmail();
+  const stranger = testAddress();
+  const real = testAddress();
+  await seedAttempts("reset_pair", emailAtAddress(email, stranger), 3);
+
+  await page.setExtraHTTPHeaders({ "x-forwarded-for": real });
+  await page.goto("/admin/forgot-password");
+  await page.getByLabel("Email").fill(email);
+  await page.getByRole("button", { name: "Send the link" }).click();
+  await expect(page.getByRole("status")).toContainText("If that email has");
+
+  expect(await countAttempts("reset_pair", emailAtAddress(email, real))).toBe(
+    1,
+  );
+  expect(await countAttempts("reset_email", email)).toBe(1);
+});
+
+test("the security headers are sent and the page still works under them", async ({
+  browser,
+  request,
+}) => {
+  const res = await request.get("/admin/login");
+  const csp = res.headers()["content-security-policy"];
+  expect(csp).toContain("default-src 'self'");
+  expect(csp).toContain("img-src 'self' data:");
+  expect(csp).toContain("frame-ancestors 'none'");
+  expect(csp).toContain("base-uri 'none'");
+  expect(csp).toContain("form-action 'self'");
+  expect(csp).toContain(
+    `connect-src 'self' ${new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin}`,
+  );
+  expect(res.headers()["strict-transport-security"]).toBe("max-age=31536000");
+
+  const redirect = await request.get("/admin/rules", { maxRedirects: 0 });
+  expect(redirect.status()).toBe(307);
+  expect(redirect.headers()["content-security-policy"]).toBe(csp);
+
+  const user = await createTestUser("owner");
+  const page = await (await browser.newContext(phone())).newPage();
+  const violations: string[] = [];
+  page.on("console", (message) => {
+    if (/content security policy/i.test(message.text())) {
+      violations.push(message.text());
+    }
+  });
+  page.on("pageerror", (error) => violations.push(error.message));
+
+  await signInWithPassword(page, user);
+  await expect(page).toHaveURL(/\/admin\/mfa$/);
+  await page.getByRole("button", { name: "Start setup" }).click();
+  const qr = page.getByAltText("QR code for your authenticator app");
+  await expect(qr).toBeVisible();
+  await expect
+    .poll(() => qr.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBeGreaterThan(0);
+  await page.goto("/admin/mfa");
+  await enrolOwner(page, user);
+  await page.goto("/admin/rules");
+  await page.getByRole("button", { name: "Add a line" }).click();
+  expect(violations).toEqual([]);
 });
 
 test("Owner is forced through MFA and reaches nothing until done", async ({
@@ -166,17 +379,23 @@ test("Owner is forced through MFA and reaches nothing until done", async ({
 
   const { data } = await authAdmin.mfa.listFactors({ userId: owner.id });
   expect(data?.factors.filter((f) => f.status === "verified")).toHaveLength(1);
+
+  const audit = await db.query(
+    `select actor_id, entity_id from public.audit_log
+     where action = 'mfa_enrolled' and entity_id = $1`,
+    [owner.id],
+  );
+  expect(audit.rows).toEqual([{ actor_id: owner.id, entity_id: owner.id }]);
 });
 
 test("an abandoned setup can be started again", async ({ browser }) => {
   const fresh = await createTestUser("owner");
-  const page = await (await browser.newContext({ viewport: PHONE })).newPage();
+  const page = await (await browser.newContext(phone())).newPage();
   await signInWithPassword(page, fresh);
   await page.getByRole("button", { name: "Start setup" }).click();
   await expect(page.getByTestId("totp-secret")).toBeVisible();
   await page.reload();
   await enrolOwner(page, fresh);
-  await deleteTestUser(fresh);
 });
 
 test("Owner signs in with password and a real code, then signs out", async ({
@@ -212,11 +431,11 @@ test("Owner signs in with password and a real code, then signs out", async ({
 
 test("wrong codes lock the code step", async ({ browser }) => {
   const user = await createTestUser("owner");
-  const first = await (await browser.newContext({ viewport: PHONE })).newPage();
+  const first = await (await browser.newContext(phone())).newPage();
   await signInWithPassword(first, user);
   await enrolOwner(first, user);
 
-  const page = await (await browser.newContext({ viewport: PHONE })).newPage();
+  const page = await (await browser.newContext(phone())).newPage();
   await signInWithPassword(page, user);
   for (let i = 0; i < 5; i += 1) {
     await page.getByLabel("6-digit code").fill("000000");
@@ -229,7 +448,6 @@ test("wrong codes lock the code step", async ({ browser }) => {
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(alert(page)).toHaveText(/Too many wrong codes/);
   await expect(page).toHaveURL(/\/admin\/mfa$/);
-  await deleteTestUser(user);
 });
 
 test("Staff get in without MFA and are blocked from owner pages", async ({
@@ -270,7 +488,7 @@ test("a burst of guesses at once cannot beat the lockout", async ({
   browser,
 }) => {
   const target = await createTestUser("staff");
-  const page = await (await browser.newContext({ viewport: PHONE })).newPage();
+  const page = await (await browser.newContext(phone())).newPage();
 
   // Fifteen tries at the same moment through the real form, in one browser.
   const attempts = await Promise.all(
@@ -288,12 +506,11 @@ test("a burst of guesses at once cannot beat the lockout", async ({
 
   await signInWithPassword(page, target);
   await expect(alert(page)).toHaveText(LOCKED);
-  await deleteTestUser(target);
 });
 
 test("Staff can turn on the optional second step", async ({ browser }) => {
   const user = await createTestUser("staff");
-  const page = await (await browser.newContext({ viewport: PHONE })).newPage();
+  const page = await (await browser.newContext(phone())).newPage();
   await signInWithPassword(page, user);
   await expect(page).toHaveURL(/\/admin$/);
   await page.goto("/admin/account");
@@ -305,10 +522,9 @@ test("Staff can turn on the optional second step", async ({ browser }) => {
   await expect(page).toHaveURL(/\/admin$/);
 
   // From now on this account needs its code too.
-  const next = await (await browser.newContext({ viewport: PHONE })).newPage();
+  const next = await (await browser.newContext(phone())).newPage();
   await signInWithPassword(next, user);
   await expect(next).toHaveURL(/\/admin\/mfa$/);
-  await deleteTestUser(user);
 });
 
 test("a session with a missing or forged activity cookie ends", async ({
@@ -333,6 +549,41 @@ test("a session with a missing or forged activity cookie ends", async ({
   expect(names.some((name) => name.includes("auth-token"))).toBe(false);
 });
 
+test("a correctly signed cookie ends the session once it is too old", async ({
+  browser,
+}) => {
+  const user = await createTestUser("staff");
+  const context = await browser.newContext(phone());
+  const page = await context.newPage();
+  await signInWithPassword(page, user);
+  await expect(page).toHaveURL(/\/admin$/);
+
+  const { rows } = await db.query(
+    `select id from auth.sessions where user_id = $1 order by created_at desc limit 1`,
+    [user.id],
+  );
+  const activity = (await context.cookies()).find(
+    (cookie) => cookie.name === "cf_admin_activity",
+  )!;
+  const signedAt = (secondsAgo: number) =>
+    createActivityValue(
+      rows[0].id,
+      Math.floor(Date.now() / 1000) - secondsAgo,
+      process.env.SUPABASE_SECRET_KEY!,
+    );
+
+  // Just inside the limit still works, which proves the signature is right.
+  await context.addCookies([{ ...activity, value: signedAt(59 * 60) }]);
+  await page.goto("/admin/account");
+  await expect(page).toHaveURL(/\/admin\/account$/);
+
+  await context.addCookies([{ ...activity, value: signedAt(61 * 60) }]);
+  await page.goto("/admin/account");
+  await expect(page).toHaveURL(/\/admin\/login\?expired=1$/);
+  const names = (await context.cookies()).map((cookie) => cookie.name);
+  expect(names.some((name) => name.includes("auth-token"))).toBe(false);
+});
+
 test("session cookies cannot be read by page scripts", async ({
   page,
   context,
@@ -352,7 +603,7 @@ test("session cookies cannot be read by page scripts", async ({
 
 test("password reset answers the same for any email", async ({ page }) => {
   await page.goto("/admin/forgot-password");
-  await page.getByLabel("Email").fill("nobody-here@example.test");
+  await page.getByLabel("Email").fill(testEmail());
   await page.getByRole("button", { name: "Send the link" }).click();
   await expect(page.getByRole("status")).toContainText("If that email has");
 });
@@ -360,7 +611,7 @@ test("password reset answers the same for any email", async ({ page }) => {
 test("a reset link sets a new password and old sessions end", async ({
   browser,
 }) => {
-  const oldContext = await browser.newContext({ viewport: PHONE });
+  const oldContext = await browser.newContext(phone());
   const oldPage = await oldContext.newPage();
   await signInWithPassword(oldPage, resetter);
   await expect(oldPage).toHaveURL(/\/admin$/);
@@ -371,7 +622,7 @@ test("a reset link sets a new password and old sessions end", async ({
   });
   if (error) throw error;
 
-  const page = await (await browser.newContext({ viewport: PHONE })).newPage();
+  const page = await (await browser.newContext(phone())).newPage();
   await page.goto(
     `/admin/auth/confirm?token_hash=${data.properties.hashed_token}&type=recovery`,
   );
@@ -389,10 +640,17 @@ test("a reset link sets a new password and old sessions end", async ({
   await page.getByRole("button", { name: "Save my new password" }).click();
   await expect(page).toHaveURL(/\/admin$/);
 
+  const audit = await db.query(
+    `select actor_id from public.audit_log
+     where action = 'password_changed' and entity_id = $1`,
+    [resetter.id],
+  );
+  expect(audit.rows).toEqual([{ actor_id: resetter.id }]);
+
   // The old session was signed out, and the old password is gone.
   await oldPage.goto("/admin/account");
   await expect(oldPage).toHaveURL(/\/admin\/login/);
-  const third = await (await browser.newContext({ viewport: PHONE })).newPage();
+  const third = await (await browser.newContext(phone())).newPage();
   await signInWithPassword(third, resetter);
   await expect(alert(third)).toHaveText(WRONG);
   await signInWithPassword(third, { ...resetter, password });
@@ -409,7 +667,7 @@ test("an Owner with MFA must pass it before setting a new password", async ({
   });
   if (error) throw error;
 
-  const page = await (await browser.newContext({ viewport: PHONE })).newPage();
+  const page = await (await browser.newContext(phone())).newPage();
   await page.goto(
     `/admin/auth/confirm?token_hash=${data.properties.hashed_token}&type=recovery`,
   );
@@ -427,7 +685,7 @@ test("an Owner with MFA must pass it before setting a new password", async ({
   await expect(page).toHaveURL(/\/admin$/);
   owner.password = password;
 
-  const check = await (await browser.newContext({ viewport: PHONE })).newPage();
+  const check = await (await browser.newContext(phone())).newPage();
   await signInOwner(check, owner);
 });
 
@@ -448,32 +706,70 @@ test("a used or broken reset link gets a plain message", async ({ page }) => {
   await expect(alert(page)).toContainText("expired");
 });
 
+test("an invite link sets a password and lets the new person in", async ({
+  browser,
+}) => {
+  const email = testEmail();
+  const { data, error } = await authAdmin.generateLink({
+    type: "invite",
+    email,
+  });
+  if (error) throw error;
+  rememberUser(data.user.id, email);
+  await db.query(
+    `insert into public.admin_profiles (id, role, display_name) values ($1, 'staff', 'Invited')`,
+    [data.user.id],
+  );
+
+  // The exact link in supabase/templates/invite.html.
+  const page = await (await browser.newContext(phone())).newPage();
+  await page.goto(
+    `/admin/auth/confirm?token_hash=${data.properties.hashed_token}&type=invite`,
+  );
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/admin\/new-password$/);
+
+  const password = "a generated invite test value";
+  await page.getByLabel("New password", { exact: true }).fill(password);
+  await page.getByLabel("Type it again").fill(password);
+  await page.getByRole("button", { name: "Save my new password" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+
+  const next = await (await browser.newContext(phone())).newPage();
+  await signInWithPassword(next, { email, password });
+  await expect(next).toHaveURL(/\/admin$/);
+});
+
+// Local Supabase allows 2 emails an hour across all worktrees. If that is used
+// up this test fails, on purpose: a reset flow that sends no mail must not
+// pass. The rest of the flow is also covered through generateLink above.
 test("the reset email itself arrives and its link works", async ({ page }) => {
   await page.goto("/admin/forgot-password");
-  await page.getByLabel("Email").fill(staff.email);
+  await page.getByLabel("Email").fill(resetter.email);
   await page.getByRole("button", { name: "Send the link" }).click();
   await expect(page.getByRole("status")).toContainText("If that email has");
 
-  // Local Supabase allows very few emails an hour, shared across worktrees.
   await expect
-    .poll(() => latestMail(staff.email), { timeout: 5000 })
-    .not.toBeNull()
-    .catch(() => {
-      test.skip(true, "Local Supabase email limit reached");
-    });
-  const mail = (await latestMail(staff.email))!;
+    .poll(() => latestMail(resetter.email), {
+      timeout: 5000,
+      message: "No reset email. Is the local limit of 2 an hour used up?",
+    })
+    .not.toBeNull();
+  const mail = (await latestMail(resetter.email))!;
   const link = /href="([^"]+)"/.exec(mail)?.[1]?.replaceAll("&amp;", "&");
-  expect(link).toContain("/auth/v1/verify");
+  expect(link).toBeTruthy();
 
-  // config.toml does not allow this port as a redirect, so Supabase goes to
-  // its default site address. Only the path differs from production.
-  const verified = await fetch(link!, { redirect: "manual" });
-  const code = new URL(verified.headers.get("location")!).searchParams.get(
-    "code",
-  );
-  expect(code).toBeTruthy();
+  // Works before and after LEAD's template goes live: the new template links
+  // straight to the page, the old one goes through Supabase first. Supabase's
+  // default site address differs from this port, so only the query is kept.
+  let query = new URL(link!).search;
+  if (link!.includes("/auth/v1/verify")) {
+    const verified = await fetch(link!, { redirect: "manual" });
+    query = new URL(verified.headers.get("location")!).search;
+  }
+  expect(query).toMatch(/code=|token_hash=/);
 
-  await page.goto(`/admin/auth/confirm?code=${code}`);
+  await page.goto(`/admin/auth/confirm${query}`);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/admin\/new-password$/);
 });

@@ -50,7 +50,7 @@ describe("what can be saved", () => {
     ).toBe(0);
   });
 
-  it.each([12.5, 33.33, 0.01, 99.99])("allows a %d%% deposit", (percent) => {
+  it.each([1, 12.5, 33.33, 99.99])("allows a %d%% deposit", (percent) => {
     const payment = { ...DEPOSIT, deposit: { kind: "percent", percent } };
     expect(issue(payment)).toBeUndefined();
   });
@@ -81,6 +81,7 @@ describe("refused payment rules", () => {
 
   it.each([
     ["0 percent", { kind: "percent", percent: 0 }],
+    ["under 1 percent", { kind: "percent", percent: 0.99 }],
     ["100 percent", { kind: "percent", percent: 100 }],
     ["120 percent", { kind: "percent", percent: 120 }],
     ["a negative percent", { kind: "percent", percent: -1 }],
@@ -107,10 +108,14 @@ describe("refused payment rules", () => {
     );
   });
 
-  it.each([-1, 1.5])("refuses %d balance days", (balanceDaysBefore) => {
+  it.each([-1, 1.5, 366])("refuses %d balance days", (balanceDaysBefore) => {
     expect(issue({ ...DEPOSIT, balanceDaysBefore })?.message).toMatch(
-      /whole number/,
+      /from 0 to 365/,
     );
+  });
+
+  it("allows the longest balance period", () => {
+    expect(issue({ ...DEPOSIT, balanceDaysBefore: 365 })).toBeUndefined();
   });
 
   it("refuses fields the contract does not have", () => {
@@ -146,8 +151,10 @@ describe("refused cancellation rules", () => {
   it("refuses more than two decimals, and out-of-range numbers", () => {
     expect(tierIssue(tiers([0, 12.345]))?.message).toMatch(/2 decimals/);
     expect(tierIssue(tiers([0, 101]))?.message).toMatch(/0 to 100/);
-    expect(tierIssue(tiers([-1, 0]))?.message).toMatch(/0 or more/);
-    expect(tierIssue(tiers([1.5, 0]))?.message).toMatch(/0 or more/);
+    expect(tierIssue(tiers([-1, 0]))?.message).toMatch(/from 0 to 3650/);
+    expect(tierIssue(tiers([1.5, 0]))?.message).toMatch(/from 0 to 3650/);
+    expect(tierIssue(tiers([3651, 0]))?.message).toMatch(/from 0 to 3650/);
+    expect(tierIssue(tiers([3650, 0]))).toBeUndefined();
   });
 
   it("refuses no lines unless non-refundable", () => {

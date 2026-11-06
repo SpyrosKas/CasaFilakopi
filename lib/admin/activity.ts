@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   ABSOLUTE_TIMEOUT_SECONDS,
   ACTIVITY_WRITE_INTERVAL_SECONDS,
+  ENROL_MAX_SESSION_AGE_SECONDS,
   IDLE_TIMEOUT_SECONDS,
 } from "@/lib/admin/config";
 
@@ -12,6 +13,37 @@ import {
 /** Keys one purpose from the server secret. Never sent to the browser. */
 export function deriveKey(secret: string, purpose: string): string {
   return createHmac("sha256", secret).update(purpose).digest("hex");
+}
+
+/** How a lockout key is stored, so no email or address is readable. */
+export function attemptHash(secret: string, value: string): string {
+  return createHmac("sha256", deriveKey(secret, "admin-attempts-v1"))
+    .update(value)
+    .digest("hex");
+}
+
+export function createDeviceValue(email: string, secret: string): string {
+  return createHmac("sha256", deriveKey(secret, "admin-device-v1"))
+    .update(email)
+    .digest("base64url");
+}
+
+export function isKnownDevice(
+  value: string | undefined,
+  email: string,
+  secret: string,
+): boolean {
+  if (!value) return false;
+  const given = Buffer.from(value);
+  const expected = Buffer.from(createDeviceValue(email, secret));
+  return given.length === expected.length && timingSafeEqual(given, expected);
+}
+
+/** Whether the password was typed recently enough to add a second factor. */
+export function isFreshSignIn(signedInAt: number | null, now: number): boolean {
+  return (
+    signedInAt !== null && now - signedInAt <= ENROL_MAX_SESSION_AGE_SECONDS
+  );
 }
 
 function sign(sessionId: string, seconds: number, secret: string): string {

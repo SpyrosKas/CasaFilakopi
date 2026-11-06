@@ -2,7 +2,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import {
   authAdmin,
   createTestUser,
-  deleteTestUser,
+  deleteCreatedUsers,
   enrolOwner,
   signInWithPassword,
   type TestUser,
@@ -125,8 +125,7 @@ for (const width of WIDTHS) {
 
     test.afterAll(async () => {
       await page.context().close();
-      await deleteTestUser(owner);
-      await deleteTestUser(staff);
+      await deleteCreatedUsers();
     });
 
     test("signed-out screens", async () => {

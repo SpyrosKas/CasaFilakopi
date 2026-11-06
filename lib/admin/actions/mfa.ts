@@ -1,6 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { isFreshSignIn } from "@/lib/admin/activity";
+import { writeAudit } from "@/lib/admin/audit";
 import { LOCK_WINDOW_MINUTES } from "@/lib/admin/config";
 import {
   errorState,
@@ -8,9 +10,13 @@ import {
   fromZodError,
   type ActionState,
 } from "@/lib/admin/form-state";
-import { claimAttempt, isLocked, recordSuccess } from "@/lib/admin/rate-limit";
+import { claimAttempt, clearAttempts, isLocked } from "@/lib/admin/rate-limit";
 import { enrolConfirmSchema, mfaVerifySchema } from "@/lib/admin/schemas";
-import { markActive, resolveAdminSession } from "@/lib/admin/session";
+import {
+  clearActive,
+  markActive,
+  resolveAdminSession,
+} from "@/lib/admin/session";
 import { t } from "@/lib/admin/strings";
 
 export interface EnrolState extends ActionState {
@@ -29,6 +35,14 @@ async function enrollingSession() {
     redirect("/admin/login");
   }
   if (session.state === "needs_verify" || session.hasTotp) redirect("/admin");
+
+  // Adding a factor is the one step a session can take that outlives it, so a
+  // session left open must prove the password again.
+  if (!isFreshSignIn(session.signedInAt, Math.floor(Date.now() / 1000))) {
+    await session.supabase.auth.signOut({ scope: "local" });
+    await clearActive();
+    redirect("/admin/login?expired=1");
+  }
   return session;
 }
 
@@ -77,6 +91,12 @@ export async function finishEnrolment(
   });
   if (error || !data) return errorState(t.mfa.enrolFailed);
 
+  await writeAudit(session, {
+    action: "mfa_enrolled",
+    entity: "admin_user",
+    entityId: session.userId,
+    after: { factorId: parsed.data.factorId },
+  });
   await markActive(data.access_token);
   redirect("/admin");
 }
@@ -107,7 +127,7 @@ export async function verifyCode(
     );
   }
 
-  await recordSuccess("mfa_user", session.userId, session.userId);
+  await clearAttempts("mfa_user", session.userId);
   await markActive(data.access_token);
   redirect(parsed.data.next === "password" ? "/admin/new-password" : "/admin");
 }

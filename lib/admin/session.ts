@@ -25,6 +25,8 @@ interface SignedIn {
   role: AdminRole;
   displayName: string;
   hasTotp: boolean;
+  /** When this session typed its password, in seconds. */
+  signedInAt: number | null;
   /** True when this session came from a reset or invite link. */
   fromEmailLink: boolean;
 }
@@ -117,6 +119,7 @@ export const resolveAdminSession = cache(async (): Promise<AdminSession> => {
     role: profile.role,
     displayName: profile.display_name,
     hasTotp: Boolean(totp),
+    signedInAt: claims.signedInAt,
     fromEmailLink: claims.methods.some((m) => EMAIL_LINK_METHODS.includes(m)),
   };
 
@@ -127,8 +130,9 @@ export const resolveAdminSession = cache(async (): Promise<AdminSession> => {
     return { state: "needs_enrolment", ...signedIn };
   }
 
-  // Only the database decides. current_admin_role() is null for an Owner
-  // without aal2, so a forged or stale state above cannot pass this.
+  // Only the database decides. current_admin_role() is null for anyone with a
+  // verified factor and no aal2, and for an Owner without aal2, so a forged or
+  // stale state above cannot pass this.
   const { data: role, error: roleError } =
     await supabase.rpc("current_admin_role");
   if (roleError || role !== profile.role) {
