@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** Wave 1: ENGINE and ADMIN merged after independent review; WEB is fixing its review findings. MAIL waits for A4 and A5. Only T2.23 remains in Phase 2. YOU: accounts A1 to A3, accountant sheet (D4), public name (D5).
+**Status:** Wave 1: ENGINE and ADMIN merged; WEB is fixing review findings. Staging exists (ref `iecsohriashrdbqcelkl`) but the Supabase CLI is logged in to a different account, so T2.23 waits for YOU to log it in as `host@miloscasa.com`. YOU also: accountant sheet (D4).
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
@@ -22,7 +22,7 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | F6 | Greek registry number "MHTE" | No number on the site | Short-term rentals normally use an AMA number rather than MHTE. See D4 |
 | F7 | Receipts and invoices assumed | Legal setup of the host unknown | If this is a private individual's short-term rental, the whole INV module may shrink a lot. See D4. Do not build INV until ACC answers |
 | F8 | Not mentioned | Testimonials, "Places to visit" and amenities sections exist | Add `testimonials` and `places` as CMS content (no conflict with "no review system": these stay curated text) |
-| F9 | Not mentioned | Brand is split: "Casa Milos" on the site, "Casa Filakopi" on OTAs and socials; `miloscasa.com` appears in the code | Decide the public name and domain. See D5 |
+| F9 | Not mentioned | Site said "Casa Milos", OTAs and socials say "Casa Filakopi"; `miloscasa.com` in the code | Settled by D5: the name is Casa Filakopi |
 | F11 | `MIG-03` says keep the current look | Mobile is broken: below 992 px the round `.img-absolute` photo (`bottom: -100px`, `css/style.css:458`) covers the heading or text in all 7 house sections. Something also forces the page wider than the screen (475 px layout on a 375 px phone) | Mobile is a deliberate exception to "identical". Fix it, do not preserve it. See T3.1a to T3.1c |
 | F10 | Not mentioned | Stale items: HomeAway link (now Vrbo), Vimeo link, tracked `.DS_Store`, backslash icon path | Clean up during migration |
 
@@ -45,7 +45,7 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | D2 | Channel sync on at launch? | **Decided** | On at launch for Airbnb + Booking.com; CHN moves from optional to launch-blocking. HomeAway/Vrbo depends on A9. The Admin toggle stays |
 | D3 | Who owns accounts and takes payments? | **Decided** | Yorgos is legal owner and activates Stripe (A10). `host@miloscasa.com` owns the technical accounts |
 | D4 | Host legal/tax setup (business vs individual short-term rental; AMA vs MHTE; VAT; myDATA) | **With ACC** | Sheet ready: [accountant-questions.md](accountant-questions.md). INV waits; everything else continues |
-| D5 | Public brand name and domain; where the site is hosted today | **Part decided** | Domain `miloscasa.com`, registered at Namecheap, expires 2027-04-11 (auto-renew must be on), hosted on Netlify. Accounts and guest mail use `host@miloscasa.com` through Namecheap forwarding. Public name still to confirm: "Casa Milos" matches the domain |
+| D5 | Public brand name and domain; where the site is hosted today | **Decided** | The house is **Casa Filakopi**. `miloscasa.com` is only the web address (Namecheap, expires 2027-04-11, auto-renew on, Netlify today). Accounts and guest mail use `host@miloscasa.com` through Namecheap forwarding |
 | D6 | Payment mode and cancellation rules | **Decided** | Yorgos edits these any time in Admin. Two modes: **Full payment (default)** or **Deposit**, where he sets the percentage and days before arrival the rest is due; 0 days means pay on arrival. Booking on or after the due date pays in full. Refund tiers are a percentage of the booking: charge = total minus refund percent, refund = paid minus charge, floored at 0, and any shortfall shows as still owed. Changes apply to new bookings only; each booking keeps a snapshot |
 | D7 | Languages at launch | Proposed | Greek + English |
 | D8 | Styling (spec open decision 1) | Proposed | Keep existing `bootstrap.css` and `style.css` as global CSS; replace jQuery, Bootstrap JS and AOS behaviour with small React components |
@@ -81,9 +81,9 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 | ID | Item | Needed by | Who | Status |
 |---|---|---|---|---|
 | A0 | Start Docker Desktop | Phase 1 | YOU | [x] |
-| A1 | Set up `host@miloscasa.com` | Phase 2 end | YOU | [ ] |
+| A1 | Set up `host@miloscasa.com` | Phase 2 end | YOU | [x] |
 | A2 | Supabase staging project | Phase 2 end | YOU | [ ] |
-| A3 | Vercel project | Phase 2 end | YOU | [ ] |
+| A3 | Vercel project | Phase 2 end | YOU | [x] |
 | A4 | Domain and DNS access | Wave 1 | YOU/HOST | [ ] |
 | A5 | Resend | Wave 1 | YOU | [ ] |
 | A6 | Stripe test mode | Wave 2 | YOU | [ ] |

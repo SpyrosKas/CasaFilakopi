@@ -423,9 +423,9 @@ enabled = true
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":180,\"commaStyle\":\"trailing\"}"
 
 [auth.email.template.recovery]
-subject = "Reset your Casa Milos admin password"
+subject = "Reset your Casa Filakopi admin password"
 content_path = "./supabase/templates/recovery.html"
 
 [auth.email.template.invite]
-subject = "Your Casa Milos admin invitation"
+subject = "Your Casa Filakopi admin invitation"
 content_path = "./supabase/templates/invite.html"

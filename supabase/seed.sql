@@ -2,7 +2,7 @@
 -- until Yorgos sets the real ones in Admin (T6.9).
 
 insert into public.property (name, address, phone, email, social_links) values (
-  'Casa Milos',
+  'Casa Filakopi',
   'Epar. Od. Triovasalou-Apollonion, Filakopi, Potamia, 84800, Milos',
   '+306934707765',
   'host@miloscasa.com',
@@ -12,8 +12,8 @@ insert into public.property (name, address, phone, email, social_links) values (
 insert into public.rooms (id, slug, name, description, max_adults, max_children, base_occupancy, base_price_cents, cleaning_fee_cents)
 values (
   '00000000-0000-4000-8000-000000000001',
-  'casa-milos',
-  '{"en": "Casa Milos", "el": "Casa Milos"}',
+  'casa-filakopi',
+  '{"en": "Casa Filakopi", "el": "Casa Filakopi"}',
   '{"en": "A traditional Cycladic farmhouse near Pollonia.", "el": "Παραδοσιακή κυκλαδίτικη αγροικία κοντά στην Πολλώνια."}',
   4, 2, 2, 12000, 4000
 );
