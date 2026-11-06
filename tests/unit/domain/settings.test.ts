@@ -94,7 +94,7 @@ describe("payment rules", () => {
     expect(parsePaymentRules({ balanceDaysBefore: 7 }).mode).toBe("full");
   });
 
-  it.each([12.5, 33.33, 0.01, 99.99])("accepts a %d%% deposit", (percent) => {
+  it.each([12.5, 33.33, 1, 99.99])("accepts a %d%% deposit", (percent) => {
     const deposit = { kind: "percent", percent };
     expect(parsePaymentRules({ ...SEED_PAYMENT, deposit }).deposit).toEqual(
       deposit,

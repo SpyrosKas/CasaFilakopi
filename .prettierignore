@@ -5,3 +5,4 @@ pnpm-lock.yaml
 tests/baseline/legacy
 lib/db/types.ts
 .claude
+supabase/templates
