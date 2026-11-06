@@ -40,7 +40,12 @@ export type BookingSettings = z.output<typeof bookingSettingsSchema>;
 const depositSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("percent"),
-    percent: z.number().gt(0).lt(100).refine(hasTwoDecimalsAtMost, twoDecimals),
+    // At least 1%: below that the deposit can fall under Stripe's minimum charge.
+    percent: z
+      .number()
+      .min(1)
+      .lt(100)
+      .refine(hasTwoDecimalsAtMost, twoDecimals),
   }),
   z.object({
     kind: z.literal("fixed"),
@@ -56,6 +61,7 @@ const paymentRulesSchema = z
       .number()
       .int()
       .min(0)
+      .max(365)
       .default(DEFAULT_PAYMENT_RULES.balanceDaysBefore),
   })
   .refine((rules) => rules.mode !== "deposit" || rules.deposit !== null, {
@@ -68,7 +74,7 @@ const byDaysDescending = (tiers: CancellationTier[]) =>
 const tiersSchema = z
   .array(
     z.object({
-      daysBefore: z.number().int().min(0),
+      daysBefore: z.number().int().min(0).max(3650),
       refundPercent: z
         .number()
         .min(0)

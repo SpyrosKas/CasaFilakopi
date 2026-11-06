@@ -171,3 +171,28 @@ describe("cancellation tiers", () => {
     expect(() => parseCancellationTiers(tiers)).toThrow();
   });
 });
+
+describe("limits that stop a typing slip breaking checkout", () => {
+  const deposit = (percent: number, balanceDaysBefore = 14) => ({
+    mode: "deposit",
+    deposit: { kind: "percent", percent },
+    balanceDaysBefore,
+  });
+
+  it("refuses an absurd balance timing", () => {
+    expect(() => parsePaymentRules(deposit(30, 101000000))).toThrow();
+    expect(() => parsePaymentRules(deposit(30, 366))).toThrow();
+    expect(parsePaymentRules(deposit(30, 365)).balanceDaysBefore).toBe(365);
+  });
+
+  it("refuses a deposit under 1%", () => {
+    expect(() => parsePaymentRules(deposit(0.01))).toThrow();
+    expect(parsePaymentRules(deposit(1)).mode).toBe("deposit");
+  });
+
+  it("refuses an absurd tier", () => {
+    expect(() =>
+      parseCancellationTiers([{ daysBefore: 10000000, refundPercent: 50 }]),
+    ).toThrow();
+  });
+});

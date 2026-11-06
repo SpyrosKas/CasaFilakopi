@@ -14,6 +14,7 @@ const DENIED = /permission denied|row-level security/;
 const TOKEN = `tok-${randomUUID()}`;
 
 const PRIVATE_TABLES = [
+  "admin_attempts",
   "admin_profiles",
   "audit_log",
   "availability_blocks",
