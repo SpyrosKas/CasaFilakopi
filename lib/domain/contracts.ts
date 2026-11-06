@@ -51,6 +51,14 @@ export interface PriceLine {
   totalCents: Cents;
 }
 
+export type PromoRejection =
+  | "not_found"
+  | "inactive"
+  | "not_yet_valid"
+  | "expired"
+  | "room_not_eligible"
+  | "exhausted";
+
 /** Stored in bookings.price_breakdown. All amounts are whole cents. */
 export interface PriceBreakdown {
   currency: "EUR";
@@ -61,6 +69,8 @@ export interface PriceBreakdown {
   balanceCents: Cents;
   balanceDueOn: IsoDate | null;
   promoCode: string | null;
+  /** Set when the guest typed a code that could not be applied. */
+  promoRejection?: PromoRejection;
 }
 
 // Rules Yorgos edits in Admin (D6). Copied onto each booking.
