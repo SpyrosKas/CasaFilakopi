@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** Phase 2 built and reviewed; awaiting YOU at Gate 2. Open: T1.9 and T2.23 need A1 to A3 and a first push. YOU: accountant sheet (D4), public name (D5), confirm the remaining proposals.
+**Status:** Gates 1 and 2 passed; CI green. Wave 1 is next. Only T2.23 remains in Phase 2 and needs A1 to A3. YOU: accountant sheet (D4), public name (D5), confirm the remaining proposals.
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
@@ -46,7 +46,7 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | D3 | Who owns accounts and takes payments? | **Decided** | Yorgos is legal owner and activates Stripe (A10). `host@miloscasa.com` owns the technical accounts |
 | D4 | Host legal/tax setup (business vs individual short-term rental; AMA vs MHTE; VAT; myDATA) | **With ACC** | Sheet ready: [accountant-questions.md](accountant-questions.md). INV waits; everything else continues |
 | D5 | Public brand name and domain; where the site is hosted today | **Part decided** | Domain `miloscasa.com`, registered at Namecheap, expires 2027-04-11 (auto-renew must be on), hosted on Netlify. Accounts and guest mail use `host@miloscasa.com` through Namecheap forwarding. Public name still to confirm: "Casa Milos" matches the domain |
-| D6 | Payment mode and cancellation rules | **Decided** | Yorgos edits these any time in Admin, no developer needed. Changes apply to new bookings only; each booking keeps a snapshot of the rules it was made under. Starting values are his to set at T6.9 |
+| D6 | Payment mode and cancellation rules | **Decided** | Yorgos edits these any time in Admin. Two modes: **Full payment (default)** or **Deposit**, where he sets the percentage and days before arrival the rest is due; 0 days means pay on arrival. Booking on or after the due date pays in full. Refund tiers are a percentage of the booking: charge = total minus refund percent, refund = paid minus charge, floored at 0, and any shortfall shows as still owed. Changes apply to new bookings only; each booking keeps a snapshot |
 | D7 | Languages at launch | Proposed | Greek + English |
 | D8 | Styling (spec open decision 1) | Proposed | Keep existing `bootstrap.css` and `style.css` as global CSS; replace jQuery, Bootstrap JS and AOS behaviour with small React components |
 | D9 | Scheduler (open decision 2) | Proposed | `pg_cron` calling SQL or secured Next.js routes. Vercel Hobby cron is too limited |
@@ -163,7 +163,7 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 - [x] T1.6 `supabase init`, local stack running (`SUP-01`)
 - [x] T1.7 Env loader with Zod validation and `.env.example` (`PLT-03`)
 - [x] T1.8 Server-only Supabase client guard so the service key cannot reach the browser (`SUP-07`)
-- [ ] T1.9 CI on GitHub Actions: lint, typecheck, test, build (`PLT-04`). Workflow written; not ticked until it runs green on GitHub after the first push
+- [x] T1.9 CI on GitHub Actions: lint, typecheck, format, unit, build, browser and database tests, plus a generated-types check (`PLT-04`). First run green on `dev-booking`
 - [x] T1.10 Write `CLAUDE.md` with conventions, ownership and test commands
 - [x] T1.12 Keep the app host-portable: `output: 'standalone'`, a Dockerfile, no Vercel-only features
 - [x] T1.11 Capture legacy visual baselines at 375, 768, 1280 px for all 3 pages (`MIG-05`, `QA-06`)
