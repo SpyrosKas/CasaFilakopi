@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** Gates 1 and 2 passed; CI green. Wave 1 is next. Only T2.23 remains in Phase 2 and needs A1 to A3. YOU: accountant sheet (D4), public name (D5), confirm the remaining proposals.
+**Status:** Wave 1: ENGINE and ADMIN merged after independent review; WEB is fixing its review findings. MAIL waits for A4 and A5. Only T2.23 remains in Phase 2. YOU: accounts A1 to A3, accountant sheet (D4), public name (D5).
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
@@ -109,6 +109,7 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 3. Tell me the project ref only (the `abcdefgh` part of the dashboard URL).
 4. In a terminal run `supabase login` yourself. It opens a browser.
 5. LEAD then pushes `config.toml` settings, since sign-ups disabled and MFA do not reach a hosted project automatically.
+6. After that push, set the sign-in rate limit to 15 in the dashboard, and check whether the plan offers the password and MFA verification hooks (ADMIN review finding 1). If not, YOU decide whether to accept Supabase's own limits for launch.
 
 **A3 Vercel:**
 1. vercel.com, sign up with GitHub (`SpyrosKas`), team name `casa-filakopi`.
@@ -221,21 +222,21 @@ Security and tooling:
 - [ ] T3.10 Visual diff against baselines, reviewed by YOU (`MIG-05`). Desktop should match; mobile differs on purpose (F11)
 
 **Track ENGINE** (owns `lib/domain`)
-- [ ] T3.11 Availability calculation (`AVL-01`, `AVL-04`, `AVL-05`)
-- [ ] T3.12 Pricing engine: seasons, weekdays, overrides, extra guest, cleaning (`BKG-02`)
-- [ ] T3.13 Taxes, climate resilience fee, promo codes (`BKG-03`, `BKG-04`)
-- [ ] T3.14 Price breakdown and deposit split (`BKG-05`, `PAY-02`)
-- [ ] T3.15 Cancellation and refund calculation (`BKG-16`)
-- [ ] T3.16 Unit tests including Athens timezone and DST edges (`QA-01`, `SUP-11`)
+- [x] T3.11 Availability calculation (`AVL-01`, `AVL-04`, `AVL-05`)
+- [x] T3.12 Pricing engine: seasons, weekdays, overrides, extra guest, cleaning (`BKG-02`)
+- [x] T3.13 Taxes, climate resilience fee, promo codes (`BKG-03`, `BKG-04`)
+- [x] T3.14 Price breakdown and deposit split (`BKG-05`, `PAY-02`)
+- [x] T3.15 Cancellation and refund calculation (`BKG-16`)
+- [x] T3.16 Unit tests including Athens timezone and DST edges (`QA-01`, `SUP-11`)
 
 **Track ADMIN** (owns `app/admin`, `components/admin`)
-- [ ] T3.17 Login, reset, invite-only, session timeout, rate limit (`SUP-12`, `ADM-01`, `ADM-03`)
-- [ ] T3.18 TOTP MFA, mandatory for Owner (`SUP-13`)
-- [ ] T3.19 Role middleware, admin shell, audit helper (`ADM-02`, `ADM-04`, `SUP-14`)
-- [ ] T3.20 Rooms, property and settings screens (`ADM-14`, `ADM-24`, `ADM-25`)
-- [ ] T3.20a Payment and cancellation rules screen for Yorgos: payment mode, deposit %, balance timing, cancellation tiers, with plain-language preview of what a guest will see (`PAY-02`, `BKG-16`, D6)
-- [ ] T3.20b Snapshot the rules onto each booking; a test proves editing rules leaves existing bookings unchanged (`CMP-03`)
-- [ ] T3.20c Admin works on a phone, since Yorgos will likely manage it from one
+- [x] T3.17 Login, reset, invite-only, session timeout, rate limit (`SUP-12`, `ADM-01`, `ADM-03`)
+- [x] T3.18 TOTP MFA, mandatory for Owner (`SUP-13`)
+- [x] T3.19 Role middleware, admin shell, audit helper (`ADM-02`, `ADM-04`, `SUP-14`)
+- [x] T3.20 Rooms, property and settings screens (`ADM-14`, `ADM-24`, `ADM-25`)
+- [x] T3.20a Payment and cancellation rules screen for Yorgos: payment mode, deposit %, balance timing, cancellation tiers, with plain-language preview of what a guest will see (`PAY-02`, `BKG-16`, D6)
+- [x] T3.20b Snapshot the rules onto each booking; a test proves editing rules leaves existing bookings unchanged (`CMP-03`)
+- [x] T3.20c Admin works on a phone, since Yorgos will likely manage it from one
 
 **Track MAIL** (owns `emails`, `lib/email`)
 - [ ] T3.21 A4, A5: domain verified with SPF, DKIM, DMARC (`EML-01`, `PLT-08`)
