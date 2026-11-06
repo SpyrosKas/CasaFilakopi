@@ -149,15 +149,7 @@ describe("issuing", () => {
       ),
     );
     const numbers = results
-      .filter(
-        (
-          r,
-        ): r is PromiseFulfilledResult<{
-          number: number;
-          invoice_id: string;
-        }> => r.status === "fulfilled",
-      )
-      .map((r) => r.value.number)
+      .flatMap((r) => (r.status === "fulfilled" ? [r.value.number] : []))
       .sort((a, b) => a - b);
     expect(numbers).toHaveLength(8);
     numbers.forEach((n, i) => expect(n).toBe(numbers[0] + i));
