@@ -4,8 +4,14 @@
     {
       "name": "legacy-static",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8123"],
+      "runtimeArgs": ["-m", "http.server", "8123", "--directory", "legacy"],
       "port": 8123
+    },
+    {
+      "name": "next-dev",
+      "runtimeExecutable": "/opt/homebrew/opt/node@24/bin/node",
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev"],
+      "port": 3000
     }
   ]
 }

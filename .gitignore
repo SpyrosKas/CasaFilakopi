@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# next.js
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# env (never commit secrets; .env.example is the documented template)
+.env*
+!.env.example
+
+# supabase local state
+supabase/.branches/
+supabase/.temp/
+
+# test output
+playwright-report/
+test-results/
+coverage/
+
+# misc
+.DS_Store
+*.log
+.vercel/

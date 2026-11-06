@@ -1,0 +1,5 @@
+legacy
+docs
+pnpm-lock.yaml
+.next
+tests/baseline/legacy

@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** Phase 0. D1 to D3, D6 and D10 decided. Next: YOU send the accountant sheet (D4), answer D5, confirm the remaining proposals.
+**Status:** Phase 1 built and verified locally, except CI, which needs a first push. Phase 2 is next. YOU: send the accountant sheet (D4), answer D5, confirm the remaining proposals.
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
@@ -78,7 +78,7 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 
 | ID | Item | Needed by | Who | Status |
 |---|---|---|---|---|
-| A0 | Start Docker Desktop | Phase 1 | YOU | [ ] |
+| A0 | Start Docker Desktop | Phase 1 | YOU | [x] |
 | A1 | Ops Gmail | Phase 1 end | YOU | [ ] |
 | A2 | Supabase staging project | Phase 2 end | YOU | [ ] |
 | A3 | Vercel project | Phase 2 end | YOU | [ ] |
@@ -141,8 +141,8 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 - [x] T0.4 YOU answer D1, D2, D3
 - [ ] T0.5 ACC answers D4 (question sheet in T0.9)
 - [ ] T0.6 YOU answer D5, D6, confirm D7 to D14
-- [ ] T0.7 Install tooling: Supabase CLI, GitHub CLI, Stripe CLI, Node LTS (`.nvmrc`)
-- [ ] T0.8 A0: Docker running, `supabase --version` and `docker ps` verified
+- [x] T0.7 Install tooling: Supabase CLI, GitHub CLI, Stripe CLI, Node LTS (`.nvmrc`)
+- [x] T0.8 A0: Docker running, `supabase --version` and `docker ps` verified
 - [x] T0.9 Write `docs/accountant-questions.md` for ACC (Greek + English)
 - [ ] T0.10 Confirm live hosting and record the rollback path (`MIG-09`). Found so far: `miloscasa.com` uses Namecheap nameservers; its IP `104.198.14.52` looks like Netlify, unconfirmed
 
@@ -150,18 +150,18 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 
 ### Phase 1: Scaffold (LEAD, serial)
 
-- [ ] T1.1 Move static site to `legacy/`, remove tracked `.DS_Store`, add `.gitignore`
-- [ ] T1.2 Create Next.js App Router + TypeScript (strict) at repo root with pnpm
-- [ ] T1.3 Add ESLint, Prettier, Vitest, Playwright
-- [ ] T1.4 Project structure: `app/[locale]`, `app/admin`, `app/api`, `lib/domain`, `lib/db`, `emails`, `supabase`
-- [ ] T1.5 `next-intl` locale routing `/el`, `/en` (`WEB-06`)
-- [ ] T1.6 `supabase init`, local stack running (`SUP-01`)
-- [ ] T1.7 Env loader with Zod validation and `.env.example` (`PLT-03`)
-- [ ] T1.8 Server-only Supabase client guard so the service key cannot reach the browser (`SUP-07`)
-- [ ] T1.9 CI on GitHub Actions: lint, typecheck, test, build (`PLT-04`)
-- [ ] T1.10 Write `CLAUDE.md` with conventions, ownership and test commands
-- [ ] T1.12 Keep the app host-portable: `output: 'standalone'`, a Dockerfile, no Vercel-only features
-- [ ] T1.11 Capture legacy visual baselines at 375, 768, 1280 px for all 3 pages (`MIG-05`, `QA-06`)
+- [x] T1.1 Move static site to `legacy/`, remove tracked `.DS_Store`, add `.gitignore`
+- [x] T1.2 Create Next.js App Router + TypeScript (strict) at repo root with pnpm
+- [x] T1.3 Add ESLint, Prettier, Vitest, Playwright
+- [x] T1.4 Project structure: `app/[locale]`, `app/admin`, `app/api`, `lib/domain`, `lib/db`, `emails`, `supabase`
+- [x] T1.5 `next-intl` locale routing `/el`, `/en` (`WEB-06`)
+- [x] T1.6 `supabase init`, local stack running (`SUP-01`)
+- [x] T1.7 Env loader with Zod validation and `.env.example` (`PLT-03`)
+- [x] T1.8 Server-only Supabase client guard so the service key cannot reach the browser (`SUP-07`)
+- [ ] T1.9 CI on GitHub Actions: lint, typecheck, test, build (`PLT-04`). Workflow written; not ticked until it runs green on GitHub after the first push
+- [x] T1.10 Write `CLAUDE.md` with conventions, ownership and test commands
+- [x] T1.12 Keep the app host-portable: `output: 'standalone'`, a Dockerfile, no Vercel-only features
+- [x] T1.11 Capture legacy visual baselines at 375, 768, 1280 px for all 3 pages (`MIG-05`, `QA-06`)
 
 **Gate 1:** `pnpm dev` serves a page, Supabase runs locally, CI is green, baselines are saved.
 
