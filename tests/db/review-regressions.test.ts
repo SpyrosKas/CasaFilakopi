@@ -1,0 +1,615 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  admin,
+  asRole,
+  confirm,
+  createAdmin,
+  createHold,
+  createRoom,
+  db,
+  expireHold,
+  PRICE,
+  RULES,
+} from "./helpers";
+
+// One test for each finding of the independent review (T2.22).
+
+let roomId: string;
+
+beforeEach(async () => {
+  roomId = await createRoom();
+});
+
+afterAll(async () => {
+  await db.end();
+});
+
+const JUNE = { checkIn: "2032-06-01", checkOut: "2032-06-05" };
+
+const statusOf = async (id: string) =>
+  (await db.query(`select status from public.bookings where id = $1`, [id]))
+    .rows[0].status as string;
+
+const claimsOf = async (id: string) =>
+  (
+    await db.query(
+      `select count(*)::int as n from public.inventory_claims where booking_id = $1`,
+      [id],
+    )
+  ).rows[0].n as number;
+
+const paymentOf = async (id: string) =>
+  (await db.query(`select id from public.payments where booking_id = $1`, [id]))
+    .rows[0].id as string;
+
+const addCalendar = async () =>
+  (
+    await db.query(
+      `insert into public.external_calendars (room_id, channel)
+       values ($1, 'airbnb') returning id`,
+      [roomId],
+    )
+  ).rows[0].id as string;
+
+const paid = async () => {
+  const id = await createHold({ roomId, ...JUNE });
+  await confirm(id);
+  return { id, paymentId: await paymentOf(id) };
+};
+
+describe("replayed Stripe events (finding 1)", () => {
+  it("a replay after dates_lost never takes the dates, even when they are free again", async () => {
+    const late = await createHold({ roomId, ...JUNE });
+    await expireHold(late);
+    const winner = await createHold({ roomId, ...JUNE });
+    await confirm(winner);
+    const intent = randomUUID();
+
+    expect((await confirm(late, intent)).outcome).toBe("dates_lost");
+    await db.query(`select public.cancel_booking($1)`, [winner]);
+
+    expect((await confirm(late, intent)).outcome).toBe("dates_lost");
+    expect(await statusOf(late)).toBe("expired");
+    expect(await claimsOf(late)).toBe(0);
+  });
+
+  it("a replay after a legitimate cancel does not report dates_lost", async () => {
+    const id = await createHold({ roomId, ...JUNE });
+    const intent = randomUUID();
+    await confirm(id, intent);
+    await db.query(`select public.cancel_booking($1)`, [id]);
+
+    expect((await confirm(id, intent)).outcome).toBe("already_confirmed");
+    expect(await statusOf(id)).toBe("cancelled");
+  });
+});
+
+describe("imports that collide with a hold (findings 2 and 3)", () => {
+  const upsert = (calendar: string, start: string, end: string) =>
+    db.query(`select public.upsert_external_event($1, $2, $3, $4) as r`, [
+      calendar,
+      randomUUID(),
+      start,
+      end,
+    ]);
+
+  it("refuses to confirm dates an import has already sold", async () => {
+    const id = await createHold({ roomId, ...JUNE });
+    await upsert(await addCalendar(), "2032-06-03", "2032-06-08");
+
+    expect((await confirm(id)).outcome).toBe("dates_lost");
+    expect(await claimsOf(id)).toBe(0);
+    expect(await statusOf(id)).toBe("expired");
+  });
+
+  it("a hold waits for an uncommitted import, then sees it", async () => {
+    await paid();
+    const calendar = await addCalendar();
+
+    const importer = await db.connect();
+    await importer.query("begin");
+    await importer.query(
+      `select public.upsert_external_event($1, 'race', '2032-06-03', '2032-06-08')`,
+      [calendar],
+    );
+
+    let settled = false;
+    const hold = createHold({
+      roomId,
+      checkIn: "2032-06-06",
+      checkOut: "2032-06-07",
+    }).finally(() => {
+      settled = true;
+    });
+    const caught = hold.catch((e: Error) => e.message);
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(settled).toBe(false);
+
+    await importer.query("commit");
+    importer.release();
+    expect(await caught).toBe("dates_unavailable");
+  });
+
+  it("reports a conflict as new only once (repeat alerts)", async () => {
+    await paid();
+    const calendar = await addCalendar();
+    const run = async () =>
+      (
+        await db.query(
+          `select public.upsert_external_event($1, 'x', '2032-06-03', '2032-06-08') as r`,
+          [calendar],
+        )
+      ).rows[0].r;
+
+    expect((await run()).is_new_conflict).toBe(true);
+    const second = await run();
+    expect(second.is_conflicted).toBe(true);
+    expect(second.is_new_conflict).toBe(false);
+  });
+
+  it("rejects bad dates cleanly", async () => {
+    await expect(
+      upsert(await addCalendar(), "2032-06-08", "2032-06-03"),
+    ).rejects.toThrow("invalid_dates");
+  });
+});
+
+describe("audit log (findings 4 and 5)", () => {
+  it("records the before and after of a settings change", async () => {
+    await db.query(
+      `update public.settings set value = '{"enabled": ["en"]}' where key = 'languages'`,
+    );
+    const { rows } = await db.query(
+      `select entity_id, before, after from public.audit_log
+       where entity = 'settings' and action = 'update' order by id desc limit 1`,
+    );
+    expect(rows[0].entity_id).toBe("languages");
+    expect(rows[0].before.value).toEqual({ enabled: ["en", "el"] });
+    expect(rows[0].after.value).toEqual({ enabled: ["en"] });
+    await db.query(
+      `update public.settings set value = '{"enabled": ["en", "el"]}' where key = 'languages'`,
+    );
+  });
+
+  it("names the admin behind a server-side cancel", async () => {
+    const owner = await createAdmin("owner");
+    const { id } = await paid();
+    await db.query(`select public.cancel_booking($1, 'x', $2)`, [id, owner.id]);
+    const { rows } = await db.query(
+      `select actor_id from public.audit_log
+       where entity = 'bookings' and entity_id = $1 order by id desc limit 1`,
+      [id],
+    );
+    expect(rows[0].actor_id).toBe(owner.id);
+  });
+
+  it("does not carry the actor into the next transaction", async () => {
+    const owner = await createAdmin("owner");
+    const { id } = await paid();
+    await db.query(`select public.cancel_booking($1, 'x', $2)`, [id, owner.id]);
+    await db.query(`update public.rooms set max_children = 1 where id = $1`, [
+      roomId,
+    ]);
+    const { rows } = await db.query(
+      `select actor_id from public.audit_log
+       where entity = 'rooms' and entity_id = $1 order by id desc limit 1`,
+      [roomId],
+    );
+    expect(rows[0].actor_id).toBeNull();
+  });
+});
+
+describe("money validation (finding 6)", () => {
+  const pay = (id: string, cents: number, intent: string | null) =>
+    db.query(`select public.confirm_booking($1, 'full', $2, $3, $4) as r`, [
+      id,
+      cents,
+      intent,
+      randomUUID(),
+    ]);
+
+  it("does not confirm a wrong amount, but records the money", async () => {
+    const id = await createHold({ roomId, ...JUNE });
+    const { rows } = await pay(id, 1, randomUUID());
+    expect(rows[0].r.outcome).toBe("amount_mismatch");
+    expect(await statusOf(id)).toBe("pending_payment");
+    await paymentOf(id);
+  });
+
+  it("refuses a payment belonging to another booking", async () => {
+    const a = await createHold({ roomId, ...JUNE });
+    const intent = randomUUID();
+    await confirm(a, intent);
+    const b = await createHold({
+      roomId,
+      checkIn: "2032-07-01",
+      checkOut: "2032-07-05",
+    });
+    await expect(pay(b, 10000, intent)).rejects.toThrow(
+      "payment_booking_mismatch",
+    );
+  });
+
+  it("flags a second, different payment", async () => {
+    const { id } = await paid();
+    const { rows } = await pay(id, 10000, randomUUID());
+    expect(rows[0].r.outcome).toBe("extra_payment");
+  });
+
+  it("requires a payment intent", async () => {
+    const id = await createHold({ roomId, ...JUNE });
+    await expect(pay(id, 10000, null)).rejects.toThrow(
+      "payment_intent_required",
+    );
+  });
+});
+
+describe("nothing due now (finding 7)", () => {
+  it("confirms without a payment", async () => {
+    const id = await createHold({ roomId, ...JUNE });
+    await db.query(
+      `update public.bookings set due_now_cents = 0 where id = $1`,
+      [id],
+    );
+    const { rows } = await db.query(
+      `select public.confirm_without_payment($1) as r`,
+      [id],
+    );
+    expect(rows[0].r.outcome).toBe("confirmed");
+  });
+
+  it("cannot skip a payment that is due", async () => {
+    const id = await createHold({ roomId, ...JUNE });
+    await expect(
+      db.query(`select public.confirm_without_payment($1)`, [id]),
+    ).rejects.toThrow("payment_required");
+  });
+});
+
+describe("privileges", () => {
+  it("functions created later are not public (finding 8)", async () => {
+    const client = await db.connect();
+    await client.query("begin");
+    await client.query(
+      `create function public.future_probe() returns int language sql as 'select 1'`,
+    );
+    const { rows } = await client.query(
+      `select has_function_privilege('anon', 'public.future_probe()', 'execute') as a,
+              has_function_privilege('authenticated', 'public.future_probe()', 'execute') as b`,
+    );
+    await client.query("rollback");
+    client.release();
+    expect(rows[0]).toEqual({ a: false, b: false });
+  });
+
+  it("the server role can run booking functions through RLS", async () => {
+    await asRole("service_role", null, async (c) => {
+      await c.query(
+        `select public.create_hold($1, '2032-06-01', '2032-06-05', 2, 0,
+           '{"email":"s@example.test"}'::jsonb, $2::jsonb, 100, 100, $3::jsonb,
+           'v1', $4, now())`,
+        [roomId, PRICE, RULES, randomUUID()],
+      );
+    });
+  });
+
+  it("the owner can update and delete site photos (finding 10)", async () => {
+    const owner = await createAdmin("owner");
+    await admin(owner.id, "aal2", async (c) => {
+      await c.query(
+        `insert into storage.objects (bucket_id, name) values ('media', 'a.jpg')`,
+      );
+      const moved = await c.query(
+        `update storage.objects set name = 'b.jpg' where bucket_id = 'media' and name = 'a.jpg'`,
+      );
+      expect(moved.rowCount).toBe(1);
+      // Supabase blocks plain SQL deletes here; the switch lets this test reach
+      // the same RLS policy the Storage API goes through.
+      await c.query(
+        `select set_config('storage.allow_delete_query', 'true', true)`,
+      );
+      const removed = await c.query(
+        `delete from storage.objects where bucket_id = 'media' and name = 'b.jpg'`,
+      );
+      expect(removed.rowCount).toBe(1);
+    });
+  });
+
+  it("the owner cannot edit the invoice counter", async () => {
+    const owner = await createAdmin("owner");
+    await expect(
+      admin(owner.id, "aal2", (c) =>
+        c.query(`update public.invoice_series set last_number = 100`),
+      ),
+    ).rejects.toThrow(/permission denied/);
+  });
+});
+
+describe("empty feeds (finding 9)", () => {
+  it("an empty feed does not release sold dates", async () => {
+    const calendar = await addCalendar();
+    await db.query(
+      `select public.upsert_external_event($1, 'a', '2032-06-01', '2032-06-05')`,
+      [calendar],
+    );
+    await expect(
+      db.query(`select public.remove_missing_external_events($1, '{}')`, [
+        calendar,
+      ]),
+    ).rejects.toThrow("empty_feed_refused");
+    await expect(createHold({ roomId, ...JUNE })).rejects.toThrow(
+      "dates_unavailable",
+    );
+
+    await db.query(
+      `select public.remove_missing_external_events($1, '{}', true)`,
+      [calendar],
+    );
+    await createHold({ roomId, ...JUNE });
+  });
+});
+
+describe("refunds (findings 11 and 12)", () => {
+  const reserve = async (id: string, paymentId: string, cents: number) =>
+    (
+      await db.query(`select public.reserve_refund($1, $2, $3) as r`, [
+        id,
+        paymentId,
+        cents,
+      ])
+    ).rows[0].r as string;
+
+  const settle = (refundId: string, status: string) =>
+    db.query(`select public.settle_refund($1, $2, $3)`, [
+      refundId,
+      status,
+      randomUUID(),
+    ]);
+
+  it("refuses to refund a disputed payment", async () => {
+    const { id, paymentId } = await paid();
+    await db.query(
+      `update public.payments set status = 'disputed' where id = $1`,
+      [paymentId],
+    );
+    await expect(reserve(id, paymentId, 100)).rejects.toThrow(
+      "payment_not_refundable",
+    );
+  });
+
+  it("the cap counts refunds still in flight", async () => {
+    const { id, paymentId } = await paid();
+    await reserve(id, paymentId, 8000);
+    await expect(reserve(id, paymentId, 3000)).rejects.toThrow(
+      "refund_exceeds_payment",
+    );
+  });
+
+  it("10 concurrent reservations cannot exceed the payment", async () => {
+    const { id, paymentId } = await paid();
+    const results = await Promise.allSettled(
+      Array.from({ length: 10 }, () => reserve(id, paymentId, 4000)),
+    );
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(2);
+  });
+
+  it("a failed refund frees the reservation", async () => {
+    const { id, paymentId } = await paid();
+    await settle(await reserve(id, paymentId, 10000), "failed");
+    await reserve(id, paymentId, 10000);
+  });
+
+  it("marks refunded on settle, and back if Stripe later reports failure", async () => {
+    const { id, paymentId } = await paid();
+    await db.query(`select public.cancel_booking($1)`, [id]);
+    const refund = await reserve(id, paymentId, 10000);
+    expect(await statusOf(id)).toBe("cancelled");
+
+    await settle(refund, "succeeded");
+    expect(await statusOf(id)).toBe("refunded");
+
+    await settle(refund, "failed");
+    expect(await statusOf(id)).toBe("cancelled");
+  });
+
+  it("records a dashboard refund even past the cap, since the money moved", async () => {
+    const { id, paymentId } = await paid();
+    await reserve(id, paymentId, 10000);
+    await db.query(`select public.record_refund($1, $2, 500, $3)`, [
+      id,
+      paymentId,
+      randomUUID(),
+    ]);
+  });
+
+  it("a full refund before cancelling still ends as refunded", async () => {
+    const { id, paymentId } = await paid();
+    await db.query(`select public.record_refund($1, $2, 10000)`, [
+      id,
+      paymentId,
+    ]);
+    await db.query(`select public.cancel_booking($1)`, [id]);
+    expect(await statusOf(id)).toBe("refunded");
+  });
+
+  it("a cancelled booking with no payment is not marked refunded", async () => {
+    const id = await createHold({ roomId, ...JUNE });
+    await db.query(`select public.cancel_booking($1)`, [id]);
+    expect(await statusOf(id)).toBe("cancelled");
+  });
+
+  it("hand-entered payments allow for earlier refunds", async () => {
+    const { id, paymentId } = await paid();
+    await db.query(`select public.record_refund($1, $2, 5000)`, [
+      id,
+      paymentId,
+    ]);
+    await db.query(`select public.record_payment($1, 'extra', 'cash', 5000)`, [
+      id,
+    ]);
+  });
+});
+
+describe("concurrency", () => {
+  it("confirm and expiry cleanup never deadlock (finding 13)", async () => {
+    const bookings = await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        createHold({
+          roomId,
+          checkIn: `2032-08-${String(i + 1).padStart(2, "0")}`,
+          checkOut: `2032-08-${String(i + 2).padStart(2, "0")}`,
+        }),
+      ),
+    );
+    await Promise.all(bookings.map(expireHold));
+
+    const results = await Promise.allSettled([
+      ...bookings.map((id) => confirm(id)),
+      ...Array.from({ length: 10 }, () =>
+        db.query(`select public.release_expired_holds($1)`, [roomId]),
+      ),
+    ]);
+    expect(results.filter((r) => r.status === "rejected")).toEqual([]);
+  });
+
+  it("the constraint itself holds without the room lock", async () => {
+    const results = await Promise.allSettled(
+      Array.from({ length: 30 }, () =>
+        db.query(
+          `select public.create_block($1, '2032-09-01', '2032-09-10', 'other')`,
+          [roomId],
+        ),
+      ),
+    );
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+  });
+});
+
+describe("promo codes (finding 14)", () => {
+  const addPromo = async (maxUses: number) => {
+    const code = `T${randomUUID().slice(0, 8)}`;
+    await db.query(
+      `insert into public.promo_codes (code, kind, value, max_uses)
+       values ($1, 'percent', 1000, $2)`,
+      [code, maxUses],
+    );
+    return code;
+  };
+
+  const used = async (code: string) =>
+    (
+      await db.query(
+        `select used_count from public.promo_codes where code = $1`,
+        [code],
+      )
+    ).rows[0].used_count as number;
+
+  it("one remaining use goes to exactly one of 10 guests", async () => {
+    const promo = await addPromo(1);
+    const results = await Promise.allSettled(
+      Array.from({ length: 10 }, (_, i) =>
+        createHold({
+          roomId,
+          checkIn: `2032-08-${String(i * 2 + 1).padStart(2, "0")}`,
+          checkOut: `2032-08-${String(i * 2 + 2).padStart(2, "0")}`,
+          promo,
+        }),
+      ),
+    );
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(await used(promo)).toBe(1);
+  });
+
+  it("gives the use back when the hold expires or is cancelled", async () => {
+    const promo = await addPromo(2);
+    const a = await createHold({ roomId, ...JUNE, promo });
+    const b = await createHold({
+      roomId,
+      checkIn: "2032-07-01",
+      checkOut: "2032-07-05",
+      promo,
+    });
+    expect(await used(promo)).toBe(2);
+    await expireHold(a);
+    await db.query(`select public.release_expired_holds($1)`, [roomId]);
+    expect(await used(promo)).toBe(1);
+    await db.query(`select public.cancel_booking($1)`, [b]);
+    expect(await used(promo)).toBe(0);
+  });
+
+  it("a confirmed booking keeps its use", async () => {
+    const promo = await addPromo(1);
+    const id = await createHold({ roomId, ...JUNE, promo });
+    await confirm(id);
+    await db.query(`select public.cancel_booking($1)`, [id]);
+    expect(await used(promo)).toBe(1);
+  });
+});
+
+describe("remaining findings", () => {
+  it("a line cannot be moved off an issued invoice", async () => {
+    const series = await db.query(
+      `insert into public.invoice_series (doc_type, prefix)
+       values ('receipt', $1) returning id`,
+      [randomUUID()],
+    );
+    const draft = await db.query(
+      `insert into public.invoices (doc_type) values ('receipt') returning id`,
+    );
+    const line = await db.query(
+      `insert into public.invoice_lines (invoice_id, description, unit_cents, total_cents)
+       values ($1, 'x', 1, 1) returning id`,
+      [draft.rows[0].id],
+    );
+    await db.query(
+      `update public.invoices
+       set status = 'issued', series_id = $1, number = 1, issued_at = now()
+       where id = $2`,
+      [series.rows[0].id, draft.rows[0].id],
+    );
+    const other = await db.query(
+      `insert into public.invoices (doc_type) values ('receipt') returning id`,
+    );
+    await expect(
+      db.query(
+        `update public.invoice_lines set invoice_id = $1 where id = $2`,
+        [other.rows[0].id, line.rows[0].id],
+      ),
+    ).rejects.toThrow("issued_invoice_immutable");
+  });
+
+  it("marketing opt-in is logged and reaches the guest only after payment", async () => {
+    const email = `${randomUUID()}@example.test`;
+    const id = await createHold({ roomId, ...JUNE, email, marketing: true });
+    const consent = await db.query(
+      `select granted from public.consent_log where subject = $1`,
+      [id],
+    );
+    expect(consent.rows).toEqual([{ granted: true }]);
+
+    const guest = () =>
+      db.query(`select marketing_consent from public.guests where email = $1`, [
+        email,
+      ]);
+    expect((await guest()).rows[0].marketing_consent).toBe(false);
+    await confirm(id);
+    expect((await guest()).rows[0].marketing_consent).toBe(true);
+  });
+
+  it("a manual booking can carry a guest link token", async () => {
+    const hash = randomUUID();
+    await db.query(
+      `select public.create_manual_booking(
+         $1, '2032-06-01', '2032-06-05', 2, 0, '{"name":"G"}'::jsonb,
+         $2::jsonb, 100, $3::jsonb, 'manual', null, $4, '2099-01-01')`,
+      [roomId, PRICE, RULES, hash],
+    );
+    const { rows } = await db.query(
+      `select 1 from public.bookings where access_token_hash = $1`,
+      [hash],
+    );
+    expect(rows).toHaveLength(1);
+  });
+});

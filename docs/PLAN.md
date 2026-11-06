@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** Phase 1 built and verified locally, except CI, which needs a first push. Phase 2 is next. YOU: send the accountant sheet (D4), answer D5, confirm the remaining proposals.
+**Status:** Phase 2 built and reviewed; awaiting YOU at Gate 2. Open: T1.9 and T2.23 need A1 to A3 and a first push. YOU: accountant sheet (D4), public name (D5), confirm the remaining proposals.
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
@@ -43,9 +43,9 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 |---|---|---|---|
 | D1 | Sell whole house only, or also single bedrooms? | **Decided** | Whole house only. One row in `rooms`; no Rooms list/detail pages or room-choice step (`WEB-02`, `WEB-04`, `BKG-07` adjusted) |
 | D2 | Channel sync on at launch? | **Decided** | On at launch for Airbnb + Booking.com; CHN moves from optional to launch-blocking. HomeAway/Vrbo depends on A9. The Admin toggle stays |
-| D3 | Who owns accounts and takes payments? | **Decided** | Yorgos is legal owner and activates Stripe (A10). A shared ops Gmail owns the technical accounts |
+| D3 | Who owns accounts and takes payments? | **Decided** | Yorgos is legal owner and activates Stripe (A10). `host@miloscasa.com` owns the technical accounts |
 | D4 | Host legal/tax setup (business vs individual short-term rental; AMA vs MHTE; VAT; myDATA) | **With ACC** | Sheet ready: [accountant-questions.md](accountant-questions.md). INV waits; everything else continues |
-| D5 | Public brand name and domain; where the site is hosted today | Open | |
+| D5 | Public brand name and domain; where the site is hosted today | **Part decided** | Domain `miloscasa.com`, registered at Namecheap, expires 2027-04-11 (auto-renew must be on), hosted on Netlify. Accounts and guest mail use `host@miloscasa.com` through Namecheap forwarding. Public name still to confirm: "Casa Milos" matches the domain |
 | D6 | Payment mode and cancellation rules | **Decided** | Yorgos edits these any time in Admin, no developer needed. Changes apply to new bookings only; each booking keeps a snapshot of the rules it was made under. Starting values are his to set at T6.9 |
 | D7 | Languages at launch | Proposed | Greek + English |
 | D8 | Styling (spec open decision 1) | Proposed | Keep existing `bootstrap.css` and `style.css` as global CSS; replace jQuery, Bootstrap JS and AOS behaviour with small React components |
@@ -54,6 +54,8 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | D11 | Stripe surface (PAY-01) | Proposed | Hosted Checkout Sessions |
 | D12 | Repo layout | Proposed | Next.js at repo root; static site moved to `legacy/` on `dev-booking` as the visual baseline, deleted after cutover |
 | D13 | Real-time channel manager later (open decision 8) | Proposed | Not now; adapter only |
+| D15 | Schema changes from the spec | Decided | `booking_nights` dropped (stay range plus `price_breakdown`). `room_photos` became `media_placements`, per section. `email_queue` merged into `email_logs`. `rate_overrides` is the spec's `rates` |
+| D16 | Paid hold on dates an import has already sold | Decided | Automatic refund plus host alert (`dates_lost`). Nothing-due-now bookings confirm through `confirm_without_payment` |
 | D14 | Launch target | Proposed | Live before the 2027 season bookings start (aim for March 2027) |
 
 ---
@@ -79,7 +81,7 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 | ID | Item | Needed by | Who | Status |
 |---|---|---|---|---|
 | A0 | Start Docker Desktop | Phase 1 | YOU | [x] |
-| A1 | Ops Gmail | Phase 1 end | YOU | [ ] |
+| A1 | Set up `host@miloscasa.com` | Phase 2 end | YOU | [ ] |
 | A2 | Supabase staging project | Phase 2 end | YOU | [ ] |
 | A3 | Vercel project | Phase 2 end | YOU | [ ] |
 | A4 | Domain and DNS access | Wave 1 | YOU/HOST | [ ] |
@@ -93,17 +95,20 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 
 **A0 Docker:** open Docker Desktop from Applications and wait for "Engine running". Needed for local Supabase.
 
-**A1 Ops Gmail:**
-1. Go to accounts.google.com/signup and create e.g. `casafilakopi.ops@gmail.com`.
-2. Turn on 2-Step Verification at myaccount.google.com/security.
-3. Store the password and recovery codes in a password manager.
-4. Use this address to sign up to A2, A3, A5, A7, A8, so nothing is tied to a personal inbox. It does not replace a guest-facing address (that comes from the domain).
+**A1 `host@miloscasa.com`:**
+1. Log in to Namecheap, open `miloscasa.com`, and turn Auto-Renew on.
+2. Advanced DNS, Mail Settings: keep Email Forwarding. Domain tab, Redirect Email: add alias `host` forwarding to your inbox. Add Yorgos's inbox too if forwarding allows more than one target.
+3. Send a test email to `host@miloscasa.com`.
+4. Use this address for A2, A3, A5, A7, A8, with 2-Step Verification on and recovery codes in a password manager.
+
+**A1b Setup guides I give you when each step is reached:** domain DNS records for sending mail (A5), how Yorgos reads guest mail and replies from `host@miloscasa.com` (T4.18a), and Gmail setup if a dedicated inbox is wanted. **Stripe:** A6 for test mode, A10 for live.
 
 **A2 Supabase staging:**
-1. supabase.com, Sign in with the ops account. Create organization `Casa Filakopi`, plan Free.
+1. supabase.com, sign up with `host@miloscasa.com`. Create organization `Casa Filakopi`, plan Free.
 2. New project: name `casa-filakopi-staging`, region `Central EU (Frankfurt)`, generate a strong database password and save it in the password manager.
 3. Tell me the project ref only (the `abcdefgh` part of the dashboard URL).
 4. In a terminal run `supabase login` yourself. It opens a browser.
+5. LEAD then pushes `config.toml` settings, since sign-ups disabled and MFA do not reach a hosted project automatically.
 
 **A3 Vercel:**
 1. vercel.com, sign up with GitHub (`SpyrosKas`), team name `casa-filakopi`.
@@ -111,19 +116,19 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 3. Upgrade to Pro only when going to production.
 
 **A5 Resend:**
-1. resend.com, sign up with the ops account.
+1. resend.com, sign up with `host@miloscasa.com`.
 2. Domains, Add Domain, use `mail.<yourdomain>`, region `eu-west-1`.
 3. Add the shown DNS records (needs A4). I will check them with you.
 4. API Keys, create `staging` with Sending access, and paste it into `.env.local` as `RESEND_API_KEY`.
 
 **A6 Stripe test mode:**
-1. stripe.com, sign up with the ops account for now. Do not activate payments yet.
+1. stripe.com, sign up with `host@miloscasa.com` for now. Do not activate payments yet.
 2. Keep "Test mode" on. Developers, API keys: put them in `.env.local` as `STRIPE_SECRET_KEY` and `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`.
 3. In a terminal run `stripe login`.
 
-**A7 Turnstile:** dash.cloudflare.com, sign up with the ops account, Turnstile, Add site, domains `localhost` and the Vercel URL. Save the two keys as `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`.
+**A7 Turnstile:** dash.cloudflare.com, sign up with `host@miloscasa.com`, Turnstile, Add site, domains `localhost` and the Vercel URL. Save the two keys as `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`.
 
-**A8 Sentry:** sentry.io, sign up with the ops account, create a Next.js project, region EU. Save the DSN as `SENTRY_DSN`.
+**A8 Sentry:** sentry.io, sign up with `host@miloscasa.com`, create a Next.js project, region EU. Save the DSN as `SENTRY_DSN`.
 
 **A9 OTA iCal (HOST):** from Airbnb (listing, Availability, Connect calendars, Export) and Booking.com (extranet, Rates & Availability, Sync calendars, Export), copy each listing's iCal URL. Also confirm whether the HomeAway/Vrbo listing is still active.
 
@@ -144,7 +149,7 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 - [x] T0.7 Install tooling: Supabase CLI, GitHub CLI, Stripe CLI, Node LTS (`.nvmrc`)
 - [x] T0.8 A0: Docker running, `supabase --version` and `docker ps` verified
 - [x] T0.9 Write `docs/accountant-questions.md` for ACC (Greek + English)
-- [ ] T0.10 Confirm live hosting and record the rollback path (`MIG-09`). Found so far: `miloscasa.com` uses Namecheap nameservers; its IP `104.198.14.52` looks like Netlify, unconfirmed
+- [x] T0.10 Confirm live hosting and rollback path (`MIG-09`): `miloscasa.com` is served by Netlify from this repo's site. Rollback = point DNS back to Netlify; keep that site until T7.7
 
 **Gate 0:** D5 and D6 answered, D7 to D14 confirmed, tools verified. D4 may stay open; only INV waits for it.
 
@@ -168,32 +173,32 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 ### Phase 2: Data foundation (LEAD, serial, reviewed)
 
 Migrations (`SUP-02`, `SUP-03`):
-- [ ] T2.1 Enable extensions; `property`, `rooms`, `room_photos`, `amenities`, `settings`
-- [ ] T2.2 `inventory_claims` with `btree_gist` exclusion constraint (`SUP-04`) and partial `WHERE` for external conflicts
-- [ ] T2.3 `bookings`, `booking_nights`, `holds`, `guests`, `availability_blocks`, status enum (`BKG-11`, `SUP-11`)
-- [ ] T2.4 `rates`, `seasons`, `restrictions`, `taxes_fees`, `promo_codes`, `cancellation_policies`
-- [ ] T2.5 `payments`, `refunds`, `stripe_events` (idempotency)
-- [ ] T2.6 `invoices`, `invoice_lines`, `invoice_series` (tables only until D4)
-- [ ] T2.7 `external_calendars`, `external_events`, `sync_logs`
-- [ ] T2.8 `contact_messages`, `email_templates`, `email_logs`, `email_queue`
-- [ ] T2.9 `pages`, `content_blocks`, `faq`, `testimonials`, `places`, `media` (per language)
-- [ ] T2.10 `admin_profiles`, `audit_log`, `consent_log`, `job_runs`
+- [x] T2.1 Enable extensions; `property`, `rooms`, `room_photos`, `amenities`, `settings`
+- [x] T2.2 `inventory_claims` with `btree_gist` exclusion constraint (`SUP-04`) and partial `WHERE` for external conflicts
+- [x] T2.3 `bookings`, `booking_nights`, `holds`, `guests`, `availability_blocks`, status enum (`BKG-11`, `SUP-11`)
+- [x] T2.4 `rates`, `seasons`, `restrictions`, `taxes_fees`, `promo_codes`, `cancellation_policies`
+- [x] T2.5 `payments`, `refunds`, `stripe_events` (idempotency)
+- [x] T2.6 `invoices`, `invoice_lines`, `invoice_series` (tables only until D4)
+- [x] T2.7 `external_calendars`, `external_events`, `sync_logs`
+- [x] T2.8 `contact_messages`, `email_templates`, `email_logs`, `email_queue`
+- [x] T2.9 `pages`, `content_blocks`, `faq`, `testimonials`, `places`, `media` (per language)
+- [x] T2.10 `admin_profiles`, `audit_log`, `consent_log`, `job_runs`
 
 RPCs (`SUP-05`):
-- [ ] T2.11 `create_hold`, including clearing expired overlaps
-- [ ] T2.12 `confirm_booking` (idempotent), `next_booking_reference` (`BKG-13`)
-- [ ] T2.13 `cancel_booking`, `record_refund`, `modify_booking`
-- [ ] T2.14 `next_invoice_number`, gapless (`INV-03`)
-- [ ] T2.15 `public_availability` returning no guest data (`AVL-09`)
+- [x] T2.11 `create_hold`, including clearing expired overlaps
+- [x] T2.12 `confirm_booking` (idempotent), `next_booking_reference` (`BKG-13`)
+- [x] T2.13 `cancel_booking`, `record_refund`, `modify_booking`
+- [x] T2.14 `next_invoice_number`, gapless (`INV-03`)
+- [x] T2.15 `public_availability` returning no guest data (`AVL-09`)
 
 Security and tooling:
-- [ ] T2.16 RLS on every table, roles enforced (`SUP-06`, `SUP-14`)
-- [ ] T2.17 Generated TS types in CI (`SUP-08`); seed scripts (`SUP-09`)
-- [ ] T2.18 Storage buckets and policies (`SUP-16`, `SUP-21`)
-- [ ] T2.19 DB tests: 50 concurrent overlapping holds, exactly one wins (`QA-02`)
-- [ ] T2.20 RLS tests for anon, token, staff, owner (`QA-03`)
-- [ ] T2.21 Domain function signatures in `lib/domain` (types only)
-- [ ] T2.22 Independent reviewer agent audits schema, RPCs and RLS
+- [x] T2.16 RLS on every table, roles enforced (`SUP-06`, `SUP-14`)
+- [x] T2.17 Generated TS types in CI (`SUP-08`); seed scripts (`SUP-09`)
+- [x] T2.18 Storage buckets and policies (`SUP-16`, `SUP-21`)
+- [x] T2.19 DB tests: 50 concurrent overlapping holds, exactly one wins, plus the constraint alone under 30 concurrent blocks (`QA-02`)
+- [x] T2.20 RLS tests for anon, token, staff, owner (`QA-03`)
+- [x] T2.21 Domain function signatures in `lib/domain` (types only)
+- [x] T2.22 Independent reviewer agent audits schema, RPCs and RLS. 5 high and 9 medium findings fixed, each with a regression test (`tests/db/review-regressions.test.ts`)
 - [ ] T2.23 A1, A2, A3: staging live; CI applies migrations to staging (`PLT-01`, `PLT-02`, `PLT-04`)
 
 **Gate 2, contract freeze:** concurrency and RLS tests green, review findings closed, YOU sign off. Parallel work starts here.
@@ -247,7 +252,7 @@ Security and tooling:
 - [ ] T4.2 Availability search and calendar widget (`WEB-04`, `WEB-05`)
 - [ ] T4.3 Checkout flow, server-side reprice, terms stored with version (`BKG-06`, `BKG-07`, `BKG-08`, `CMP-03`)
 - [ ] T4.4 Hold 35 min, Checkout Session 30 min (`BKG-09`, `BKG-10`, `PAY-01`)
-- [ ] T4.5 Webhook: signature, idempotent, all events (`PAY-04`, `PAY-05`, `BKG-12`)
+- [ ] T4.5 Webhook: signature, idempotent, all events (`PAY-04`, `PAY-05`, `BKG-12`). LEAD adds the dispute open/close RPC
 - [ ] T4.6 Failed or abandoned payment (`PAY-10`)
 - [ ] T4.7 Paid-after-hold-lost: auto-refund and alert
 - [ ] T4.8 Confirmation page and emails (`EML-02`, `EML-03`)
@@ -263,6 +268,8 @@ Security and tooling:
 - [ ] T4.16 Bookings list and detail, export (`ADM-06`, `ADM-07`, `ADM-09`)
 - [ ] T4.17 Booking actions: manual, modify, cancel, refund, payment (`ADM-08`, `BKG-17`, `BKG-18`, `PAY-06`, `PAY-07`, `PAY-11`)
 - [ ] T4.18 Messages inbox (`CNT-05`, `ADM-21`)
+- [ ] T4.18a Yorgos can read all guest messages and replies in Admin, and they also reach `host@miloscasa.com`
+- [ ] T4.18b Write-to-guest box on any booking or message: pick a template or type freely, send, and it is logged on the booking. Replies come back to `host@miloscasa.com`
 
 **Track CMS** (owns `app/admin/content`, `app/admin/media`, `scripts/migrate-media`)
 - [ ] T4.19 Migrate 68 images to `media` bucket and rewrite references (`SUP-17`, `SUP-18`)
@@ -298,8 +305,10 @@ Security and tooling:
 
 **Track OPS**
 - [ ] T5.8 Editable email templates, remaining emails (`EML-02`, `EML-03`, `EML-06`, `EML-09`, `ADM-27`)
+- [ ] T5.8a Scheduled messages: Yorgos sets rules like "7 days before arrival" or "1 day after check-out", per language, on/off, plus one-off sends at a chosen date on a single booking
+- [ ] T5.8b Automatic guest emails verified end to end: booking confirmation, payment confirmation, reminders, and invoice/receipt once D4 is answered
 - [ ] T5.9 All scheduled jobs with logging and alerts (`JOB-01`, `JOB-04`, `JOB-07`, `JOB-09`)
-- [ ] T5.10 Guests, GDPR export/anonymise, retention (`ADM-20`, `CMP-01`, `CMP-02`, `JOB-08`)
+- [ ] T5.10 Guests, GDPR export/anonymise, retention (`ADM-20`, `CMP-01`, `CMP-02`, `JOB-08`). Anonymise must cover `bookings.guest_*` and `special_requests`, `email_logs`, `contact_messages`, `external_events.guest_*`, `stripe_events.payload`
 - [ ] T5.11 Reports, user management, languages (`ADM-23`, `ADM-29`, `ADM-30`)
 - [ ] T5.12 SEO: sitemap, hreflang, schema.org (`WEB-09`); analytics after consent (`WEB-13`); registry number (`WEB-15`, `CMP-05`)
 

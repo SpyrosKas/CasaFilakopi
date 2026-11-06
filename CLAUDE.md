@@ -46,4 +46,8 @@ Next 16 uses `proxy.ts`, not `middleware.ts`, and route `params` are Promises.
 - **Editable by Yorgos:** rules, prices, text and photos live in the database and Admin, not in code.
 - **Mobile:** every public and admin page must work at 320 px with no overlap and no sideways scrolling.
 - **Parallel work:** stay inside your track's folders listed in `docs/PLAN.md`.
+- **Admin server actions:** check `current_admin_role()` through the user's client before any secret-key RPC, because that path skips the MFA check. Pass the admin's id as `p_actor` so the audit log names them.
+- **Public reads:** use an anon client and name columns explicitly. `select *` fails on `settings` and `content_blocks`.
+- **Stripe refunds:** `reserve_refund`, then Stripe, then `settle_refund`.
+- **Guest tokens:** never put a raw token link in `email_logs.payload`, since staff can read it. Build it at send time.
 - **Plan:** tick a task only after verifying it.

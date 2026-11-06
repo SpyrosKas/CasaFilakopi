@@ -3,3 +3,4 @@ docs
 pnpm-lock.yaml
 .next
 tests/baseline/legacy
+lib/db/types.ts

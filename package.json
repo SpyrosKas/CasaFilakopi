@@ -11,6 +11,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "test:db": "vitest run -c vitest.db.config.ts",
+    "db:types": "supabase gen types typescript --local > lib/db/types.ts",
     "test:e2e": "playwright test",
     "baseline": "playwright test -c playwright.baseline.config.ts"
   },
@@ -27,10 +29,12 @@
   "devDependencies": {
     "@playwright/test": "^1.65.0",
     "@types/node": "^24.19.2",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
+    "pg": "^8.23.1",
     "prettier": "^3.9.10",
     "typescript": "^5",
     "vitest": "^5.1.0"
