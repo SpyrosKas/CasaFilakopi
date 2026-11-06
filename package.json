@@ -14,7 +14,8 @@
     "test:db": "vitest run -c vitest.db.config.ts",
     "db:types": "supabase gen types typescript --local > lib/db/types.ts",
     "test:e2e": "playwright test",
-    "baseline": "playwright test -c playwright.baseline.config.ts"
+    "baseline": "playwright test -c playwright.baseline.config.ts",
+    "visual": "playwright test -c tests/visual/playwright.config.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -36,6 +37,7 @@
     "eslint-config-next": "16.4.5",
     "pg": "^8.23.1",
     "prettier": "^3.9.10",
+    "sharp": "^0.35.5",
     "typescript": "^5",
     "vitest": "^5.1.0"
   },

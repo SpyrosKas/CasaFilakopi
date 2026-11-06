@@ -1,6 +1,286 @@
 {
+  "Common": {
+    "siteName": "Casa Milos",
+    "skipToContent": "Μετάβαση στο κύριο περιεχόμενο",
+    "close": "Κλείσιμο",
+    "previous": "Προηγούμενη",
+    "next": "Επόμενη",
+    "pause": "Παύση",
+    "play": "Αναπαραγωγή",
+    "showPhoto": "Εμφάνιση φωτογραφίας {number}",
+    "openPhoto": "Άνοιγμα φωτογραφίας: {alt}",
+    "photoStatus": "Φωτογραφία {number} από {total}",
+    "language": "Γλώσσα",
+    "languageName": "Ελληνικά",
+    "otherLanguageName": "English"
+  },
+  "Nav": {
+    "home": "Αρχική",
+    "reservations": "Κρατήσεις",
+    "host": "Ο Οικοδεσπότης",
+    "directions": "Οδηγίες",
+    "gallery": "Φωτογραφίες",
+    "contact": "Επικοινωνία",
+    "faq": "Συχνές ερωτήσεις",
+    "houseRules": "Κανόνες σπιτιού",
+    "privacy": "Απόρρητο",
+    "terms": "Όροι",
+    "cancellation": "Ακύρωση",
+    "cookies": "Cookies",
+    "openMenu": "Άνοιγμα μενού",
+    "closeMenu": "Κλείσιμο μενού",
+    "mainNavigation": "Κύρια πλοήγηση",
+    "contactInfo": "Στοιχεία επικοινωνίας",
+    "addressLine1": "Επαρχιακή Οδός Τριοβασάλου-Απολλωνίων,",
+    "addressLine2": "Φυλακωπή, Ποταμιά, 84800, Ελλάδα",
+    "whatsappLabel": "Whatsapp: {number}"
+  },
+  "Footer": {
+    "copyright": "Copyright ©{year} miloscasa.com | Με την επιφύλαξη παντός δικαιώματος",
+    "facebook": "Η Casa Milos στο Facebook",
+    "whatsapp": "Μήνυμα στον οικοδεσπότη μέσω WhatsApp",
+    "instagram": "Η Casa Milos στο Instagram",
+    "cookieSettings": "Ρυθμίσεις cookies",
+    "moreLinks": "Περισσότερες σελίδες"
+  },
+  "Reserve": {
+    "title": "Ανακαλύψτε την ομορφιά.<br></br>Κάντε κράτηση τώρα!",
+    "button": "Κράτηση τώρα",
+    "makeReservation": "Κάντε την κράτησή σας"
+  },
+  "Hero": {
+    "scrollDown": "Κύλιση προς τα κάτω",
+    "explore": "Ανακαλύψτε την ομορφιά"
+  },
   "Home": {
-    "title": "Casa Filakopi",
-    "tagline": "Η νέα ιστοσελίδα ετοιμάζεται"
+    "metaTitle": "Casa Milos",
+    "welcomeTo": "Καλώς ήρθατε στην",
+    "sections": {
+      "welcome": {
+        "title": "Καλώς ήρθατε!",
+        "body": "Η Casa Milos είναι μια αγροικία με 3,5 acres καλλιεργημένων χωραφιών και περίπου 0,5 acre χώρων του σπιτιού. Η ιστορία της ξεκινά το 1920 και τα τελευταία 2 χρόνια ανακαινίστηκε πλήρως, διατηρώντας τα μοναδικά παραδοσιακά χαρακτηριστικά της σε συνδυασμό με σύγχρονες ανέσεις.<br></br>Ο χώρος έχει πολύ παιχνιδιάρικο χαρακτήρα και αποτελείται από δύο κύρια δωμάτια που μπορούν να απομονωθούν μεταξύ τους, ένα W.C., μια εξωτερική κουζίνα και ένα εξωτερικό μπάνιο.",
+        "alt": "Η αυλή της Casa Milos με λευκό πανί σκίασης",
+        "roundAlt": "Λεπτομέρεια της αυλής"
+      },
+      "masterBedroom": {
+        "title": "Κύρια κρεβατοκάμαρα",
+        "body": "Το πρώτο δωμάτιο του σπιτιού είναι η κύρια κρεβατοκάμαρα, με ένα διπλό κρεβάτι queen ή δύο μονά κρεβάτια (ανάλογα με τις ανάγκες των επισκεπτών), κλιματισμό και δικό της μπάνιο. Μπορεί επίσης να μετατραπεί σε καθιστικό με δύο άνετους καναπέδες.",
+        "alt": "Η κύρια κρεβατοκάμαρα με το κρεβάτι και μια πράσινη πόρτα",
+        "roundAlt": "Λεπτομέρεια της κύριας κρεβατοκάμαρας"
+      },
+      "secondBedroom": {
+        "title": "Δεύτερη κρεβατοκάμαρα",
+        "body": "Μια πολύ ζεστή και χαλαρωτική κρεβατοκάμαρα με παλιό παραδοσιακό διπλό κρεβάτι queen. Περιλαμβάνει κλιματιστικό.",
+        "alt": "Η δεύτερη κρεβατοκάμαρα με το παλιό παραδοσιακό κρεβάτι",
+        "roundAlt": "Λεπτομέρεια της δεύτερης κρεβατοκάμαρας"
+      },
+      "kitchen": {
+        "title": "Κουζίνα",
+        "body": "Ένας παραδοσιακός «αγροτικός» φούρνος, που αναπαλαιώθηκε σε πλήρως εξοπλισμένη κουζίνα, βρίσκεται ακριβώς δίπλα στα κύρια δωμάτια και έχει ανεξάρτητη αυλή. Η κουζίνα συνοδεύεται από ξύλινο εξωτερικό τραπέζι και χτιστό κάθισμα έξι ατόμων. Ιδανικό σημείο για πρωινό, μεσημεριανό ή βραδινό, πλήρως προστατευμένο από τον ήλιο.",
+        "alt": "Η κουζίνα με τα ξύλινα ράφια",
+        "roundAlt": "Λεπτομέρεια της κουζίνας"
+      },
+      "interiorBathroom": {
+        "title": "Εσωτερικό μπάνιο",
+        "body": "Ένα μικρό αλλά όμορφα φτιαγμένο εσωτερικό μπάνιο με θέα στο βουνό, ιδανικό για όλες τις βασικές ανάγκες των επισκεπτών μας.",
+        "alt": "Το εσωτερικό μπάνιο με πέτρινο νιπτήρα",
+        "roundAlt": "Λεπτομέρεια του εσωτερικού μπάνιου"
+      },
+      "exteriorBathroom": {
+        "title": "Εξωτερικό μπάνιο",
+        "body": "Για όσους προτιμούν να απολαμβάνουν το ντους τους αγναντεύοντας το τοπίο, υπάρχει εξωτερικό μπάνιο ακριβώς απέναντι από την κουζίνα. Ένας εξαιρετικός συνδυασμός απλότητας, κομψότητας και άνεσης.",
+        "alt": "Το εξωτερικό μπάνιο με στρογγυλό καθρέφτη και πράσινο παράθυρο",
+        "roundAlt": "Λεπτομέρεια του εξωτερικού μπάνιου"
+      },
+      "coolOff": {
+        "title": "Γωνιές δροσιάς",
+        "body": "Όλοι οι χώροι της Casa Milos απλώνονται γύρω από μια αυλή 70 τ.μ. Η αυλή προσφέρει στους επισκέπτες όμορφη και γαλήνια θέα στα χωράφια, στην ξερή κοίτη του ποταμού κάτω από το σπίτι και στη θάλασσα στον ορίζοντα.",
+        "alt": "Βεράντα με ξαπλώστρες κάτω από πανί σκίασης, με θέα στα χωράφια",
+        "roundAlt": "Λεπτομέρεια της βεράντας"
+      }
+    },
+    "viewMore": "Δείτε περισσότερα",
+    "overallTitle": "Συνολικά",
+    "overallBody": "Ο χώρος έχει πολύ παιχνιδιάρικο χαρακτήρα και αποτελείται από δύο κύρια δωμάτια (κρεβατοκάμαρες) που μπορούν να απομονωθούν μεταξύ τους, ένα εσωτερικό μπάνιο, μια εξωτερική κουζίνα και ένα εξωτερικό μπάνιο. Το σπίτι διατηρεί τον παραδοσιακό χαρακτήρα μιας τυπικής κυκλαδίτικης αγροικίας της Μήλου. Η Casa Milos στέκει μόνη της, σχεδόν κρυμμένη, περιτριγυρισμένη από σιωπή και ήχους της φύσης. Την ιδιωτικότητά σας δεν θα διαταράξει τίποτα και κανείς.",
+    "amenitiesTitle": "Παροχές",
+    "amenitiesBody": "Αιώρα, εξωτερικό ντους, ψησταριά υγραερίου, κλιματιστικό, Wi-Fi, τηλεόραση, πιστολάκι μαλλιών, στρώμα γιόγκα, εξοπλισμός κολύμβησης με αναπνευστήρα, πετσέτες θαλάσσης",
+    "placesTitle": "Μέρη για να επισκεφθείτε",
+    "placesBody": "Η Casa Milos απέχει περίπου 2,5 χλμ. από την Απολλωνία, ένα από τα πιο γνωστά παραδοσιακά χωριά της Μήλου (φημισμένο για τα εστιατόρια, τα καφέ και την ανέμελη ατμόσφαιρά του). Θα βρίσκεστε επίσης πολύ κοντά σε όλες τις βόρειες παραλίες της Μήλου, όπως ο Παπάφραγκας, ο Μύτακας, η Παχαινά, το Σαρακήνικο και ο Καστανάς."
+  },
+  "Reviews": {
+    "heading": "Τι λένε οι επισκέπτες",
+    "readMore": "Διαβάστε περισσότερα",
+    "reviewBy": "Κριτική από {name}",
+    "starsLabel": "{stars} από 5 αστέρια",
+    "items": {
+      "alex": {
+        "name": "Alex",
+        "teaser": "If you are considering this property look no further. Our most favorite holiday home ever. Such a great space. Such a beautiful and tranquil location. Perfect for our family of 4! The views are stunning..",
+        "text": "If you are considering this property look no further. Our most favorite holiday home ever. Such a great space. Such a beautiful and tranquil location. Perfect for our family of 4! The views are stunning. The property is so unique & modern yet so reminiscent of old Greek houses with the outdoor kitchen & shower. We loved cooking breakfast every morning & sitting at the outdoor dining table & enjoying the views & the breeze. We had so much space outdoors. The children could run & play & we could relax on the hammock & read in perfect seclusion. Was so relaxing! Our only neighbors were the goats. And even they were friendly! If you want privacy, if you want a romantic & beautiful setting, look no further. Only a few minutes drive from Pollonia with a quaint beach & amazing restaurants. 10 minutes from Adamas & 15 minutes from the beautiful hills of Plaka. The location was perfect. A great spot to tour the island & come back to pure tranquility. George was such a wonderful host leaving us a welcome hamper & dropping off the most delicious figs whilst we were at the beach. His list of restaurants did not disappoint either! Every recommendation was delicious. George also gave plenty of tips for sightseeing & beaches & was always on hand if we needed anything at all. We also spotted him with his band in Plaka rocking the night away!!! Don’t hesitate to book this stunning property. We are left with the most wonderful memories!"
+      },
+      "steven": {
+        "name": "Steven",
+        "teaser": "“Meaningful luxury ” is the best to describe what Giorgios’s place has to offer. The ability to take a late-night outdoor shower in complete privacy; read your book or take an afternoon nap in the hammock..",
+        "text": "“Meaningful luxury ” is the best to describe what Giorgios’s place has to offer. The ability to take a late-night outdoor shower in complete privacy; read your book or take an afternoon nap tucked away in the hammock protected from the elements; watch the sunset with your loved one from the natural lounger; have a candle-lit dinner on the terrace, or just lay in bed with the door open letting the breeze through... no money can buy that. This place is for those of us who hate to go into a room and reach for remotes- if you really want A/C or TV, it’s there but we didn’t use either as there is absolutely no need. We weren’t able to find anything comparable online and we did not come across anything comparable while on the island for 10 days. Giorgios is super friendly, knowledgeable, personable, and responsive. His place is stocked up with all essentials and is spotlessly clean. The question is not whether you should book this place but rather whether you’ll be able to find any availability. We hope to be able to come back to this oasis of a place."
+      },
+      "kristina": {
+        "name": "Kristina",
+        "teaser": "This is the most beautiful and perfect house you could ask for in Milos. It is very peaceful with lots of space and amazing views - it’s also very private with no other properties overlooking it..",
+        "text": "This is the most beautiful and perfect house you could ask for in Milos. It is very peaceful with lots of space and amazing views - it’s also very private with no other properties overlooking it. The design of the home is beautiful, all the little details and have been thought of and its much more stylish than many boutique hotels! It’s perfectly located on the north coast but with easy access to the south beaches and Adamas and Plaka. It has all the amenities you could need and we were also kindly welcomed with some breakfast food. We would love to stay here again and would recommend it to anyone. Giorgos is also an amazing and very responsive host who did everything possible to help us have an enjoyable stay. Don’t hesitate to book and thank you Giorgos!"
+      }
+    }
+  },
+  "Host": {
+    "metaTitle": "Ο Οικοδεσπότης",
+    "title": "Ο Οικοδεσπότης",
+    "photoAlt": "Ο Γιώργος Καβουράκης, ο οικοδεσπότης σας",
+    "letter": "Αγαπητέ φίλε,<br></br><br></br>Ως μουσικός πλήρους απασχόλησης και ηθοποιός μερικής απασχόλησης ζω στην Αθήνα,<br></br> αλλά σε όλη μου τη ζωή έχει αναπτυχθεί ένας πολύ δυνατός δεσμός με αυτό το πραγματικά μοναδικό, γεμάτο εκπλήξεις και ομορφιά,<br></br> <em>νησί της Μήλου.</em><br></br> Κρατώ πολλές έντονες αναμνήσεις από αυτό το σπίτι από τα πρώτα παιδικά μου χρόνια. Το να μοιράζομαι με άλλους ανθρώπους την εμπειρία της διαμονής σε έναν τόσο χαριτωμένο τόπο είναι ένα όνειρο που έγινε πραγματικότητα.<br></br> Εύχομαι σε όλους τους επισκέπτες μου να ζήσουν το νησί και την Casa Milos με τον πιο ουσιαστικό και χαρούμενο τρόπο.<br></br><br></br>Ανυπομονώ να σας γνωρίσω,<br></br>Γιώργος Καβουράκης"
+  },
+  "Directions": {
+    "metaTitle": "Οδηγίες",
+    "welcome": "Πώς θα φτάσετε στην",
+    "adamasTitle": "Ξεκινώντας από το κέντρο του Αδάμαντα",
+    "airportTitle": "Ξεκινώντας από το αεροδρόμιο",
+    "picture": "Φωτ. {number}",
+    "stepAlt": "Βήμα {number}: {text}",
+    "adamas": {
+      "1": {
+        "text": "Στην κεντρική διασταύρωση (Grigoris Cafe) στρίψτε δεξιά.",
+        "icon": "Στρίψτε δεξιά"
+      },
+      "2": {
+        "text": "Και ακολουθήστε τον δρόμο παράλληλα με τη θάλασσα.",
+        "icon": "Ακολουθήστε τον δρόμο"
+      },
+      "3": {
+        "text": "Όταν φτάσετε στην πινακίδα για Πολλώνια (200 μ.) στρίψτε αριστερά.",
+        "icon": "Στρίψτε αριστερά"
+      },
+      "4": {
+        "text": "Συνεχίζοντας θα περάσετε το εστιατόριο Αλευρόμυλος στα δεξιά σας.",
+        "icon": "Ακολουθήστε τον δρόμο"
+      },
+      "5": {
+        "text": "Και μετά από λίγο το βενζινάδικο Eko, επίσης στα δεξιά σας.",
+        "icon": "Συνεχίστε ευθεία"
+      },
+      "6": {
+        "text": "Δίπλα στο βενζινάδικο υπάρχει κυκλικός κόμβος (Φωτ. 6). Στρίψτε δεξιά για Πολλώνια.",
+        "icon": "Στρίψτε δεξιά για Πολλώνια."
+      },
+      "7": {
+        "text": "Θα περάσετε ένα βενζινάδικο Elin στα δεξιά.",
+        "icon": "Ακολουθήστε τον δρόμο"
+      },
+      "8": {
+        "text": "Και μετά από λίγο ένα μικρό γεφύρι.",
+        "icon": "Συνεχίστε ευθεία"
+      },
+      "9": {
+        "text": "Τελικά φτάσατε στην παραλία Παπάφραγκας. (ΜΗΝ στρίψετε πουθενά). Συνεχίστε ευθεία.",
+        "icon": "Συνεχίστε ευθεία μπροστά"
+      },
+      "10": {
+        "text": "Συνεχίστε για περίπου 200 μέτρα μέχρι να φτάσετε στην πινακίδα με το βέλος.",
+        "icon": "Ακολουθήστε τον δρόμο"
+      },
+      "11": {
+        "text": "Όταν φτάσετε τελικά στις πινακίδες με τα βέλη..<br></br> Στρίψτε δεξιά στον αγροτικό δρόμο και ακολουθήστε τον.",
+        "icon": "Στρίψτε δεξιά στον αγροτικό δρόμο"
+      },
+      "12": {
+        "text": "Σχεδόν φτάσατε. Απλώς ακολουθήστε τον δρόμο.",
+        "icon": "Συνεχίστε ευθεία"
+      },
+      "13": {
+        "text": "Θα δείτε την Casa Milos στα αριστερά σας.<br></br> Στο τέλος του δρόμου στρίψτε αριστερά και φτάσατε.",
+        "icon": "Συνεχίστε ευθεία στον δρόμο."
+      },
+      "14": {
+        "text": "Καλώς ήρθατε. Νιώστε σαν στο σπίτι σας.",
+        "icon": "Καλώς ήρθατε"
+      }
+    },
+    "airport": {
+      "1": {
+        "text": "Ακολουθήστε τον δρόμο προς Αδάμαντα. Μετά από μερικά χιλιόμετρα θα συναντήσετε πινακίδα για Πολλώνια (Φωτ. 1).<br></br> Στρίψτε δεξιά και ακολουθήστε τις παραπάνω οδηγίες.<br></br> ",
+        "icon": "Στρίψτε δεξιά"
+      }
+    },
+    "airportLink": "Ξεκινώντας από το κέντρο του Αδάμαντα."
+  },
+  "Gallery": {
+    "metaTitle": "Φωτογραφίες",
+    "title": "Φωτογραφίες"
+  },
+  "Contact": {
+    "metaTitle": "Επικοινωνία",
+    "title": "Επικοινωνία",
+    "nameLabel": "Όνομα",
+    "name": "Γιώργος Καβουράκης",
+    "addressLabel": "Διεύθυνση",
+    "emailLabel": "Email",
+    "phoneLabel": "Τηλέφωνο",
+    "whatsappLabel": "WhatsApp",
+    "mapHeading": "Πού θα μας βρείτε",
+    "formSlotTitle": "Φόρμα επικοινωνίας",
+    "formSlotBody": "Η φόρμα επικοινωνίας θα εμφανιστεί εδώ. Μέχρι τότε, χρησιμοποιήστε το email ή το WhatsApp παραπάνω."
+  },
+  "Placeholder": {
+    "title": "Το περιεχόμενο έρχεται σύντομα",
+    "body": "Αυτή η σελίδα είναι προσωρινή. Το τελικό κείμενο πρέπει να δοθεί από τον οικοδεσπότη πριν ανοίξει η ιστοσελίδα."
+  },
+  "Pages": {
+    "faq": {
+      "title": "Συχνές ερωτήσεις"
+    },
+    "houseRules": {
+      "title": "Κανόνες σπιτιού"
+    },
+    "privacy": {
+      "title": "Πολιτική απορρήτου"
+    },
+    "terms": {
+      "title": "Όροι και προϋποθέσεις"
+    },
+    "cancellation": {
+      "title": "Πολιτική ακύρωσης"
+    },
+    "cookies": {
+      "title": "Πολιτική cookies"
+    }
+  },
+  "Book": {
+    "metaTitle": "Κρατήσεις",
+    "title": "Κρατήσεις",
+    "soon": "Οι ηλεκτρονικές κρατήσεις έρχονται σύντομα.",
+    "body": "Αν θέλετε να κάνετε κράτηση, επικοινωνήστε με τον οικοδεσπότη σας μέσω",
+    "emailLabel": "Email: {email}",
+    "whatsappLabel": "Whatsapp: {number}"
+  },
+  "NotFound": {
+    "metaTitle": "Η σελίδα δεν βρέθηκε",
+    "title": "Η σελίδα δεν βρέθηκε",
+    "body": "Η σελίδα που αναζητάτε δεν υπάρχει ή έχει μεταφερθεί.",
+    "home": "Επιστροφή στην αρχική"
+  },
+  "Error": {
+    "title": "Κάτι πήγε στραβά",
+    "body": "Δεν ήταν δυνατή η εμφάνιση αυτής της σελίδας. Δοκιμάστε ξανά.",
+    "retry": "Δοκιμάστε ξανά",
+    "home": "Επιστροφή στην αρχική"
+  },
+  "Consent": {
+    "bannerLabel": "Επιλογές cookies",
+    "text": "Η ιστοσελίδα λειτουργεί χωρίς μη απαραίτητα cookies. Οι Χάρτες Google ορίζουν δικά τους cookies, γι’ αυτό ο χάρτης φορτώνει μόνο αν αποδεχτείτε.",
+    "policy": "Πολιτική cookies",
+    "accept": "Αποδοχή",
+    "decline": "Απόρριψη"
+  },
+  "Map": {
+    "title": "Χάρτης με τη διαδρομή προς την Casa Milos",
+    "blocked": "Ο χάρτης είναι κρυμμένος επειδή οι Χάρτες Google ορίζουν cookies.",
+    "allow": "Αποδοχή cookies και εμφάνιση χάρτη",
+    "openExternally": "Άνοιγμα στους Χάρτες Google"
   }
 }
