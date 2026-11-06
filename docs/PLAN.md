@@ -1,0 +1,332 @@
+# Casa Filakopi: Build Plan
+
+Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
+Working branch: `dev-booking`. `master` stays the live static site until cutover.
+
+**Status:** Phase 0. D1 to D3, D6 and D10 decided. Next: YOU send the accountant sheet (D4), answer D5, confirm the remaining proposals.
+**Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
+
+Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
+
+---
+
+## 1. Where the spec and the repo disagree
+
+| # | Spec says | Repo shows | Consequence |
+|---|---|---|---|
+| F1 | Multiple rooms/units | One farmhouse with one listing on each OTA. Two bedrooms "can be isolated", but they are sold as a house | See D1. If whole-house only, drop Rooms list/detail and the room-choice step; keep a `rooms` table with one row so the schema stays general |
+| F2 | Booking.com/Airbnb sync optional, off by default | Live Airbnb, Booking.com and HomeAway listings | With one unit, direct booking without sync means real double bookings. See D2 |
+| F3 | Pages: Home, Rooms, Gallery, About, Contact, FAQ, House rules | Only 3 pages: `index`, `host`, `directions` | New pages need content that does not exist yet (FAQ, house rules, legal) |
+| F4 | Greek + English | English only, no Greek text anywhere | All Greek copy must be written, then reviewed by HOST |
+| F5 | Images in `public/` | Images in `img/` (68 files, 6.3 MB). No `public/` folder | SUP-17 script targets `img/` |
+| F6 | Greek registry number "MHTE" | No number on the site | Short-term rentals normally use an AMA number rather than MHTE. See D4 |
+| F7 | Receipts and invoices assumed | Legal setup of the host unknown | If this is a private individual's short-term rental, the whole INV module may shrink a lot. See D4. Do not build INV until ACC answers |
+| F8 | Not mentioned | Testimonials, "Places to visit" and amenities sections exist | Add `testimonials` and `places` as CMS content (no conflict with "no review system": these stay curated text) |
+| F9 | Not mentioned | Brand is split: "Casa Milos" on the site, "Casa Filakopi" on OTAs and socials; `miloscasa.com` appears in the code | Decide the public name and domain. See D5 |
+| F11 | `MIG-03` says keep the current look | Mobile is broken: below 992 px the round `.img-absolute` photo (`bottom: -100px`, `css/style.css:458`) covers the heading or text in all 7 house sections. Something also forces the page wider than the screen (475 px layout on a 375 px phone) | Mobile is a deliberate exception to "identical". Fix it, do not preserve it. See T3.1a to T3.1c |
+| F10 | Not mentioned | Stale items: HomeAway link (now Vrbo), Vimeo link, tracked `.DS_Store`, backslash icon path | Clean up during migration |
+
+### Spec corrections (technical)
+
+- **SUP-04 cannot work as written.** A Postgres exclusion constraint covers one table only, so it cannot span bookings, holds and blocks. Design: a single `inventory_claims` table (`room_id`, `stay daterange`, `kind`, `source_id`) holds the constraint, and each booking, hold or block owns one claim row.
+- **BKG-09 example of 15 minutes conflicts with Stripe.** A Checkout Session must live at least 30 minutes. A 15-minute hold would let a guest pay after the hold died. Design: hold 35 minutes, session 30 minutes.
+- **Paid after hold lost:** if a late webhook finds the dates gone, auto-refund and alert the host. Spec does not cover this. Added as T6.8.
+- **External events cannot use the hard constraint.** CHN-13 needs an imported overlap to be stored and flagged, not rejected. External claims that collide are saved with `conflict = true` and excluded from the constraint through a partial `WHERE`. Direct bookings are still refused against all external claims, checked inside the RPC.
+- **Holds expiring (JOB-01):** a constraint cannot use `now()`, so the hold RPC also clears expired overlapping holds in the same transaction. The minute job is cleanup, not the safety net.
+- **Node:** machine has 20.16, which is end-of-life. Move to current LTS.
+
+---
+
+## 2. Decisions log
+
+| ID | Decision | Status | Answer |
+|---|---|---|---|
+| D1 | Sell whole house only, or also single bedrooms? | **Decided** | Whole house only. One row in `rooms`; no Rooms list/detail pages or room-choice step (`WEB-02`, `WEB-04`, `BKG-07` adjusted) |
+| D2 | Channel sync on at launch? | **Decided** | On at launch for Airbnb + Booking.com; CHN moves from optional to launch-blocking. HomeAway/Vrbo depends on A9. The Admin toggle stays |
+| D3 | Who owns accounts and takes payments? | **Decided** | Yorgos is legal owner and activates Stripe (A10). A shared ops Gmail owns the technical accounts |
+| D4 | Host legal/tax setup (business vs individual short-term rental; AMA vs MHTE; VAT; myDATA) | **With ACC** | Sheet ready: [accountant-questions.md](accountant-questions.md). INV waits; everything else continues |
+| D5 | Public brand name and domain; where the site is hosted today | Open | |
+| D6 | Payment mode and cancellation rules | **Decided** | Yorgos edits these any time in Admin, no developer needed. Changes apply to new bookings only; each booking keeps a snapshot of the rules it was made under. Starting values are his to set at T6.9 |
+| D7 | Languages at launch | Proposed | Greek + English |
+| D8 | Styling (spec open decision 1) | Proposed | Keep existing `bootstrap.css` and `style.css` as global CSS; replace jQuery, Bootstrap JS and AOS behaviour with small React components |
+| D9 | Scheduler (open decision 2) | Proposed | `pg_cron` calling SQL or secured Next.js routes. Vercel Hobby cron is too limited |
+| D10 | Hosting (open decision 3) | **Decided** | Vercel (Pro at launch). Database on managed Supabase: Pro for production (Free has no backups and pauses), Free for staging |
+| D11 | Stripe surface (PAY-01) | Proposed | Hosted Checkout Sessions |
+| D12 | Repo layout | Proposed | Next.js at repo root; static site moved to `legacy/` on `dev-booking` as the visual baseline, deleted after cutover |
+| D13 | Real-time channel manager later (open decision 8) | Proposed | Not now; adapter only |
+| D14 | Launch target | Proposed | Live before the 2027 season bookings start (aim for March 2027) |
+
+---
+
+## 3. How we work (multi-agent model)
+
+**Principle:** serial until the contracts exist, parallel after. Most multi-agent failure comes from parallel work against a moving schema.
+
+1. **LEAD** alone does Phases 0 to 2: decisions, scaffold, schema, RPCs, RLS, types. Agents working before this would each invent their own contracts.
+2. **Contract freeze (Gate 2)** locks migrations, generated types and the domain function signatures.
+3. **Waves 3 to 5:** one worker per track, each in its own git worktree on `feat/<track>`, merging into `dev-booking` through LEAD.
+4. **File ownership:** each track owns its folders and no two tracks edit the same files. Only LEAD changes `supabase/migrations`; a worker needing a schema change asks LEAD.
+5. **Independent review:** anything touching money, overbooking or RLS gets a separate reviewer agent that did not write it, before merge.
+6. **Every merge requires:** lint, typecheck, tests green, plan items ticked, and a one-paragraph report.
+7. **YOU approve at each Gate.** Commits and pushes happen when you say so. Anything outward-facing (DNS, live keys, emails to real people) is confirmed first.
+
+---
+
+## 4. Accounts and access tracker
+
+Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignored) or the Vercel dashboard, and I only see the variable names. I cannot create accounts or enter passwords, so these steps are yours. I will prompt you when each is needed; nothing is needed until Phase 1 ends.
+
+| ID | Item | Needed by | Who | Status |
+|---|---|---|---|---|
+| A0 | Start Docker Desktop | Phase 1 | YOU | [ ] |
+| A1 | Ops Gmail | Phase 1 end | YOU | [ ] |
+| A2 | Supabase staging project | Phase 2 end | YOU | [ ] |
+| A3 | Vercel project | Phase 2 end | YOU | [ ] |
+| A4 | Domain and DNS access | Wave 1 | YOU/HOST | [ ] |
+| A5 | Resend | Wave 1 | YOU | [ ] |
+| A6 | Stripe test mode | Wave 2 | YOU | [ ] |
+| A7 | Cloudflare Turnstile | Wave 2 | YOU | [ ] |
+| A8 | Sentry | Phase 6 | YOU | [ ] |
+| A9 | OTA iCal URLs | Wave 2 | HOST | [ ] |
+| A10 | Stripe live activation | Phase 7 | HOST | [ ] |
+| A11 | Supabase production (Pro) | Phase 7 | YOU | [ ] |
+
+**A0 Docker:** open Docker Desktop from Applications and wait for "Engine running". Needed for local Supabase.
+
+**A1 Ops Gmail:**
+1. Go to accounts.google.com/signup and create e.g. `casafilakopi.ops@gmail.com`.
+2. Turn on 2-Step Verification at myaccount.google.com/security.
+3. Store the password and recovery codes in a password manager.
+4. Use this address to sign up to A2, A3, A5, A7, A8, so nothing is tied to a personal inbox. It does not replace a guest-facing address (that comes from the domain).
+
+**A2 Supabase staging:**
+1. supabase.com, Sign in with the ops account. Create organization `Casa Filakopi`, plan Free.
+2. New project: name `casa-filakopi-staging`, region `Central EU (Frankfurt)`, generate a strong database password and save it in the password manager.
+3. Tell me the project ref only (the `abcdefgh` part of the dashboard URL).
+4. In a terminal run `supabase login` yourself. It opens a browser.
+
+**A3 Vercel:**
+1. vercel.com, sign up with GitHub (`SpyrosKas`), team name `casa-filakopi`.
+2. Add New Project, import `SpyrosKas/CasaFilakopi`. Set Production Branch to `dev-booking` for now, so nothing touches the live site.
+3. Upgrade to Pro only when going to production.
+
+**A5 Resend:**
+1. resend.com, sign up with the ops account.
+2. Domains, Add Domain, use `mail.<yourdomain>`, region `eu-west-1`.
+3. Add the shown DNS records (needs A4). I will check them with you.
+4. API Keys, create `staging` with Sending access, and paste it into `.env.local` as `RESEND_API_KEY`.
+
+**A6 Stripe test mode:**
+1. stripe.com, sign up with the ops account for now. Do not activate payments yet.
+2. Keep "Test mode" on. Developers, API keys: put them in `.env.local` as `STRIPE_SECRET_KEY` and `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`.
+3. In a terminal run `stripe login`.
+
+**A7 Turnstile:** dash.cloudflare.com, sign up with the ops account, Turnstile, Add site, domains `localhost` and the Vercel URL. Save the two keys as `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`.
+
+**A8 Sentry:** sentry.io, sign up with the ops account, create a Next.js project, region EU. Save the DSN as `SENTRY_DSN`.
+
+**A9 OTA iCal (HOST):** from Airbnb (listing, Availability, Connect calendars, Export) and Booking.com (extranet, Rates & Availability, Sync calendars, Export), copy each listing's iCal URL. Also confirm whether the HomeAway/Vrbo listing is still active.
+
+**A10 Stripe activation (HOST):** the legal owner completes Stripe's business profile: identity, tax details, IBAN. Must be done by that person in the Stripe dashboard.
+
+---
+
+## 5. Phases
+
+### Phase 0: Decisions and tooling (LEAD, YOU)
+
+- [x] T0.1 Read spec v2 and audit repo (`MIG-01`, first pass)
+- [x] T0.2 Record spec conflicts and technical corrections (section 1)
+- [x] T0.3 Add spec to repo as `docs/requirements.md`
+- [x] T0.4 YOU answer D1, D2, D3
+- [ ] T0.5 ACC answers D4 (question sheet in T0.9)
+- [ ] T0.6 YOU answer D5, D6, confirm D7 to D14
+- [ ] T0.7 Install tooling: Supabase CLI, GitHub CLI, Stripe CLI, Node LTS (`.nvmrc`)
+- [ ] T0.8 A0: Docker running, `supabase --version` and `docker ps` verified
+- [x] T0.9 Write `docs/accountant-questions.md` for ACC (Greek + English)
+- [ ] T0.10 Confirm live hosting and record the rollback path (`MIG-09`). Found so far: `miloscasa.com` uses Namecheap nameservers; its IP `104.198.14.52` looks like Netlify, unconfirmed
+
+**Gate 0:** D5 and D6 answered, D7 to D14 confirmed, tools verified. D4 may stay open; only INV waits for it.
+
+### Phase 1: Scaffold (LEAD, serial)
+
+- [ ] T1.1 Move static site to `legacy/`, remove tracked `.DS_Store`, add `.gitignore`
+- [ ] T1.2 Create Next.js App Router + TypeScript (strict) at repo root with pnpm
+- [ ] T1.3 Add ESLint, Prettier, Vitest, Playwright
+- [ ] T1.4 Project structure: `app/[locale]`, `app/admin`, `app/api`, `lib/domain`, `lib/db`, `emails`, `supabase`
+- [ ] T1.5 `next-intl` locale routing `/el`, `/en` (`WEB-06`)
+- [ ] T1.6 `supabase init`, local stack running (`SUP-01`)
+- [ ] T1.7 Env loader with Zod validation and `.env.example` (`PLT-03`)
+- [ ] T1.8 Server-only Supabase client guard so the service key cannot reach the browser (`SUP-07`)
+- [ ] T1.9 CI on GitHub Actions: lint, typecheck, test, build (`PLT-04`)
+- [ ] T1.10 Write `CLAUDE.md` with conventions, ownership and test commands
+- [ ] T1.12 Keep the app host-portable: `output: 'standalone'`, a Dockerfile, no Vercel-only features
+- [ ] T1.11 Capture legacy visual baselines at 375, 768, 1280 px for all 3 pages (`MIG-05`, `QA-06`)
+
+**Gate 1:** `pnpm dev` serves a page, Supabase runs locally, CI is green, baselines are saved.
+
+### Phase 2: Data foundation (LEAD, serial, reviewed)
+
+Migrations (`SUP-02`, `SUP-03`):
+- [ ] T2.1 Enable extensions; `property`, `rooms`, `room_photos`, `amenities`, `settings`
+- [ ] T2.2 `inventory_claims` with `btree_gist` exclusion constraint (`SUP-04`) and partial `WHERE` for external conflicts
+- [ ] T2.3 `bookings`, `booking_nights`, `holds`, `guests`, `availability_blocks`, status enum (`BKG-11`, `SUP-11`)
+- [ ] T2.4 `rates`, `seasons`, `restrictions`, `taxes_fees`, `promo_codes`, `cancellation_policies`
+- [ ] T2.5 `payments`, `refunds`, `stripe_events` (idempotency)
+- [ ] T2.6 `invoices`, `invoice_lines`, `invoice_series` (tables only until D4)
+- [ ] T2.7 `external_calendars`, `external_events`, `sync_logs`
+- [ ] T2.8 `contact_messages`, `email_templates`, `email_logs`, `email_queue`
+- [ ] T2.9 `pages`, `content_blocks`, `faq`, `testimonials`, `places`, `media` (per language)
+- [ ] T2.10 `admin_profiles`, `audit_log`, `consent_log`, `job_runs`
+
+RPCs (`SUP-05`):
+- [ ] T2.11 `create_hold`, including clearing expired overlaps
+- [ ] T2.12 `confirm_booking` (idempotent), `next_booking_reference` (`BKG-13`)
+- [ ] T2.13 `cancel_booking`, `record_refund`, `modify_booking`
+- [ ] T2.14 `next_invoice_number`, gapless (`INV-03`)
+- [ ] T2.15 `public_availability` returning no guest data (`AVL-09`)
+
+Security and tooling:
+- [ ] T2.16 RLS on every table, roles enforced (`SUP-06`, `SUP-14`)
+- [ ] T2.17 Generated TS types in CI (`SUP-08`); seed scripts (`SUP-09`)
+- [ ] T2.18 Storage buckets and policies (`SUP-16`, `SUP-21`)
+- [ ] T2.19 DB tests: 50 concurrent overlapping holds, exactly one wins (`QA-02`)
+- [ ] T2.20 RLS tests for anon, token, staff, owner (`QA-03`)
+- [ ] T2.21 Domain function signatures in `lib/domain` (types only)
+- [ ] T2.22 Independent reviewer agent audits schema, RPCs and RLS
+- [ ] T2.23 A1, A2, A3: staging live; CI applies migrations to staging (`PLT-01`, `PLT-02`, `PLT-04`)
+
+**Gate 2, contract freeze:** concurrency and RLS tests green, review findings closed, YOU sign off. Parallel work starts here.
+
+### Wave 1 (Phase 3): parallel
+
+**Track WEB** (owns `app/[locale]`, `components/site`, `styles`)
+- [ ] T3.1 Extract tokens and import legacy CSS as global (`MIG-02`, `MIG-04`)
+- [ ] T3.1a Mobile-first layout for house sections: round photo no longer overlaps text at any width (fixes F11)
+- [ ] T3.1b Find and remove the cause of horizontal overflow on phones; check hero title legibility
+- [ ] T3.1c Automated Playwright check at 320, 375, 414, 768 px: no text/image overlap, no horizontal scroll, on every public page, in CI
+- [ ] T3.2 Header, footer, fullscreen menu, cookie-safe map embed (`WEB-10`)
+- [ ] T3.3 Home sections, carousels and modals in React (`MIG-03`)
+- [ ] T3.4 Host page; Directions page with accordions
+- [ ] T3.5 Scroll animations without jQuery
+- [ ] T3.6 New pages in same style: Gallery, Contact, FAQ, House rules, legal, 404 (`MIG-08`, `WEB-02`, `WEB-03`, `WEB-16`)
+- [ ] T3.7 Replace the "book via OTA" modal with the booking entry point
+- [ ] T3.8 301s from `index.html`, `host.html`, `directions.html` (`MIG-06`)
+- [ ] T3.9 Cookie consent, logged (`WEB-12`, `CMP-04`)
+- [ ] T3.10 Visual diff against baselines, reviewed by YOU (`MIG-05`). Desktop should match; mobile differs on purpose (F11)
+
+**Track ENGINE** (owns `lib/domain`)
+- [ ] T3.11 Availability calculation (`AVL-01`, `AVL-04`, `AVL-05`)
+- [ ] T3.12 Pricing engine: seasons, weekdays, overrides, extra guest, cleaning (`BKG-02`)
+- [ ] T3.13 Taxes, climate resilience fee, promo codes (`BKG-03`, `BKG-04`)
+- [ ] T3.14 Price breakdown and deposit split (`BKG-05`, `PAY-02`)
+- [ ] T3.15 Cancellation and refund calculation (`BKG-16`)
+- [ ] T3.16 Unit tests including Athens timezone and DST edges (`QA-01`, `SUP-11`)
+
+**Track ADMIN** (owns `app/admin`, `components/admin`)
+- [ ] T3.17 Login, reset, invite-only, session timeout, rate limit (`SUP-12`, `ADM-01`, `ADM-03`)
+- [ ] T3.18 TOTP MFA, mandatory for Owner (`SUP-13`)
+- [ ] T3.19 Role middleware, admin shell, audit helper (`ADM-02`, `ADM-04`, `SUP-14`)
+- [ ] T3.20 Rooms, property and settings screens (`ADM-14`, `ADM-24`, `ADM-25`)
+- [ ] T3.20a Payment and cancellation rules screen for Yorgos: payment mode, deposit %, balance timing, cancellation tiers, with plain-language preview of what a guest will see (`PAY-02`, `BKG-16`, D6)
+- [ ] T3.20b Snapshot the rules onto each booking; a test proves editing rules leaves existing bookings unchanged (`CMP-03`)
+- [ ] T3.20c Admin works on a phone, since Yorgos will likely manage it from one
+
+**Track MAIL** (owns `emails`, `lib/email`)
+- [ ] T3.21 A4, A5: domain verified with SPF, DKIM, DMARC (`EML-01`, `PLT-08`)
+- [ ] T3.22 Queue, retries, logging, Resend webhooks (`EML-07`, `EML-08`, `JOB-05`)
+- [ ] T3.23 Branded base layout, per-language (`EML-04`, `EML-05`)
+- [ ] T3.24 Contact flow: save, notify, reply-to, auto-reply, Turnstile, rate limit (`CNT-01` to `CNT-04`, `CNT-07`)
+
+**Gate 3:** public site matches the old one, pricing tests green, admin login works. YOU approve the visual diff.
+
+### Wave 2 (Phase 4): parallel
+
+**Track PAY + checkout** (owns `app/[locale]/book`, `app/api/stripe`, `lib/payments`)
+- [ ] T4.1 A6: Stripe test mode; webhook forwarding by CLI
+- [ ] T4.2 Availability search and calendar widget (`WEB-04`, `WEB-05`)
+- [ ] T4.3 Checkout flow, server-side reprice, terms stored with version (`BKG-06`, `BKG-07`, `BKG-08`, `CMP-03`)
+- [ ] T4.4 Hold 35 min, Checkout Session 30 min (`BKG-09`, `BKG-10`, `PAY-01`)
+- [ ] T4.5 Webhook: signature, idempotent, all events (`PAY-04`, `PAY-05`, `BKG-12`)
+- [ ] T4.6 Failed or abandoned payment (`PAY-10`)
+- [ ] T4.7 Paid-after-hold-lost: auto-refund and alert
+- [ ] T4.8 Confirmation page and emails (`EML-02`, `EML-03`)
+- [ ] T4.9 Guest token page: view, pay balance, cancel, message (`BKG-15`, `SUP-15`, `CNT-06`)
+- [ ] T4.10 Balance links and reminders (`PAY-03`, `JOB-03`)
+- [ ] T4.11 Integration tests with Stripe CLI (`QA-04`)
+
+**Track ADMIN-OPS** (owns `app/admin/bookings`, `app/admin/calendar`)
+- [ ] T4.12 Dashboard (`ADM-05`)
+- [ ] T4.13 Availability calendar and blocking (`AVL-02`, `AVL-03`, `AVL-06`, `AVL-10`)
+- [ ] T4.14 Rates calendar, bulk edit (`AVL-07`, `ADM-11`)
+- [ ] T4.15 Restrictions, taxes, promos, policies (`ADM-12`, `ADM-13`)
+- [ ] T4.16 Bookings list and detail, export (`ADM-06`, `ADM-07`, `ADM-09`)
+- [ ] T4.17 Booking actions: manual, modify, cancel, refund, payment (`ADM-08`, `BKG-17`, `BKG-18`, `PAY-06`, `PAY-07`, `PAY-11`)
+- [ ] T4.18 Messages inbox (`CNT-05`, `ADM-21`)
+
+**Track CMS** (owns `app/admin/content`, `app/admin/media`, `scripts/migrate-media`)
+- [ ] T4.19 Migrate 68 images to `media` bucket and rewrite references (`SUP-17`, `SUP-18`)
+- [ ] T4.20 Next Image loader with transforms (`SUP-19`)
+- [ ] T4.21 Move hardcoded text into DB (`MIG-07`, `WEB-07`)
+- [ ] T4.22 Greek translation drafts for HOST review (`WEB-06`)
+- [ ] T4.23 Page editor, draft/publish/preview, revalidation (`ADM-15`, `ADM-19`, `WEB-08`)
+- [ ] T4.24 Media library, upload, alt text, safe delete (`SUP-20`, `ADM-16`)
+- [ ] T4.24a Per-section photo manager: upload from phone or computer, delete, drag to rearrange, choose cover, and it appears on the site without a developer (`ADM-14`, `ADM-16`, `WEB-08`)
+- [ ] T4.24b Oversized phone photos auto-resized on upload, and any photo stays usable on mobile layouts
+- [ ] T4.25 FAQ, legal, testimonials, places, SEO fields (`ADM-17`, `ADM-18`)
+
+**Track CHN** (owns `lib/channels`, `app/admin/integrations`, `app/api/ical`)
+- [ ] T4.26 Provider adapter interface (`CHN-17`)
+- [ ] T4.27 Settings, toggles, URL validation (`CHN-01` to `CHN-05`, `ADM-28`)
+- [ ] T4.28 Import job with UID upsert, sync now (`CHN-06` to `CHN-09`, `JOB-02`)
+- [ ] T4.29 Export feed, token, no loops (`CHN-10` to `CHN-12`)
+- [ ] T4.30 Conflicts, sync logs, alerts, limitation notice (`CHN-13` to `CHN-16`)
+- [ ] T4.31 Fixture-feed tests, then A9 real-feed test (`QA-04`)
+
+**Gate 4:** full test-card booking on staging, blocked dates show on the public site, an Airbnb test block arrives in our calendar and ours arrives in Airbnb.
+
+### Wave 3 (Phase 5): parallel, INV blocked by D4
+
+**Track INV** (owns `lib/invoicing`, `app/admin/invoices`)
+- [ ] T5.1 Rescope against ACC answers; list what is removed
+- [ ] T5.2 Document issuing, immutable, triggers (`INV-01` to `INV-04`, `INV-07`)
+- [ ] T5.3 Credit notes (`INV-05`)
+- [ ] T5.4 PDF, private storage, email attachment (`INV-06`)
+- [ ] T5.5 myDATA adapter, retries (`INV-08`, `INV-09`, `JOB-06`)
+- [ ] T5.6 OTA booking invoices (`INV-10`)
+- [ ] T5.7 List, export, settings (`INV-11`, `INV-12`, `ADM-22`, `ADM-26`)
+
+**Track OPS**
+- [ ] T5.8 Editable email templates, remaining emails (`EML-02`, `EML-03`, `EML-06`, `EML-09`, `ADM-27`)
+- [ ] T5.9 All scheduled jobs with logging and alerts (`JOB-01`, `JOB-04`, `JOB-07`, `JOB-09`)
+- [ ] T5.10 Guests, GDPR export/anonymise, retention (`ADM-20`, `CMP-01`, `CMP-02`, `JOB-08`)
+- [ ] T5.11 Reports, user management, languages (`ADM-23`, `ADM-29`, `ADM-30`)
+- [ ] T5.12 SEO: sitemap, hreflang, schema.org (`WEB-09`); analytics after consent (`WEB-13`); registry number (`WEB-15`, `CMP-05`)
+
+**Gate 5:** every spec ID is either ticked or explicitly descoped in the Decisions log.
+
+### Phase 6: Hardening (QA, LEAD)
+
+- [ ] T6.1 Playwright E2E: booking, contact, manual booking, block, cancel with refund, sync conflict (`QA-05`)
+- [ ] T6.2 Lighthouse 90+ and WCAG 2.1 AA in CI (`WEB-01`, `WEB-14`, `QA-07`)
+- [ ] T6.3 Security headers, CSP, Zod, rate limits (`PLT-05`)
+- [ ] T6.4 Full `/security-review`; independent review of payment and RLS paths
+- [ ] T6.5 Sentry, uptime, structured logs (`PLT-06`, `PLT-07`)
+- [ ] T6.6 Backup and tested restore on staging (`SUP-10`)
+- [ ] T6.7 README, runbook, ER diagram, host guide in Greek and English (`DOC-01` to `DOC-04`)
+- [ ] T6.8 Late-payment and double-webhook drills
+
+- [ ] T6.9 HOST sets real starting values for payment and cancellation rules in Admin
+- [ ] T6.10 HOST test, unaided: change a cancellation rule, upload, delete and reorder photos, from a phone
+
+**Gate 6:** HOST walks through the admin and a test booking on staging and approves.
+
+### Phase 7: Launch (YOU, HOST, LEAD)
+
+- [ ] T7.1 A10, A11: Stripe live, Supabase production, Vercel Pro
+- [ ] T7.2 Production migrations, seed real rates and content
+- [ ] T7.3 Import existing future bookings from OTAs before opening sales
+- [ ] T7.4 One real low-value booking, refund it
+- [ ] T7.5 Merge `dev-booking` to `master`; DNS switch with low TTL (`MIG-09`)
+- [ ] T7.6 Monitor for 72 hours; keep legacy site ready for rollback
+- [ ] T7.7 Remove `legacy/` and handover
