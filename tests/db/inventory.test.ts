@@ -510,8 +510,8 @@ describe("references and invoices", () => {
 
   it("numbers invoices without gaps, even after a rollback", async () => {
     const { rows } = await db.query(
-      `insert into public.invoice_series (doc_type, prefix)
-       values ('receipt', $1) returning id`,
+      `insert into public.invoice_series (doc_type, prefix, is_active)
+       values ('receipt', $1, false) returning id`,
       [`T${Date.now()}`],
     );
     const seriesId = rows[0].id;
@@ -534,8 +534,8 @@ describe("references and invoices", () => {
 
   it("makes issued invoices immutable (INV-07)", async () => {
     const series = await db.query(
-      `insert into public.invoice_series (doc_type, prefix)
-       values ('receipt', $1) returning id`,
+      `insert into public.invoice_series (doc_type, prefix, is_active)
+       values ('receipt', $1, false) returning id`,
       [`I${Date.now()}`],
     );
     const { rows } = await db.query(

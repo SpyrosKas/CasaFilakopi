@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
+import { afterAll } from "vitest";
 
 // Types come back as strings so dates are compared exactly as stored.
 pg.types.setTypeParser(1082, (v) => v);
@@ -84,10 +85,27 @@ export async function confirm(bookingId: string, intent = randomUUID()) {
   return rows[0].result as { outcome: string; reference?: string };
 }
 
+const createdAdmins: string[] = [];
+
+// Runs once per test file, and needs its own connection because the file's
+// own afterAll may already have closed the pool.
+afterAll(async () => {
+  if (createdAdmins.length === 0) return;
+  const client = new pg.Client({
+    connectionString: "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
+  });
+  await client.connect();
+  await client.query(`delete from auth.users where id = any($1::uuid[])`, [
+    createdAdmins,
+  ]);
+  await client.end();
+});
+
 export async function createAdmin(
   role: "owner" | "staff",
 ): Promise<{ id: string }> {
   const id = randomUUID();
+  createdAdmins.push(id);
   await db.query(
     `insert into auth.users (id, email, aud, role) values ($1, $2, 'authenticated', 'authenticated')`,
     [id, `${id}@example.test`],

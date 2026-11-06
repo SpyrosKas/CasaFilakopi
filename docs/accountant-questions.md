@@ -28,18 +28,23 @@ Casa Filakopi (Milos) will take direct bookings and card payments on its own web
 8. **Airbnb / Booking.com:** Χρειάζεται να εκδίδουμε κάτι από το σύστημά μας για αυτές τις κρατήσεις;
    *Do we need to issue anything from our system for bookings made on these platforms?*
 
+9. **Τιμές με ή χωρίς ΦΠΑ:** Οι τιμές που βλέπει ο πελάτης πρέπει να περιλαμβάνουν τον ΦΠΑ; Σε ποιο ποσό υπολογίζεται (διαμονή, καθαριότητα, χωρίς το τέλος ανθεκτικότητας);
+   *Must displayed prices include VAT? What is it calculated on (stay, cleaning, excluding the climate fee)?*
+10. **Τέλος ανθεκτικότητας σε ακύρωση:** Αν ο πελάτης ακυρώσει, επιστρέφεται το τέλος ακόμη και όταν κρατάμε την προκαταβολή;
+    *If a guest cancels, is the climate fee refunded even when the deposit is kept?*
+
 ## myDATA και δηλώσεις / myDATA and declarations
 
-9. **Χρειάζεται διαβίβαση στο myDATA;** Αν ναι: τη χειρίζεστε εσείς, μέσω παρόχου ηλεκτρονικής τιμολόγησης, ή απευθείας με το API;
+11. **Χρειάζεται διαβίβαση στο myDATA;** Αν ναι: τη χειρίζεστε εσείς, μέσω παρόχου ηλεκτρονικής τιμολόγησης, ή απευθείας με το API;
    *Is myDATA transmission needed? If so: handled by you, through a certified provider, or directly by API?*
-10. **Δηλώσεις διαμονών στο Μητρώο:** Ποιος τις καταχωρεί για τις απευθείας κρατήσεις; Ποια στοιχεία του επισκέπτη πρέπει να συλλέγουμε;
+12. **Δηλώσεις διαμονών στο Μητρώο:** Ποιος τις καταχωρεί για τις απευθείας κρατήσεις; Ποια στοιχεία του επισκέπτη πρέπει να συλλέγουμε;
     *Stay declarations in the registry: who files them for direct bookings, and what guest data must we collect?*
 
 ## Πρακτικά / Practical
 
-11. **Προμήθειες Stripe:** Χρειάζονται ειδικό χειρισμό; Τι στοιχεία θέλετε σε κάθε εξαγωγή;
+13. **Προμήθειες Stripe:** Χρειάζονται ειδικό χειρισμό; Τι στοιχεία θέλετε σε κάθε εξαγωγή;
     *Stripe fees: do they need special handling, and what do you want in each export?*
-12. **Μορφή εξαγωγής:** Τι σας εξυπηρετεί κάθε μήνα (Excel, CSV, PDF);
+14. **Μορφή εξαγωγής:** Τι σας εξυπηρετεί κάθε μήνα (Excel, CSV, PDF);
     *Which monthly export format suits you?*
-13. **Διατήρηση αρχείων:** Για πόσα χρόνια πρέπει να κρατάμε τα παραστατικά και τα στοιχεία πελατών;
+15. **Διατήρηση αρχείων:** Για πόσα χρόνια πρέπει να κρατάμε τα παραστατικά και τα στοιχεία πελατών;
     *How many years must we keep documents and guest data?*

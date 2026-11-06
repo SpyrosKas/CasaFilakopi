@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** Gates 1 and 2 passed; CI green. Wave 1 is next. Only T2.23 remains in Phase 2 and needs A1 to A3. YOU: accountant sheet (D4), public name (D5), confirm the remaining proposals.
+**Status:** Wave 1: ENGINE and ADMIN merged; WEB is fixing review findings. Track INV started early (D17). Staging database live. After WEB: restart local Supabase, push auth config and seed, connect Vercel keys. YOU: accountant sheet (D4).
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
@@ -22,7 +22,7 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | F6 | Greek registry number "MHTE" | No number on the site | Short-term rentals normally use an AMA number rather than MHTE. See D4 |
 | F7 | Receipts and invoices assumed | Legal setup of the host unknown | If this is a private individual's short-term rental, the whole INV module may shrink a lot. See D4. Do not build INV until ACC answers |
 | F8 | Not mentioned | Testimonials, "Places to visit" and amenities sections exist | Add `testimonials` and `places` as CMS content (no conflict with "no review system": these stay curated text) |
-| F9 | Not mentioned | Brand is split: "Casa Milos" on the site, "Casa Filakopi" on OTAs and socials; `miloscasa.com` appears in the code | Decide the public name and domain. See D5 |
+| F9 | Not mentioned | Site said "Casa Milos", OTAs and socials say "Casa Filakopi"; `miloscasa.com` in the code | Settled by D5: the name is Casa Filakopi |
 | F11 | `MIG-03` says keep the current look | Mobile is broken: below 992 px the round `.img-absolute` photo (`bottom: -100px`, `css/style.css:458`) covers the heading or text in all 7 house sections. Something also forces the page wider than the screen (475 px layout on a 375 px phone) | Mobile is a deliberate exception to "identical". Fix it, do not preserve it. See T3.1a to T3.1c |
 | F10 | Not mentioned | Stale items: HomeAway link (now Vrbo), Vimeo link, tracked `.DS_Store`, backslash icon path | Clean up during migration |
 
@@ -45,7 +45,7 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | D2 | Channel sync on at launch? | **Decided** | On at launch for Airbnb + Booking.com; CHN moves from optional to launch-blocking. HomeAway/Vrbo depends on A9. The Admin toggle stays |
 | D3 | Who owns accounts and takes payments? | **Decided** | Yorgos is legal owner and activates Stripe (A10). `host@miloscasa.com` owns the technical accounts |
 | D4 | Host legal/tax setup (business vs individual short-term rental; AMA vs MHTE; VAT; myDATA) | **With ACC** | Sheet ready: [accountant-questions.md](accountant-questions.md). INV waits; everything else continues |
-| D5 | Public brand name and domain; where the site is hosted today | **Part decided** | Domain `miloscasa.com`, registered at Namecheap, expires 2027-04-11 (auto-renew must be on), hosted on Netlify. Accounts and guest mail use `host@miloscasa.com` through Namecheap forwarding. Public name still to confirm: "Casa Milos" matches the domain |
+| D5 | Public brand name and domain; where the site is hosted today | **Decided** | The house is **Casa Filakopi**. `miloscasa.com` is only the web address (Namecheap, expires 2027-04-11, auto-renew on, Netlify today). Accounts and guest mail use `host@miloscasa.com` through Namecheap forwarding |
 | D6 | Payment mode and cancellation rules | **Decided** | Yorgos edits these any time in Admin. Two modes: **Full payment (default)** or **Deposit**, where he sets the percentage and days before arrival the rest is due; 0 days means pay on arrival. Booking on or after the due date pays in full. Refund tiers are a percentage of the booking: charge = total minus refund percent, refund = paid minus charge, floored at 0, and any shortfall shows as still owed. Changes apply to new bookings only; each booking keeps a snapshot |
 | D7 | Languages at launch | Proposed | Greek + English |
 | D8 | Styling (spec open decision 1) | Proposed | Keep existing `bootstrap.css` and `style.css` as global CSS; replace jQuery, Bootstrap JS and AOS behaviour with small React components |
@@ -56,6 +56,7 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | D13 | Real-time channel manager later (open decision 8) | Proposed | Not now; adapter only |
 | D15 | Schema changes from the spec | Decided | `booking_nights` dropped (stay range plus `price_breakdown`). `room_photos` became `media_placements`, per section. `email_queue` merged into `email_logs`. `rate_overrides` is the spec's `rates` |
 | D16 | Paid hold on dates an import has already sold | Decided | Automatic refund plus host alert (`dates_lost`). Nothing-due-now bookings confirm through `confirm_without_payment` |
+| D17 | Build invoicing before the accountant answers | Decided | Yes. Dummy business details, every document marked provisional and not sent to guests until D4 is confirmed. PDFs in the private `invoices` bucket. Admin filters by month, transaction, booking. myDATA mode Off: Yorgos exports to the accountant, who uploads. VAT and document types stay data |
 | D14 | Launch target | Proposed | Live before the 2027 season bookings start (aim for March 2027) |
 
 ---
@@ -81,9 +82,9 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 | ID | Item | Needed by | Who | Status |
 |---|---|---|---|---|
 | A0 | Start Docker Desktop | Phase 1 | YOU | [x] |
-| A1 | Set up `host@miloscasa.com` | Phase 2 end | YOU | [ ] |
-| A2 | Supabase staging project | Phase 2 end | YOU | [ ] |
-| A3 | Vercel project | Phase 2 end | YOU | [ ] |
+| A1 | Set up `host@miloscasa.com` | Phase 2 end | YOU | [x] |
+| A2 | Supabase staging project | Phase 2 end | YOU | [x] |
+| A3 | Vercel project | Phase 2 end | YOU | [x] |
 | A4 | Domain and DNS access | Wave 1 | YOU/HOST | [ ] |
 | A5 | Resend | Wave 1 | YOU | [ ] |
 | A6 | Stripe test mode | Wave 2 | YOU | [ ] |
@@ -109,6 +110,7 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 3. Tell me the project ref only (the `abcdefgh` part of the dashboard URL).
 4. In a terminal run `supabase login` yourself. It opens a browser.
 5. LEAD then pushes `config.toml` settings, since sign-ups disabled and MFA do not reach a hosted project automatically.
+6. After that push, set the sign-in rate limit to 15 in the dashboard, and check whether the plan offers the password and MFA verification hooks (ADMIN review finding 1). If not, YOU decide whether to accept Supabase's own limits for launch.
 
 **A3 Vercel:**
 1. vercel.com, sign up with GitHub (`SpyrosKas`), team name `casa-filakopi`.
@@ -199,7 +201,7 @@ Security and tooling:
 - [x] T2.20 RLS tests for anon, token, staff, owner (`QA-03`)
 - [x] T2.21 Domain function signatures in `lib/domain` (types only)
 - [x] T2.22 Independent reviewer agent audits schema, RPCs and RLS. 5 high and 9 medium findings fixed, each with a regression test (`tests/db/review-regressions.test.ts`)
-- [ ] T2.23 A1, A2, A3: staging live; CI applies migrations to staging (`PLT-01`, `PLT-02`, `PLT-04`)
+- [ ] T2.23 A1, A2, A3: staging live; CI applies migrations to staging (`PLT-01`, `PLT-02`, `PLT-04`). Done: staging project linked, 7 migrations pushed, schema and privileges verified on hosted. Left: auth config, seed, Vercel keys, CI migration step
 
 **Gate 2, contract freeze:** concurrency and RLS tests green, review findings closed, YOU sign off. Parallel work starts here.
 
@@ -221,21 +223,21 @@ Security and tooling:
 - [ ] T3.10 Visual diff against baselines, reviewed by YOU (`MIG-05`). Desktop should match; mobile differs on purpose (F11)
 
 **Track ENGINE** (owns `lib/domain`)
-- [ ] T3.11 Availability calculation (`AVL-01`, `AVL-04`, `AVL-05`)
-- [ ] T3.12 Pricing engine: seasons, weekdays, overrides, extra guest, cleaning (`BKG-02`)
-- [ ] T3.13 Taxes, climate resilience fee, promo codes (`BKG-03`, `BKG-04`)
-- [ ] T3.14 Price breakdown and deposit split (`BKG-05`, `PAY-02`)
-- [ ] T3.15 Cancellation and refund calculation (`BKG-16`)
-- [ ] T3.16 Unit tests including Athens timezone and DST edges (`QA-01`, `SUP-11`)
+- [x] T3.11 Availability calculation (`AVL-01`, `AVL-04`, `AVL-05`)
+- [x] T3.12 Pricing engine: seasons, weekdays, overrides, extra guest, cleaning (`BKG-02`)
+- [x] T3.13 Taxes, climate resilience fee, promo codes (`BKG-03`, `BKG-04`)
+- [x] T3.14 Price breakdown and deposit split (`BKG-05`, `PAY-02`)
+- [x] T3.15 Cancellation and refund calculation (`BKG-16`)
+- [x] T3.16 Unit tests including Athens timezone and DST edges (`QA-01`, `SUP-11`)
 
 **Track ADMIN** (owns `app/admin`, `components/admin`)
-- [ ] T3.17 Login, reset, invite-only, session timeout, rate limit (`SUP-12`, `ADM-01`, `ADM-03`)
-- [ ] T3.18 TOTP MFA, mandatory for Owner (`SUP-13`)
-- [ ] T3.19 Role middleware, admin shell, audit helper (`ADM-02`, `ADM-04`, `SUP-14`)
-- [ ] T3.20 Rooms, property and settings screens (`ADM-14`, `ADM-24`, `ADM-25`)
-- [ ] T3.20a Payment and cancellation rules screen for Yorgos: payment mode, deposit %, balance timing, cancellation tiers, with plain-language preview of what a guest will see (`PAY-02`, `BKG-16`, D6)
-- [ ] T3.20b Snapshot the rules onto each booking; a test proves editing rules leaves existing bookings unchanged (`CMP-03`)
-- [ ] T3.20c Admin works on a phone, since Yorgos will likely manage it from one
+- [x] T3.17 Login, reset, invite-only, session timeout, rate limit (`SUP-12`, `ADM-01`, `ADM-03`)
+- [x] T3.18 TOTP MFA, mandatory for Owner (`SUP-13`)
+- [x] T3.19 Role middleware, admin shell, audit helper (`ADM-02`, `ADM-04`, `SUP-14`)
+- [x] T3.20 Rooms, property and settings screens (`ADM-14`, `ADM-24`, `ADM-25`)
+- [x] T3.20a Payment and cancellation rules screen for Yorgos: payment mode, deposit %, balance timing, cancellation tiers, with plain-language preview of what a guest will see (`PAY-02`, `BKG-16`, D6)
+- [x] T3.20b Snapshot the rules onto each booking; a test proves editing rules leaves existing bookings unchanged (`CMP-03`)
+- [x] T3.20c Admin works on a phone, since Yorgos will likely manage it from one
 
 **Track MAIL** (owns `emails`, `lib/email`)
 - [ ] T3.21 A4, A5: domain verified with SPF, DKIM, DMARC (`EML-01`, `PLT-08`)
@@ -292,16 +294,17 @@ Security and tooling:
 
 **Gate 4:** full test-card booking on staging, blocked dates show on the public site, an Airbnb test block arrives in our calendar and ours arrives in Airbnb.
 
-### Wave 3 (Phase 5): parallel, INV blocked by D4
+### Wave 3 (Phase 5): parallel, final INV rules wait for D4
 
-**Track INV** (owns `lib/invoicing`, `app/admin/invoices`)
-- [ ] T5.1 Rescope against ACC answers; list what is removed
+**Track INV** (owns `lib/invoicing`, `app/admin/invoices`). Started early under D17
+- [ ] T5.1 Rescope against ACC answers; list what is removed. Done last, when D4 is answered
 - [ ] T5.2 Document issuing, immutable, triggers (`INV-01` to `INV-04`, `INV-07`)
 - [ ] T5.3 Credit notes (`INV-05`)
 - [ ] T5.4 PDF, private storage, email attachment (`INV-06`)
 - [ ] T5.5 myDATA adapter, retries (`INV-08`, `INV-09`, `JOB-06`)
 - [ ] T5.6 OTA booking invoices (`INV-10`)
 - [ ] T5.7 List, export, settings (`INV-11`, `INV-12`, `ADM-22`, `ADM-26`)
+- [ ] T5.7a Download one document, or select several or all matching a filter, as a PDF or a ZIP plus CSV. Marking as sent stays a separate step
 
 **Track OPS**
 - [ ] T5.8 Editable email templates, remaining emails (`EML-02`, `EML-03`, `EML-06`, `EML-09`, `ADM-27`)
