@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** Wave 1: ENGINE and ADMIN merged; WEB is fixing review findings. Staging database live (ref `iecsohriashrdbqcelkl`). After WEB: restart local Supabase, switch seed to full payment, push auth config and seed to staging, connect Vercel keys. YOU: accountant sheet (D4).
+**Status:** Wave 1: ENGINE and ADMIN merged; WEB is fixing review findings. Track INV started early (D17). Staging database live. After WEB: restart local Supabase, push auth config and seed, connect Vercel keys. YOU: accountant sheet (D4).
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
@@ -56,6 +56,7 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | D13 | Real-time channel manager later (open decision 8) | Proposed | Not now; adapter only |
 | D15 | Schema changes from the spec | Decided | `booking_nights` dropped (stay range plus `price_breakdown`). `room_photos` became `media_placements`, per section. `email_queue` merged into `email_logs`. `rate_overrides` is the spec's `rates` |
 | D16 | Paid hold on dates an import has already sold | Decided | Automatic refund plus host alert (`dates_lost`). Nothing-due-now bookings confirm through `confirm_without_payment` |
+| D17 | Build invoicing before the accountant answers | Decided | Yes. Dummy business details, every document marked provisional and not sent to guests until D4 is confirmed. PDFs in the private `invoices` bucket. Admin filters by month, transaction, booking. myDATA mode Off: Yorgos exports to the accountant, who uploads. VAT and document types stay data |
 | D14 | Launch target | Proposed | Live before the 2027 season bookings start (aim for March 2027) |
 
 ---
@@ -293,10 +294,10 @@ Security and tooling:
 
 **Gate 4:** full test-card booking on staging, blocked dates show on the public site, an Airbnb test block arrives in our calendar and ours arrives in Airbnb.
 
-### Wave 3 (Phase 5): parallel, INV blocked by D4
+### Wave 3 (Phase 5): parallel, final INV rules wait for D4
 
-**Track INV** (owns `lib/invoicing`, `app/admin/invoices`)
-- [ ] T5.1 Rescope against ACC answers; list what is removed
+**Track INV** (owns `lib/invoicing`, `app/admin/invoices`). Started early under D17
+- [ ] T5.1 Rescope against ACC answers; list what is removed. Done last, when D4 is answered
 - [ ] T5.2 Document issuing, immutable, triggers (`INV-01` to `INV-04`, `INV-07`)
 - [ ] T5.3 Credit notes (`INV-05`)
 - [ ] T5.4 PDF, private storage, email attachment (`INV-06`)

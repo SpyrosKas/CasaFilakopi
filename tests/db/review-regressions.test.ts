@@ -551,8 +551,8 @@ describe("promo codes (finding 14)", () => {
 describe("remaining findings", () => {
   it("a line cannot be moved off an issued invoice", async () => {
     const series = await db.query(
-      `insert into public.invoice_series (doc_type, prefix)
-       values ('receipt', $1) returning id`,
+      `insert into public.invoice_series (doc_type, prefix, is_active)
+       values ('receipt', $1, false) returning id`,
       [randomUUID()],
     );
     const draft = await db.query(
