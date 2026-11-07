@@ -252,9 +252,11 @@ test.describe("home", () => {
     await page.goto("/admin");
     await expect(page.getByText("Calendar sync needs a look")).toBeVisible();
     // Soonest first, so a clash next month is not lost among later ones.
-    await expect(page.locator("section.notice-bad")).toContainText(
-      formatStay(addDays(today, 40), addDays(today, 44)),
-    );
+    await expect(
+      page
+        .locator("section.notice-bad")
+        .filter({ hasText: "Calendar sync needs a look" }),
+    ).toContainText(formatStay(addDays(today, 40), addDays(today, 44)));
     await db.query(
       `delete from public.external_events where calendar_id = $1`,
       [room.airbnb],

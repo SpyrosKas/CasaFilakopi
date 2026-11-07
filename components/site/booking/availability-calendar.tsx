@@ -197,7 +197,7 @@ export function AvailabilityCalendar({
 
       <div className="calendar__months">
         {months.map((value) => (
-          <table key={value} className="calendar__month" role="grid">
+          <table key={value} className="calendar__month">
             <caption aria-live="polite">{monthName(value, locale)}</caption>
             <thead>
               <tr>
