@@ -10,8 +10,8 @@ export function formatEuro(cents: number): string {
   return `${sign}${String(whole).replace(/\B(?=(\d{3})+$)/g, ".")},${part} €`;
 }
 
-/** Plain decimal comma, no thousands mark, so Greek Excel reads a number. */
-export function csvAmount(cents: number): string {
+/** A plain amount with a decimal comma, for a form box. */
+export function plainAmount(cents: number): string {
   const sign = cents < 0 ? "-" : "";
   const whole = Math.floor(Math.abs(cents) / 100);
   return `${sign}${whole},${String(Math.abs(cents) % 100).padStart(2, "0")}`;

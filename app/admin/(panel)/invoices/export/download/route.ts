@@ -7,7 +7,12 @@ import {
   pdfResponse,
   resolveSelection,
 } from "@/lib/invoicing/export";
-import { applyFilters, filtersSchema } from "@/lib/invoicing/filters";
+import {
+  applyFilters,
+  filtersSchema,
+  parseFilters,
+} from "@/lib/invoicing/filters";
+import { monthScope, selectionScope } from "@/lib/invoicing/workbook";
 
 // The monthly pack and a selection are the same export: only how the list of
 // documents is found differs. Neither marks anything as sent.
@@ -29,7 +34,10 @@ export async function GET(request: Request): Promise<Response> {
   if (!filters.month) return refuse(t.invoices.selection.refused, 400);
 
   const rows = applyFilters(await loadIndex(admin), filters).reverse();
-  return packResponse(admin, rows, `casa-filakopi-${filters.month}`);
+  return packResponse(admin, rows, {
+    name: `casa-filakopi-invoices-${filters.month}`,
+    scope: monthScope(filters.month, rows.length),
+  });
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -50,5 +58,13 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
   const today = athensDate(new Date());
-  return packResponse(admin, rows, `casa-filakopi-selection-${today}`);
+  // Words for the Summary sheet only. It selects nothing: the ids did that.
+  const filter = String(form.get("filter") ?? "");
+  const listFilters = parseFilters(
+    Object.fromEntries(new URLSearchParams(filter)),
+  );
+  return packResponse(admin, rows, {
+    name: `casa-filakopi-invoices-selection-${today}`,
+    scope: selectionScope(rows.length, listFilters),
+  });
 }

@@ -617,14 +617,14 @@ isOneToOne: false
                   ]
                 },"refunds": {
                   Row: {
-                    "amount_cents": number,"booking_id": string,"created_at": string,"id": string,"payment_id": string,"reason": string | null,"recorded_by": string | null,"status": Database["public"]['Enums']["refund_status"],"stripe_refund_id": string | null,"updated_at": string
+                    "amount_cents": number,"booking_id": string,"created_at": string,"id": string,"payment_id": string,"reason": string | null,"recorded_by": string | null,"settled_at": string | null,"status": Database["public"]['Enums']["refund_status"],"stripe_refund_id": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount_cents": number,"booking_id": string,"created_at"?: string,"id"?: string,"payment_id": string,"reason"?: string | null,"recorded_by"?: string | null,"status": Database["public"]['Enums']["refund_status"],"stripe_refund_id"?: string | null,"updated_at"?: string
+                    "amount_cents": number,"booking_id": string,"created_at"?: string,"id"?: string,"payment_id": string,"reason"?: string | null,"recorded_by"?: string | null,"settled_at"?: string | null,"status": Database["public"]['Enums']["refund_status"],"stripe_refund_id"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "amount_cents"?: number,"booking_id"?: string,"created_at"?: string,"id"?: string,"payment_id"?: string,"reason"?: string | null,"recorded_by"?: string | null,"status"?: Database["public"]['Enums']["refund_status"],"stripe_refund_id"?: string | null,"updated_at"?: string
+                    "amount_cents"?: number,"booking_id"?: string,"created_at"?: string,"id"?: string,"payment_id"?: string,"reason"?: string | null,"recorded_by"?: string | null,"settled_at"?: string | null,"status"?: Database["public"]['Enums']["refund_status"],"stripe_refund_id"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -925,8 +925,11 @@ isOneToOne: false
 "transition_booking":
 { Args: { "p_actor"?: string,"p_booking_id": string,"p_status": Database["public"]['Enums']["booking_status"] }; Returns: undefined
                            },
+"update_booking_notes":
+{ Args: { "p_actor"?: string,"p_booking_id": string,"p_notes": string }; Returns: undefined
+                           },
 "update_external_event_details":
-{ Args: { "p_actor"?: string,"p_amount_cents": number,"p_event_id": string,"p_guest_email": string,"p_guest_name": string,"p_guest_notes": string,"p_guest_phone": string }; Returns: undefined
+{ Args: { "p_actor"?: string,"p_amount_cents": number,"p_event_id": string,"p_guest_email": string,"p_guest_name": string,"p_guest_notes": string,"p_guest_phone": string,"p_update_amount"?: boolean }; Returns: undefined
                            },
 "upsert_external_event":
 { Args: { "p_calendar_id": string,"p_end": string,"p_start": string,"p_summary"?: string,"p_uid": string }; Returns: Json
