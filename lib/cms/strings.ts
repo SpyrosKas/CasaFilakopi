@@ -1,5 +1,5 @@
-// Every word of the text and photo screens, in one structure. Field labels live
-// here too, so the Greek admin needs one new entry and no other change (D25).
+// Every English word of the text and photo screens, in one structure, with the
+// field labels. The Greek is in strings.el.ts, typed against this object.
 
 const labels = {
   howThisPageLooksOnGoogle: "How this page looks on Google",
@@ -326,7 +326,6 @@ const en = {
   languages: { el: "Greek", en: "English" },
 };
 
-/** One entry per language. The admin language switch adds the second one. */
-export const cmsStrings = { en };
+export type CmsStrings = typeof en;
 
-export const t = cmsStrings.en;
+export const cmsEn: CmsStrings = en;

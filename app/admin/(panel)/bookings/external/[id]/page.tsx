@@ -1,3 +1,4 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { ActionForm, Field, TextAreaField } from "@/components/admin/form";
@@ -11,18 +12,9 @@ import {
 } from "@/components/admin/ui";
 import { WriteToGuest } from "@/components/admin/write-to-guest";
 import { saveExternalDetails } from "@/lib/admin/actions/bookings";
-import {
-  centsToBox,
-  formatDate,
-  formatEuro,
-  nightsWord,
-} from "@/lib/admin/format";
 import { messageTemplates } from "@/lib/admin/message-templates";
 import { requireAdmin } from "@/lib/admin/session";
 import { loadExternalEmails, loadExternalStay } from "@/lib/admin/stay-data";
-import { t } from "@/lib/admin/strings";
-
-const e = t.external;
 
 /** An Airbnb or Booking.com stay. The calendar gives dates, he adds the rest. */
 export default async function ExternalBookingPage({
@@ -30,6 +22,10 @@ export default async function ExternalBookingPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const i18n = await adminI18n();
+  const { t, formatDate, nightsWord, formatEuro, centsToBox } = i18n;
+  const e = t.external;
+
   const admin = await requireAdmin();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
@@ -145,12 +141,17 @@ export default async function ExternalBookingPage({
         target="external"
         id={id}
         email={stay.email}
-        templates={messageTemplates({
-          name: stay.name,
-          reference: null,
-          checkIn: stay.checkIn,
-          checkOut: stay.checkOut,
-        })}
+        locale={stay.locale}
+        templates={messageTemplates(
+          {
+            name: stay.name,
+            reference: null,
+            checkIn: stay.checkIn,
+            checkOut: stay.checkOut,
+            locale: stay.locale,
+          },
+          i18n,
+        )}
       />
       <SentMessages messages={emails} />
     </div>

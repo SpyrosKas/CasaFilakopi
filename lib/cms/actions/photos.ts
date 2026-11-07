@@ -1,5 +1,7 @@
 "use server";
 
+import type { CmsStrings } from "@/lib/cms/strings";
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireOwner, type AdminContext } from "@/lib/admin/session";
@@ -20,7 +22,6 @@ import {
   reorderSchema,
   startUploadSchema,
 } from "@/lib/cms/schemas";
-import { t } from "@/lib/cms/strings";
 import { runUpload, type UploadSteps } from "@/lib/cms/upload-flow";
 import { createAdminClient } from "@/lib/db/admin";
 
@@ -39,10 +40,12 @@ export type PhotoResult =
   | { ok: true; items: PhotoItem[]; message?: string }
   | { ok: false; message: string };
 
-const failed = (message: string = t.common.somethingWrong): PhotoResult => ({
-  ok: false,
-  message,
-});
+const failure =
+  (t: CmsStrings) =>
+  (message: string = t.common.somethingWrong): PhotoResult => ({
+    ok: false,
+    message,
+  });
 
 /**
  * The private bucket has no policies, so it needs the secret key, and the
@@ -177,6 +180,9 @@ async function removeFileAndRow(
 }
 
 export async function finishUpload(input: unknown): Promise<PhotoResult> {
+  const { cms: t } = await adminI18n();
+  const failed = failure(t);
+
   const admin = await requireOwner();
   const parsed = finishUploadSchema.safeParse(input);
   if (!parsed.success) return failed();
@@ -348,6 +354,9 @@ async function dropIfUnused(admin: AdminContext, mediaId: string) {
 }
 
 export async function reorderPhotos(input: unknown): Promise<PhotoResult> {
+  const { cms: t } = await adminI18n();
+  const failed = failure(t);
+
   const admin = await requireOwner();
   const parsed = reorderSchema.safeParse(input);
   if (!parsed.success) return failed();
@@ -369,6 +378,9 @@ export async function reorderPhotos(input: unknown): Promise<PhotoResult> {
 }
 
 export async function saveAlt(input: unknown): Promise<PhotoResult> {
+  const { cms: t } = await adminI18n();
+  const failed = failure(t);
+
   const admin = await requireOwner();
   const parsed = altSchema.safeParse(input);
   if (!parsed.success) return failed();
@@ -401,6 +413,9 @@ export async function saveAlt(input: unknown): Promise<PhotoResult> {
 }
 
 export async function addExistingPhoto(input: unknown): Promise<PhotoResult> {
+  const { cms: t } = await adminI18n();
+  const failed = failure(t);
+
   const admin = await requireOwner();
   const parsed = placementSchema.safeParse(input);
   if (!parsed.success) return failed();
@@ -431,6 +446,9 @@ export async function addExistingPhoto(input: unknown): Promise<PhotoResult> {
 }
 
 export async function removeFromSection(input: unknown): Promise<PhotoResult> {
+  const { cms: t } = await adminI18n();
+  const failed = failure(t);
+
   const admin = await requireOwner();
   const parsed = placementSchema.safeParse(input);
   if (!parsed.success) return failed();
@@ -467,6 +485,9 @@ export async function removeFromSection(input: unknown): Promise<PhotoResult> {
  * pointing at a missing file, and the delete can be tried again.
  */
 export async function deleteEverywhere(input: unknown): Promise<PhotoResult> {
+  const { cms: t, say } = await adminI18n();
+  const failed = failure(t);
+
   const admin = await requireOwner();
   const parsed = deleteSchema.safeParse(input);
   if (!parsed.success) return failed();
@@ -480,7 +501,9 @@ export async function deleteEverywhere(input: unknown): Promise<PhotoResult> {
     });
     if (required.length) {
       return failed(
-        t.photos.needsOneElsewhere(required.map(collectionName).join(", ")),
+        t.photos.needsOneElsewhere(
+          required.map(collectionName).map(say).join(", "),
+        ),
       );
     }
 

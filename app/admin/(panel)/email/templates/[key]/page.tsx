@@ -1,12 +1,10 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { findTemplate } from "@/emails/registry";
+import { findTemplate, templateLabel } from "@/emails/registry";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import { renderCopy } from "@/lib/email/render";
 import { TemplateEditor } from "./template-editor";
-
-const s = t.email.templates;
 
 export default async function EditTemplatePage({
   params,
@@ -15,6 +13,9 @@ export default async function EditTemplatePage({
   params: Promise<{ key: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const { t, lang: screen } = await adminI18n();
+  const s = t.email.templates;
+
   const admin = await requireOwner();
   const { key } = await params;
   const { lang } = await searchParams;
@@ -40,7 +41,7 @@ export default async function EditTemplatePage({
 
   return (
     <div className="stack eml-wide">
-      <h1>{s.editTitle(def.label)}</h1>
+      <h1>{s.editTitle(templateLabel(def, screen))}</h1>
       <Link
         href="/admin/email/templates"
         prefetch={false}

@@ -1,6 +1,6 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { athensDate } from "@/lib/domain/dates";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import { loadIndex } from "@/lib/invoicing/data";
 import {
   packResponse,
@@ -28,6 +28,8 @@ function refuse(message: string, status: number): Response {
 }
 
 export async function GET(request: Request): Promise<Response> {
+  const { t } = await adminI18n();
+
   const admin = await requireOwner();
   const month = new URL(request.url).searchParams.get("month") ?? "";
   const filters = filtersSchema.parse({ month });
@@ -41,6 +43,8 @@ export async function GET(request: Request): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const { t } = await adminI18n();
+
   const admin = await requireOwner();
   // A body that is not a form has no ids, and is refused like any other.
   const form = await request.formData().catch(() => new FormData());

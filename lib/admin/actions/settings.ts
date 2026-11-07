@@ -1,5 +1,6 @@
 "use server";
 
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { revalidatePath } from "next/cache";
 import { callAdminRpc } from "@/lib/admin/audit";
 import {
@@ -18,7 +19,6 @@ import {
 } from "@/lib/admin/schemas";
 import { requireOwner } from "@/lib/admin/session";
 import { loadBookingSettings, loadHouse } from "@/lib/admin/settings-data";
-import { t } from "@/lib/admin/strings";
 import type { Json } from "@/lib/db/types";
 
 // Writes run through the Owner's own client, so RLS applies and the database
@@ -35,9 +35,11 @@ export async function saveProperty(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = propertySchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { instagram, facebook, ...fields } = parsed.data;
 
   const { data: before, error: readError } = await admin.supabase
@@ -67,9 +69,11 @@ export async function saveHouse(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = houseSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const value = parsed.data;
 
   const house = await loadHouse(admin);
@@ -100,15 +104,21 @@ export async function saveBookingSettings(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, sayAll, t } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = bookingSettingsSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
 
   const stored = await loadBookingSettings(admin);
   const value = { ...stored, ...parsed.data };
   const fieldErrors = bookingSettingsErrors(value);
   if (fieldErrors) {
-    return { status: "error", message: t.common.fixErrors, fieldErrors };
+    return {
+      status: "error",
+      message: t.common.fixErrors,
+      fieldErrors: sayAll(fieldErrors),
+    };
   }
 
   const { error } = await admin.supabase.from("settings").upsert({
@@ -126,6 +136,8 @@ export async function saveRules(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { t, say } = await adminI18n();
+
   const admin = await requireOwner();
 
   let input: unknown;
@@ -135,7 +147,7 @@ export async function saveRules(
     return errorState(t.common.somethingWrong);
   }
   const parsed = rulesSchema.safeParse(input);
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { payment, cancellation } = parsed.data;
 
   try {

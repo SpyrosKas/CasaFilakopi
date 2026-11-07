@@ -1,15 +1,13 @@
 "use client";
 
+import { useAdminI18n } from "@/components/admin/language-provider";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { FormMessage } from "@/components/admin/form";
-import { Panel } from "@/components/admin/ui";
+import { Panel } from "@/components/admin/panel";
 import { queueGuestMessage } from "@/lib/admin/actions/messages";
 import { idleState } from "@/lib/admin/form-state";
 import { mailHref } from "@/lib/admin/contact";
 import type { MessageTemplate } from "@/lib/admin/message-templates";
-import { t } from "@/lib/admin/strings";
-
-const w = t.write;
 
 /**
  * Saves a message for the sender to pick up once email is connected. The link
@@ -19,13 +17,19 @@ export function WriteToGuest({
   target,
   id,
   email,
+  locale,
   templates,
 }: {
   target: "booking" | "external" | "contact";
   id: string;
   email: string | null;
+  /** The booking's language, which the templates are written in. */
+  locale: string;
   templates: MessageTemplate[];
 }) {
+  const { t, cms } = useAdminI18n();
+  const w = t.write;
+
   const [state, formAction, pending] = useActionState(
     queueGuestMessage,
     idleState,
@@ -90,6 +94,13 @@ export function WriteToGuest({
               </option>
             ))}
           </select>
+          {templates.length > 0 && (
+            <p className="hint">
+              {w.templateLanguage(
+                locale === "el" ? cms.languages.el : cms.languages.en,
+              )}
+            </p>
+          )}
         </div>
         <div className="field">
           <label htmlFor="write-subject">{w.subject}</label>

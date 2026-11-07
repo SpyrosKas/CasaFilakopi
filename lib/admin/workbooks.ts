@@ -5,7 +5,7 @@ import {
   type ReportInput,
 } from "@/lib/admin/reports";
 import type { Stay } from "@/lib/admin/stays";
-import { t } from "@/lib/admin/strings";
+import type { AdminI18n } from "@/lib/admin/i18n";
 import { buildXlsx, type Cell, type Sheet } from "@/lib/invoicing/xlsx";
 
 // The two Excel files (D21). Real numbers and dates, and text that is stored
@@ -21,7 +21,7 @@ const date = (value: string): Cell => ({ kind: "date", value });
 const header = (titles: string[]): Cell[] =>
   titles.map((value) => ({ kind: "text", value, style: "header" }));
 
-export function bookingsWorkbook(stays: Stay[]): Uint8Array {
+export function bookingsWorkbook(stays: Stay[], { t }: AdminI18n): Uint8Array {
   const c = t.bookings.exported;
   const columns: { title: string; width: number }[] = [
     { title: c.reference, width: 20 },
@@ -79,7 +79,11 @@ export function bookingsWorkbook(stays: Stay[]): Uint8Array {
   ]);
 }
 
-function reportCells(label: string, report: Report): Cell[] {
+function reportCells(
+  label: string,
+  report: Report,
+  formatTenths: AdminI18n["formatTenths"],
+): Cell[] {
   const { money, bookings, nights, noAmount } = report;
   return [
     text(label),
@@ -100,13 +104,18 @@ function reportCells(label: string, report: Report): Cell[] {
     count(nights.available),
     nights.occupancyTenths === null
       ? { kind: "empty" }
-      : text(`${(nights.occupancyTenths / 10).toFixed(1)}%`),
+      : text(`${formatTenths(nights.occupancyTenths)}%`),
     euro(nights.averageNightCents),
     count(noAmount.stays),
   ];
 }
 
-export function reportWorkbook(input: ReportInput, year: number): Uint8Array {
+export function reportWorkbook(
+  input: ReportInput,
+  year: number,
+  i18n: AdminI18n,
+): Uint8Array {
+  const { t } = i18n;
   const c = t.reports.sheet;
   const titles = [
     c.month,
@@ -137,9 +146,13 @@ export function reportWorkbook(input: ReportInput, year: number): Uint8Array {
     rows: [
       header(titles),
       ...monthlyReports(input, year).map(({ key, report }) =>
-        reportCells(key, report),
+        reportCells(key, report, i18n.formatTenths),
       ),
-      reportCells(c.wholeYear, buildReport(input, { year, month: null })),
+      reportCells(
+        c.wholeYear,
+        buildReport(input, { year, month: null }),
+        i18n.formatTenths,
+      ),
     ],
   };
   return buildXlsx([sheet]);

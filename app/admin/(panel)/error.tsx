@@ -1,8 +1,10 @@
 "use client";
 
-import { t } from "@/lib/admin/strings";
+import { useAdminI18n } from "@/components/admin/language-provider";
 
 export default function PanelError({ reset }: { reset: () => void }) {
+  const { t } = useAdminI18n();
+
   return (
     <div className="stack">
       <h1>{t.common.errorTitle}</h1>

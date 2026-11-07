@@ -1,3 +1,4 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import {
@@ -12,15 +13,16 @@ import { messageTemplates } from "@/lib/admin/message-templates";
 import { requireAdmin } from "@/lib/admin/session";
 import { loadStayBook } from "@/lib/admin/stay-data";
 import { buildGuests } from "@/lib/admin/stays";
-import { t } from "@/lib/admin/strings";
-
-const g = t.guests;
 
 export default async function GuestPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const i18n = await adminI18n();
+  const { t } = i18n;
+  const g = t.guests;
+
   const admin = await requireAdmin();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
@@ -74,12 +76,17 @@ export default async function GuestPage({
         target={latest.kind === "external" ? "external" : "booking"}
         id={latest.id}
         email={latest.email ?? guest.email}
-        templates={messageTemplates({
-          name: guest.name,
-          reference: latest.reference,
-          checkIn: latest.checkIn,
-          checkOut: latest.checkOut,
-        })}
+        locale={latest.locale}
+        templates={messageTemplates(
+          {
+            name: guest.name,
+            reference: latest.reference,
+            checkIn: latest.checkIn,
+            checkOut: latest.checkOut,
+            locale: latest.locale,
+          },
+          i18n,
+        )}
       />
     </div>
   );

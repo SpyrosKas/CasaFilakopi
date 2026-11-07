@@ -1,5 +1,7 @@
 "use server";
 
+import { adminI18n } from "@/lib/admin/i18n-server";
+import type { AdminStrings } from "@/lib/admin/strings";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { callAdminRpc, callRecordingRpc } from "@/lib/admin/audit";
@@ -38,7 +40,6 @@ import {
   summariseMoney,
   type BookingStatus,
 } from "@/lib/admin/stays";
-import { t } from "@/lib/admin/strings";
 import { createAdminClient } from "@/lib/db/admin";
 import type { Json } from "@/lib/db/types";
 import { athensDate } from "@/lib/domain/dates";
@@ -49,7 +50,7 @@ import { loadRulesSnapshot } from "@/lib/domain/services";
 // Nothing about price or refund is taken from the browser: the amounts sent
 // back are only compared, so a stale screen cannot act on old numbers.
 
-const HOUSE_ERROR = () => errorState(t.house.missing);
+const houseError = (t: AdminStrings) => errorState(t.house.missing);
 
 function refresh() {
   revalidatePath("/admin", "layout");
@@ -70,13 +71,16 @@ export async function previewNewBooking(
   _previous: PreviewState,
   formData: FormData,
 ): Promise<PreviewState> {
+  const i18n = await adminI18n();
+  const { t, say } = i18n;
+
   const admin = await requireAdmin();
   const parsed = newBookingSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const value = parsed.data;
 
   const roomId = await houseId(admin);
-  if (!roomId) return HOUSE_ERROR();
+  if (!roomId) return houseError(t);
 
   const quote = await quoteForAdmin(
     {
@@ -87,11 +91,12 @@ export async function previewNewBooking(
       children: value.children,
     },
     { ownDatesAllowed: false },
+    t,
   );
   if (!quote.ok) return errorState(quote.message);
   return {
     status: "ok",
-    preview: toPreview(manualBreakdown(quote.breakdown), quote.warnings),
+    preview: toPreview(manualBreakdown(quote.breakdown), quote.warnings, i18n),
   };
 }
 
@@ -99,13 +104,16 @@ export async function createBooking(
   _previous: PreviewState,
   formData: FormData,
 ): Promise<PreviewState> {
+  const i18n = await adminI18n();
+  const { say, t } = i18n;
+
   const admin = await requireAdmin();
   const parsed = newBookingSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const value = parsed.data;
 
   const roomId = await houseId(admin);
-  if (!roomId) return HOUSE_ERROR();
+  if (!roomId) return houseError(t);
 
   const now = new Date();
   const quote = await quoteForAdmin(
@@ -117,13 +125,14 @@ export async function createBooking(
       children: value.children,
     },
     { ownDatesAllowed: false, now },
+    t,
   );
   if (!quote.ok) return errorState(quote.message);
   const breakdown = manualBreakdown(quote.breakdown);
   if (value.expectedTotal !== breakdown.totalCents) {
     return {
       ...errorState(t.stayForm.priceMoved),
-      preview: toPreview(breakdown, quote.warnings),
+      preview: toPreview(breakdown, quote.warnings, i18n),
     };
   }
 
@@ -151,7 +160,7 @@ export async function createBooking(
     });
     bookingId = (result as { booking_id: string }).booking_id;
   } catch (error) {
-    return dbErrorState(error);
+    return dbErrorState(error, t);
   }
 
   refresh();
@@ -162,6 +171,9 @@ async function priceChange(
   admin: AdminContext,
   value: { id: string; checkIn: string; checkOut: string },
 ) {
+  const i18n = await adminI18n();
+  const { t } = i18n;
+
   const booking = await loadBooking(admin, value.id);
   if (!booking)
     return {
@@ -178,6 +190,7 @@ async function priceChange(
       children: booking.children,
     },
     { ownPromoCode: promoOf(booking.price_breakdown), ownDatesAllowed: true },
+    t,
   );
   if (!quote.ok) {
     return { ok: false as const, state: errorState(quote.message) };
@@ -190,7 +203,7 @@ async function priceChange(
     booking,
     breakdown,
     preview: {
-      ...toPreview(breakdown, quote.warnings),
+      ...toPreview(breakdown, quote.warnings, i18n),
       previousCents: booking.total_cents,
       overpaidCents: Math.max(paidCents - breakdown.totalCents, 0),
     },
@@ -201,9 +214,11 @@ export async function previewChangeDates(
   _previous: PreviewState,
   formData: FormData,
 ): Promise<PreviewState> {
+  const { say } = await adminI18n();
+
   const admin = await requireAdmin();
   const parsed = changeDatesSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
 
   const priced = await priceChange(admin, parsed.data);
   if (!priced.ok) return priced.state;
@@ -214,9 +229,11 @@ export async function changeDates(
   _previous: PreviewState,
   formData: FormData,
 ): Promise<PreviewState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireAdmin();
   const parsed = changeDatesSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const value = parsed.data;
 
   const priced = await priceChange(admin, value);
@@ -238,7 +255,7 @@ export async function changeDates(
       p_total_cents: priced.breakdown.totalCents,
     });
   } catch (error) {
-    return dbErrorState(error);
+    return dbErrorState(error, t);
   }
 
   refresh();
@@ -249,9 +266,11 @@ export async function saveNotes(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireAdmin();
   const parsed = notesSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
 
   try {
     await callAdminRpc(admin, "update_booking_notes", {
@@ -259,7 +278,7 @@ export async function saveNotes(
       p_notes: parsed.data.notes,
     });
   } catch (error) {
-    return dbErrorState(error);
+    return dbErrorState(error, t);
   }
   refresh();
   return okState(t.detail.notesSaved);
@@ -269,9 +288,11 @@ export async function markStay(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireAdmin();
   const parsed = transitionSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { id, to } = parsed.data;
 
   const booking = await loadBooking(admin, id);
@@ -286,7 +307,7 @@ export async function markStay(
       p_status: to,
     });
   } catch (error) {
-    return dbErrorState(error);
+    return dbErrorState(error, t);
   }
   refresh();
   return okState(t.common.saved);
@@ -303,9 +324,11 @@ export async function recordPayment(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireAdmin();
   const parsed = paymentSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const value = parsed.data;
 
   const booking = await loadBooking(admin, value.id);
@@ -338,7 +361,7 @@ export async function recordPayment(
       p_note: value.note ?? undefined,
     });
   } catch (error) {
-    return dbErrorState(error);
+    return dbErrorState(error, t);
   }
   refresh();
   return okState(t.act.paymentSaved);
@@ -354,9 +377,11 @@ export async function recordRefund(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireAdmin();
   const parsed = refundSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const value = parsed.data;
 
   const { payments, refunds } = await loadBookingMoney(admin, value.id);
@@ -377,7 +402,7 @@ export async function recordRefund(
       p_reason: value.reason ?? undefined,
     });
   } catch (error) {
-    return dbErrorState(error);
+    return dbErrorState(error, t);
   }
   refresh();
   return okState(t.act.refundSaved);
@@ -387,9 +412,11 @@ export async function cancelBooking(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireAdmin();
   const parsed = cancelSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const value = parsed.data;
 
   const booking = await loadBooking(admin, value.id);
@@ -424,7 +451,7 @@ export async function cancelBooking(
       p_reason: value.reason ?? undefined,
     })) as { outcome: string };
   } catch (error) {
-    return dbErrorState(error);
+    return dbErrorState(error, t);
   }
   // A second tap landed first, so the refund belongs to that request.
   if (cancelled.outcome !== "cancelled") {
@@ -458,9 +485,11 @@ export async function saveExternalDetails(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireAdmin();
   const parsed = externalDetailsSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const value = parsed.data;
 
   // Only the Owner's save touches the amount. In a Staff request it is ignored,
@@ -478,7 +507,7 @@ export async function saveExternalDetails(
       p_update_amount: isOwner,
     });
   } catch (error) {
-    return dbErrorState(error);
+    return dbErrorState(error, t);
   }
   refresh();
   return okState(t.external.saved);

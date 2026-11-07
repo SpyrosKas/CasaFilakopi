@@ -1,13 +1,14 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { ActionForm, Field, SelectField } from "@/components/admin/form";
 import { PageHead } from "@/components/admin/ui";
 import { saveBookingSettings } from "@/lib/admin/actions/settings";
 import { MIN_HOLD_MINUTES } from "@/lib/admin/config";
+import type { AdminStrings } from "@/lib/admin/strings";
 import { requireOwner } from "@/lib/admin/session";
 import { loadBookingSettings } from "@/lib/admin/settings-data";
-import { t } from "@/lib/admin/strings";
 
 /** Stored as an hour from 0 to 24, shown as a time of day. */
-const CUTOFF_OPTIONS = [
+const cutoffOptions = (t: AdminStrings) => [
   { value: "24", label: t.booking.cutoffNoLimit },
   ...Array.from({ length: 23 }, (_, index) => ({
     value: String(index + 1),
@@ -17,6 +18,8 @@ const CUTOFF_OPTIONS = [
 ];
 
 export default async function BookingSettingsPage() {
+  const { t } = await adminI18n();
+
   const admin = await requireOwner();
   const settings = await loadBookingSettings(admin);
   const b = t.booking;
@@ -41,7 +44,7 @@ export default async function BookingSettingsPage() {
           name="sameDayCutoffHour"
           hint={b.cutoffHint}
           defaultValue={String(settings.sameDayCutoffHour)}
-          options={CUTOFF_OPTIONS}
+          options={cutoffOptions(t)}
         />
         <Field
           label={b.horizon}

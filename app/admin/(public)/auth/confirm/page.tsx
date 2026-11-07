@@ -1,7 +1,7 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { ActionForm } from "@/components/admin/form";
 import { confirmEmailLink } from "@/lib/admin/actions/auth";
-import { t } from "@/lib/admin/strings";
 
 /** Where reset and invite emails land. Nothing happens until the button. */
 export default async function ConfirmLinkPage({
@@ -14,6 +14,8 @@ export default async function ConfirmLinkPage({
     error?: string;
   }>;
 }) {
+  const { t } = await adminI18n();
+
   const { code, token_hash: tokenHash, type, error } = await searchParams;
   const usable = !error && (code || (tokenHash && type));
 

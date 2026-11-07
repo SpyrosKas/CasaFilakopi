@@ -1,8 +1,11 @@
+import { LanguageSwitch } from "@/components/admin/language-switch";
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 
 export default async function AccountPage() {
+  const { t } = await adminI18n();
+
   const admin = await requireAdmin();
   const a = t.account;
 
@@ -29,6 +32,10 @@ export default async function AccountPage() {
         </Link>
       )}
       <p className="hint">{a.password}</p>
+      <div className="language-row">
+        <span>{t.common.language}</span>
+        <LanguageSwitch />
+      </div>
     </div>
   );
 }

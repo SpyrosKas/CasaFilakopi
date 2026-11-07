@@ -1,9 +1,9 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { IssueForm } from "@/components/admin/invoices/issue-form";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import {
   loadIndex,
   loadInvoicingSetup,
@@ -13,13 +13,14 @@ import { cannotPrint } from "@/lib/invoicing/fonts";
 import { formatEuro } from "@/lib/invoicing/format";
 import { buildPaymentLines } from "@/lib/invoicing/lines";
 
-const s = t.invoices.issue;
-
 export default async function IssuePage({
   params,
 }: {
   params: Promise<{ paymentId: string }>;
 }) {
+  const { t } = await adminI18n();
+  const s = t.invoices.issue;
+
   const admin = await requireOwner();
   const { paymentId } = await params;
   if (!z.uuid().safeParse(paymentId).success) notFound();

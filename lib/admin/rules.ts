@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { t } from "@/lib/admin/strings";
+import type { AdminI18n } from "@/lib/admin/i18n";
+import { later } from "@/lib/admin/later";
+import type { AdminStrings } from "@/lib/admin/strings";
 import type {
   CancellationRules,
   CancellationTier,
@@ -25,7 +27,7 @@ export interface Rules {
 
 const MAX_TIERS = 10;
 
-const m = t.rules.errors;
+const m = later.admin.rules.errors;
 
 /** Stored longest notice first, as in the seed. */
 function sortTiers(tiers: readonly CancellationTier[]): CancellationTier[] {
@@ -126,14 +128,7 @@ export const DEFAULT_RULES: Rules = {
   },
 };
 
-const g = t.rules.guest;
-
-/** "€1,000" or "€333.30". */
-export function formatEuros(cents: number): string {
-  const whole = Math.floor(cents / 100).toLocaleString("en-US");
-  const rest = cents % 100;
-  return `€${whole}${rest === 0 ? "" : `.${String(rest).padStart(2, "0")}`}`;
-}
+type GuestWords = AdminStrings["rules"]["guest"];
 
 function depositPercent(rules: PaymentRules): number | null {
   return rules.mode === "deposit" && rules.deposit?.kind === "percent"
@@ -141,7 +136,7 @@ function depositPercent(rules: PaymentRules): number | null {
     : null;
 }
 
-function describePayment(rules: PaymentRules): string[] {
+function describePayment(rules: PaymentRules, g: GuestWords): string[] {
   const percent = depositPercent(rules);
   if (percent === null) return [g.payFull];
   const days = rules.balanceDaysBefore;
@@ -160,7 +155,7 @@ interface Band {
 }
 
 /** The periods a guest can cancel in, longest notice first. */
-function refundBands(rules: CancellationRules): Band[] {
+function refundBands(rules: CancellationRules, g: GuestWords): Band[] {
   if (rules.isNonRefundable) return [{ when: g.anyTime, daysBefore: 0 }];
 
   const tiers = sortTiers(rules.tiers);
@@ -183,7 +178,11 @@ function refundBands(rules: CancellationRules): Band[] {
   return bands;
 }
 
-function refundText(rules: CancellationRules, daysBefore: number): string {
+function refundText(
+  rules: CancellationRules,
+  daysBefore: number,
+  g: GuestWords,
+): string {
   const tier = rules.isNonRefundable
     ? null
     : (sortTiers(rules.tiers).find((one) => one.daysBefore <= daysBefore) ??
@@ -201,8 +200,13 @@ const capitalise = (text: string) =>
   text.charAt(0).toUpperCase() + text.slice(1);
 
 /** Runs the real refund calculation on a sample booking. */
-function exampleLines(rules: CancellationRules, paidCents: number): string[] {
-  return refundBands(rules).map(({ when, daysBefore }) => {
+function exampleLines(
+  rules: CancellationRules,
+  paidCents: number,
+  { t, formatRoundEuro }: AdminI18n,
+): string[] {
+  const g = t.rules.guest;
+  return refundBands(rules, g).map(({ when, daysBefore }) => {
     const { refundCents, retainedCents } = calculateRefund({
       rules,
       checkIn: EXAMPLE_CHECK_IN,
@@ -210,8 +214,8 @@ function exampleLines(rules: CancellationRules, paidCents: number): string[] {
       totalCents: EXAMPLE_TOTAL_CENTS,
       paidCents,
     });
-    const back = formatEuros(refundCents);
-    const kept = formatEuros(retainedCents);
+    const back = formatRoundEuro(refundCents);
+    const kept = formatRoundEuro(retainedCents);
 
     let outcome: string;
     // D24: a shortfall is not chased, so a guest is never told they owe more.
@@ -240,28 +244,31 @@ export interface RulesPreview {
 export function describeRules(
   payment: PaymentRules,
   cancellation: CancellationRules,
+  i18n: AdminI18n,
 ): RulesPreview {
+  const { t, formatRoundEuro } = i18n;
+  const g = t.rules.guest;
   const percent = depositPercent(payment);
   const depositCents =
     percent === null ? null : percentOf(EXAMPLE_TOTAL_CENTS, percent);
 
   return {
-    payment: describePayment(payment),
-    cancellation: refundBands(cancellation).map(({ when, daysBefore }) =>
-      g.sentence(when, refundText(cancellation, daysBefore)),
+    payment: describePayment(payment, g),
+    cancellation: refundBands(cancellation, g).map(({ when, daysBefore }) =>
+      g.sentence(when, refundText(cancellation, daysBefore, g)),
     ),
     example: {
-      heading: g.exampleHeading(formatEuros(EXAMPLE_TOTAL_CENTS)),
+      heading: g.exampleHeading(formatRoundEuro(EXAMPLE_TOTAL_CENTS)),
       paidInFull: {
-        heading: g.examplePaidFull(formatEuros(EXAMPLE_TOTAL_CENTS)),
-        lines: exampleLines(cancellation, EXAMPLE_TOTAL_CENTS),
+        heading: g.examplePaidFull(formatRoundEuro(EXAMPLE_TOTAL_CENTS)),
+        lines: exampleLines(cancellation, EXAMPLE_TOTAL_CENTS, i18n),
       },
       depositOnly:
         depositCents === null
           ? null
           : {
-              heading: g.exampleDepositOnly(formatEuros(depositCents)),
-              lines: exampleLines(cancellation, depositCents),
+              heading: g.exampleDepositOnly(formatRoundEuro(depositCents)),
+              lines: exampleLines(cancellation, depositCents, i18n),
             },
     },
   };

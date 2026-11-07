@@ -22,6 +22,7 @@ const BOOKING_FACTS = [
 export interface HostTemplate {
   key: string;
   label: string;
+  labelEl: string;
   placeholders: readonly string[];
   required?: readonly string[];
   /** Pointless without its booking, so it fails rather than going hollow. */
@@ -55,6 +56,7 @@ export const HOST_TEMPLATES: HostTemplate[] = [
   {
     key: "host_new_booking",
     label: "Host: new booking",
+    labelEl: "Προς εσάς: νέα κράτηση",
     needsBooking: true,
     placeholders: BOOKING_FACTS,
     en: {
@@ -81,6 +83,7 @@ ${openEl}`,
   {
     key: "host_booking_modified",
     label: "Host: booking changed",
+    labelEl: "Προς εσάς: η κράτηση άλλαξε",
     needsBooking: true,
     placeholders: [...BOOKING_FACTS, "changes"],
     en: {
@@ -107,6 +110,7 @@ ${openEl}`,
   {
     key: "host_booking_cancelled",
     label: "Host: booking cancelled",
+    labelEl: "Προς εσάς: η κράτηση ακυρώθηκε",
     needsBooking: true,
     placeholders: [...BOOKING_FACTS, "refundAmount"],
     en: {
@@ -131,6 +135,7 @@ ${openEl}`,
   {
     key: "host_payment_failed",
     label: "Host: payment failed",
+    labelEl: "Προς εσάς: η πληρωμή απέτυχε",
     placeholders: [...BOOKING_FACTS, "paymentAmount", "reason"],
     en: {
       subject: "A payment failed: {{reference}}",
@@ -162,6 +167,7 @@ ${openEl}`,
   {
     key: "host_dispute_opened",
     label: "Host: payment dispute",
+    labelEl: "Προς εσάς: αμφισβήτηση πληρωμής",
     placeholders: [...BOOKING_FACTS, "paymentAmount", "reason"],
     en: {
       subject: "A payment dispute was opened: {{reference}}",
@@ -191,6 +197,7 @@ ${openEl}`,
   {
     key: "host_contact_message",
     label: "Host: new contact message",
+    labelEl: "Προς εσάς: νέο μήνυμα επικοινωνίας",
     placeholders: [
       "guestName",
       "guestEmail",
@@ -233,6 +240,7 @@ ${openEl}`,
   {
     key: "host_guest_message",
     label: "Host: message from a booked guest",
+    labelEl: "Προς εσάς: μήνυμα από επισκέπτη με κράτηση",
     needsBooking: true,
     placeholders: [...BOOKING_FACTS, "message"],
     required: ["message"],
@@ -256,6 +264,7 @@ ${openEl}`,
   {
     key: "host_sync_conflict",
     label: "Host: calendar conflict",
+    labelEl: "Προς εσάς: σύγκρουση στο ημερολόγιο",
     placeholders: ["channel", "checkIn", "checkOut", "summary", "adminLink"],
     en: {
       subject: "Calendar conflict: {{channel}}, {{checkIn}} to {{checkOut}}",
@@ -282,6 +291,7 @@ ${openEl}`,
   {
     key: "host_sync_failure",
     label: "Host: calendar sync failing",
+    labelEl: "Προς εσάς: πρόβλημα σύνδεσης ημερολογίου",
     placeholders: ["channel", "failures", "errorDetail", "adminLink"],
     en: {
       subject: "Calendar sync is failing: {{channel}}",
@@ -303,6 +313,7 @@ ${openEl}`,
   {
     key: "host_invoice_failed",
     label: "Host: invoice transmission failed",
+    labelEl: "Προς εσάς: η διαβίβαση παραστατικού απέτυχε",
     placeholders: ["documentNumber", "errorDetail", "adminLink"],
     en: {
       subject: "A document could not be transmitted: {{documentNumber}}",
@@ -324,6 +335,7 @@ ${openEl}`,
   {
     key: "host_email_bounced",
     label: "Host: an email could not be delivered",
+    labelEl: "Προς εσάς: ένα email δεν παραδόθηκε",
     placeholders: [
       "emailName",
       "recipient",
@@ -361,6 +373,7 @@ ${openEl}`,
   {
     key: "host_job_failure",
     label: "Host: scheduled task failing",
+    labelEl: "Προς εσάς: πρόβλημα σε αυτόματη εργασία",
     placeholders: ["jobName", "failures", "errorDetail"],
     en: {
       subject: "A scheduled task keeps failing: {{jobName}}",

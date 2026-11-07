@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { i18nFor } from "@/lib/admin/i18n";
 import { findEmptyLanguages, findMissingRequired } from "@/lib/cms/checks";
 import { removeOldUploads, type TempStorage } from "@/lib/cms/cleanup";
 import {
@@ -29,6 +30,9 @@ import { cleanBlock } from "@/lib/cms/schemas";
 import { isBuilding, recover } from "@/lib/cms/runtime";
 import { runUpload, type UploadSteps } from "@/lib/cms/upload-flow";
 import imageSizes from "@/content/image-sizes.json";
+
+const english = i18nFor("en");
+const { cms: t, sayAll } = english;
 
 describe("sanitising", () => {
   it("removes tags, including ones hidden inside each other", () => {
@@ -253,7 +257,9 @@ describe("saved blocks", () => {
       en: { title: "x".repeat(301) },
       el: {},
     });
-    expect(result).toEqual({ error: "title is too long." });
+    expect("error" in result && english.say(result.error)).toBe(
+      "title is too long.",
+    );
   });
 
   it("refuses a bad address in a link field", () => {
@@ -263,7 +269,9 @@ describe("saved blocks", () => {
       el: {},
       shared: { facebook: "javascript:alert(1)" },
     });
-    expect(result).toEqual({ error: "Facebook link does not look right." });
+    expect("error" in result && english.say(result.error)).toBe(
+      "Facebook link does not look right.",
+    );
   });
 
   it("replaces an unknown icon and refuses repeated ids", () => {
@@ -281,12 +289,16 @@ describe("empty languages", () => {
   it("names a field with text in one language only", () => {
     const page = findPage("home")!;
     expect(
-      findEmptyLanguages(page, {
-        kitchen: {
-          en: { title: "Kitchen", body: "Text" },
-          el: { title: "Κουζίνα", body: "" },
+      findEmptyLanguages(
+        sayAll(page),
+        {
+          kitchen: {
+            en: { title: "Kitchen", body: "Text" },
+            el: { title: "Κουζίνα", body: "" },
+          },
         },
-      }),
+        t,
+      ),
     ).toEqual(["Kitchen: description (Greek is empty)"]);
   });
 });
@@ -418,7 +430,7 @@ describe("required fields", () => {
   it("are all filled in the imported text", () => {
     for (const page of allPages()) {
       expect(
-        findMissingRequired(page, defaultBlocks()[page.slug] ?? {}),
+        findMissingRequired(sayAll(page), defaultBlocks()[page.slug] ?? {}, t),
       ).toEqual([]);
     }
   });
@@ -426,37 +438,53 @@ describe("required fields", () => {
   it("names a blank title, per language, and blank contact details", () => {
     const home = findPage("home")!;
     expect(
-      findMissingRequired(home, {
-        kitchen: { en: { title: "Kitchen" }, el: { title: "  " } },
-      }),
+      findMissingRequired(
+        sayAll(home),
+        {
+          kitchen: { en: { title: "Kitchen" }, el: { title: "  " } },
+        },
+        t,
+      ),
     ).toEqual(["Kitchen: title (Greek)"]);
     const site = findPage("site")!;
     expect(
-      findMissingRequired(site, {
-        contact: { en: {}, el: {}, shared: { phone: "1" } },
-      }),
+      findMissingRequired(
+        sayAll(site),
+        {
+          contact: { en: {}, el: {}, shared: { phone: "1" } },
+        },
+        t,
+      ),
     ).toContain("Contact details: email");
   });
 
   it("leaves SEO descriptions and legal text optional", () => {
     const terms = findPage("terms")!;
     expect(
-      findMissingRequired(terms, {
-        main: { en: { body: "" }, el: { body: "" } },
-        seo: {
-          en: { metaTitle: "", metaDescription: "" },
-          el: { metaTitle: "", metaDescription: "" },
+      findMissingRequired(
+        sayAll(terms),
+        {
+          main: { en: { body: "" }, el: { body: "" } },
+          seo: {
+            en: { metaTitle: "", metaDescription: "" },
+            el: { metaTitle: "", metaDescription: "" },
+          },
         },
-      }),
+        t,
+      ),
     ).toEqual([]);
   });
 
   it("does not ask twice: a required field is not also a language warning", () => {
     const home = findPage("home")!;
     expect(
-      findEmptyLanguages(home, {
-        kitchen: { en: { title: "Kitchen" }, el: { title: "" } },
-      }),
+      findEmptyLanguages(
+        sayAll(home),
+        {
+          kitchen: { en: { title: "Kitchen" }, el: { title: "" } },
+        },
+        t,
+      ),
     ).toEqual([]);
   });
 });

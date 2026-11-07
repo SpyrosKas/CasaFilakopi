@@ -1,3 +1,5 @@
+import type { AdminI18n } from "@/lib/admin/i18n";
+import { adminI18n } from "@/lib/admin/i18n-server";
 import {
   ActionButton,
   ActionForm,
@@ -7,11 +9,8 @@ import {
 import { RatesTabs } from "@/components/admin/rates-tabs";
 import { Badge, Empty, PageHead, Panel } from "@/components/admin/ui";
 import { deleteRestriction, saveRestriction } from "@/lib/admin/actions/rates";
-import { formatDate, nightsWord } from "@/lib/admin/format";
 import { requireAdmin } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 
-const r = t.rates;
 const WEEK = [1, 2, 3, 4, 5, 6, 0];
 
 interface RuleValues {
@@ -25,7 +24,10 @@ interface RuleValues {
   allowed_check_in_days?: number[] | null;
 }
 
-function RuleFields({ rule }: { rule: RuleValues }) {
+async function RuleFields({ rule }: { rule: RuleValues }) {
+  const { t } = await adminI18n();
+  const r = t.rates;
+
   return (
     <>
       {rule.id && <input type="hidden" name="id" value={rule.id} />}
@@ -86,7 +88,11 @@ function RuleFields({ rule }: { rule: RuleValues }) {
   );
 }
 
-const ruleBadges = (rule: RuleValues): string[] => [
+const ruleBadges = (
+  rule: RuleValues,
+  { t, nightsWord }: AdminI18n,
+  r = t.rates,
+): string[] => [
   ...(rule.min_stay ? [r.ruleMin(nightsWord(rule.min_stay))] : []),
   ...(rule.max_stay ? [r.ruleMax(nightsWord(rule.max_stay))] : []),
   ...(rule.closed_to_arrival ? [r.ruleNoArrival] : []),
@@ -104,6 +110,10 @@ const ruleBadges = (rule: RuleValues): string[] => [
 
 /** Staff may edit these too (ADM-02). */
 export default async function RestrictionsPage() {
+  const i18n = await adminI18n();
+  const { t, formatDate } = i18n;
+  const r = t.rates;
+
   const admin = await requireAdmin();
   const { data: rules, error } = await admin.supabase
     .from("restrictions")
@@ -128,7 +138,7 @@ export default async function RestrictionsPage() {
           )}
         >
           <span className="row-badges">
-            {ruleBadges(rule).map((text) => (
+            {ruleBadges(rule, i18n).map((text) => (
               <Badge key={text}>{text}</Badge>
             ))}
           </span>

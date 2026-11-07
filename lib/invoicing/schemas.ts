@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { t } from "@/lib/admin/strings";
+import { later } from "@/lib/admin/later";
 import { ISSUABLE_DOC_TYPES } from "./types";
 
 // Server-side checks for the invoice forms. Form values arrive as strings.
 
-const v = t.validation;
-const i = t.invoices.errors;
+const v = later.admin.validation;
+const i = later.admin.invoices.errors;
 
 const required = (max: number) =>
   z.string().trim().min(1, v.required).max(max, v.tooLong);

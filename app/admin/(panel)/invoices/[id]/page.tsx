@@ -1,9 +1,9 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { ActionForm } from "@/components/admin/form";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import { regeneratePdf } from "@/lib/invoicing/actions";
 import {
   loadIndex,
@@ -18,9 +18,6 @@ import {
   issuedOn,
 } from "@/lib/invoicing/format";
 import { needsAccountantCheck, vatBreakdown } from "@/lib/invoicing/lines";
-
-const s = t.invoices;
-const d = s.detail;
 
 function Fact({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
@@ -51,6 +48,10 @@ export default async function InvoiceDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ pdf?: string; notice?: string }>;
 }) {
+  const { t } = await adminI18n();
+  const s = t.invoices;
+  const d = s.detail;
+
   const admin = await requireOwner();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();

@@ -6,7 +6,8 @@ import {
   shiftMonth,
 } from "@/lib/admin/calendar";
 import { mailHref, telHref, whatsappHref } from "@/lib/admin/contact";
-import { centsToBox, formatEuro, parseEuros } from "@/lib/admin/format";
+import { formatters, parseEuros } from "@/lib/admin/format";
+import { i18nFor } from "@/lib/admin/i18n";
 import { messageTemplates } from "@/lib/admin/message-templates";
 import {
   basePricesSchema,
@@ -440,6 +441,7 @@ describe("amounts he types", () => {
   });
 
   it("writes amounts back", () => {
+    const { centsToBox, formatEuro } = formatters("en");
     expect(formatEuro(123456)).toBe("€1,234.56");
     expect(formatEuro(-5)).toBe("-€0.05");
     expect(centsToBox(1205)).toBe("12.05");
@@ -654,13 +656,22 @@ describe("money with no booking behind it (D7)", () => {
 
 describe("message templates", () => {
   it("fills in the guest and the booking", () => {
-    const [arrival] = messageTemplates({
+    const facts = {
       name: "Maria Papadaki",
       reference: "CF-2027-00001",
       checkIn: "2027-06-20",
       checkOut: "2027-06-22",
-    });
+    };
+    const screen = i18nFor("en");
+    const [arrival] = messageTemplates({ ...facts, locale: "en" }, screen);
     expect(arrival.body).toContain("Hello Maria,");
     expect(arrival.subject).toContain("CF-2027-00001");
+
+    // The guest's language decides the words, the admin's only the label.
+    const [greek] = messageTemplates({ ...facts, locale: "el" }, screen);
+    expect(greek.label).toBe("Before arrival");
+    expect(greek.body).toContain("Γεια σας Maria,");
+    expect(greek.body).toContain("Κυρ 20 Ιουν 2027");
+    expect(greek.subject).toContain("CF-2027-00001");
   });
 });

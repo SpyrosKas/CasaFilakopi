@@ -1,7 +1,7 @@
 "use client";
 
+import { useAdminI18n } from "@/components/admin/language-provider";
 import { useEffect, useRef, type ReactNode } from "react";
-import { t } from "@/lib/cms/strings";
 
 /** A native modal: the browser handles focus, Escape and the backdrop. */
 export function ConfirmDialog({
@@ -15,6 +15,8 @@ export function ConfirmDialog({
   onClose: () => void;
   actions: ReactNode;
 }) {
+  const { cms: t } = useAdminI18n();
+
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {

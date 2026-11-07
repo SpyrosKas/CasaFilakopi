@@ -1,12 +1,9 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { ActionButton, ActionForm, Field } from "@/components/admin/form";
 import { RatesTabs } from "@/components/admin/rates-tabs";
 import { Empty, PageHead, Panel } from "@/components/admin/ui";
 import { deleteSeason, saveSeason } from "@/lib/admin/actions/rates";
-import { centsToBox, formatDate, formatEuro } from "@/lib/admin/format";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
-
-const r = t.rates;
 
 interface SeasonValues {
   id?: string;
@@ -17,7 +14,10 @@ interface SeasonValues {
   weekend_cents?: number | null;
 }
 
-function SeasonFields({ season }: { season: SeasonValues }) {
+async function SeasonFields({ season }: { season: SeasonValues }) {
+  const { t, centsToBox } = await adminI18n();
+  const r = t.rates;
+
   return (
     <>
       {season.id && <input type="hidden" name="id" value={season.id} />}
@@ -57,6 +57,9 @@ function SeasonFields({ season }: { season: SeasonValues }) {
 }
 
 export default async function SeasonsPage() {
+  const { t, formatDate, formatEuro } = await adminI18n();
+  const r = t.rates;
+
   const admin = await requireOwner();
   const { data: seasons, error } = await admin.supabase
     .from("seasons")

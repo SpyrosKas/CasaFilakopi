@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { PhotoManager } from "@/components/admin/cms/photo-manager";
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { requireOwner } from "@/lib/admin/session";
 import { loadCollection } from "@/lib/cms/data";
 import { findCollection } from "@/lib/cms/registry";
@@ -12,6 +13,7 @@ export default async function CollectionPhotosPage({ params }: Props) {
   const def = findCollection(decodeURIComponent(collection));
   if (!def) notFound();
 
+  const { sayAll } = await adminI18n();
   const items = await loadCollection(admin, def.id);
-  return <PhotoManager key={def.id} def={def} initialItems={items} />;
+  return <PhotoManager key={def.id} def={sayAll(def)} initialItems={items} />;
 }

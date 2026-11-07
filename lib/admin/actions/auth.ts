@@ -1,5 +1,6 @@
 "use server";
 
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createDeviceValue, isKnownDevice } from "@/lib/admin/activity";
@@ -39,7 +40,6 @@ import {
   markActive,
   resolveAdminSession,
 } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import { createAdminSessionClient } from "@/lib/admin/supabase";
 import { getPublicEnv } from "@/lib/env";
 import { getServerEnv } from "@/lib/env.server";
@@ -61,9 +61,11 @@ export async function login(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const startedAt = Date.now();
   const parsed = loginSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { email, password } = parsed.data;
   const address = await clientAddress();
   const pair = emailAtAddress(email, address);
@@ -146,9 +148,11 @@ export async function requestPasswordReset(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const startedAt = Date.now();
   const parsed = forgotPasswordSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { email } = parsed.data;
 
   // Whatever happens below, the answer and its timing stay the same.
@@ -184,6 +188,8 @@ export async function confirmEmailLink(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { t } = await adminI18n();
+
   const parsed = confirmLinkSchema.safeParse(formFields(formData));
   if (!parsed.success) return errorState(t.confirm.missing);
 
@@ -205,6 +211,8 @@ export async function setNewPassword(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const session = await resolveAdminSession();
   const allowed =
     (session.state === "ready" || session.state === "needs_enrolment") &&
@@ -212,7 +220,7 @@ export async function setNewPassword(
   if (!allowed) redirect("/admin/login");
 
   const parsed = newPasswordSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
 
   const { error } = await session.supabase.auth.updateUser({
     password: parsed.data.password,

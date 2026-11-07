@@ -1,13 +1,14 @@
 "use client";
 
+import { useAdminI18n } from "@/components/admin/language-provider";
 import { ActionForm } from "@/components/admin/form";
-import { t } from "@/lib/admin/strings";
 import { saveGeneral } from "@/lib/channels/actions";
 import { SYNC_INTERVALS, type ChannelSettings } from "@/lib/channels/settings";
-import { channelStrings as s } from "@/lib/channels/strings";
 import { CHANNELS } from "@/lib/channels/types";
 
 export function GeneralForm({ settings }: { settings: ChannelSettings }) {
+  const { channels: s, t } = useAdminI18n();
+
   return (
     <ActionForm
       action={saveGeneral}

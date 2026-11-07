@@ -1,15 +1,13 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { Badge, Empty, PageHead, Tabs } from "@/components/admin/ui";
-import { formatStamp } from "@/lib/admin/format";
 import { requireAdmin } from "@/lib/admin/session";
 import {
   countMessages,
   loadMessagePage,
   MESSAGES_PER_PAGE,
 } from "@/lib/admin/stay-data";
-import { t } from "@/lib/admin/strings";
 
-const m = t.messages;
 const TABS = ["new", "replied", "archived"] as const;
 
 export default async function MessagesPage({
@@ -20,6 +18,9 @@ export default async function MessagesPage({
     page?: string | string[];
   }>;
 }) {
+  const { t, formatStamp } = await adminI18n();
+  const m = t.messages;
+
   const admin = await requireAdmin();
   const query = await searchParams;
   const tab = TABS.find((name) => name === query.tab) ?? "new";

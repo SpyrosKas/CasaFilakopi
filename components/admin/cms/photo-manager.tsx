@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdminI18n } from "@/components/admin/language-provider";
 import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
@@ -23,10 +24,9 @@ import {
   shrinkForUpload,
 } from "@/lib/cms/browser-image";
 import type { PhotoItem } from "@/lib/cms/data";
-import { t } from "@/lib/cms/strings";
+import type { CmsStrings } from "@/lib/cms/strings";
 import type { CollectionDef } from "@/lib/cms/types";
 
-const p = t.photos;
 const PHOTO_SIZES = "(min-width: 700px) 340px, 100vw";
 
 /** Sends one file and returns the section as the server now has it. */
@@ -35,6 +35,7 @@ export async function uploadOne(
   collection: string,
   replaceMediaId: string | undefined,
   onProgress: (text: string) => void,
+  p: CmsStrings["photos"],
 ): Promise<PhotoResult> {
   if (!looksLikePhoto(file)) {
     return { ok: false, message: p.wrongType(file.name) };
@@ -73,6 +74,9 @@ function AltEditor({
   collection: string;
   onSaved: (result: PhotoResult) => void;
 }) {
+  const { cms: t } = useAdminI18n();
+  const p = t.photos;
+
   const [en, setEn] = useState(item.alt.en);
   const [el, setEl] = useState(item.alt.el);
   const [saving, setSaving] = useState(false);
@@ -144,6 +148,9 @@ export function PhotoManager({
   def: CollectionDef;
   initialItems: PhotoItem[];
 }) {
+  const { cms: t, say } = useAdminI18n();
+  const p = t.photos;
+
   const [items, setItems] = useState(initialItems);
   const [progress, setProgress] = useState<string | null>(null);
   const [notice, setNotice] = useState<{
@@ -177,8 +184,12 @@ export function PhotoManager({
     let added = 0;
     for (const [index, file] of files.entries()) {
       const prefix = `${p.progress(index + 1, files.length)}. `;
-      const result = await uploadOne(file, def.id, replaceMediaId, (text) =>
-        setProgress(prefix + text),
+      const result = await uploadOne(
+        file,
+        def.id,
+        replaceMediaId,
+        (text) => setProgress(prefix + text),
+        p,
       );
       if (result.ok) {
         setItems(result.items);
@@ -372,7 +383,7 @@ export function PhotoManager({
               <p className="hint">{position}</p>
               {item.usedElsewhere.length > 0 && (
                 <p className="hint">
-                  {p.usedElsewhere(item.usedElsewhere.join(", "))}
+                  {p.usedElsewhere(item.usedElsewhere.map(say).join(", "))}
                 </p>
               )}
               {!def.decorative && (
@@ -472,12 +483,12 @@ export function PhotoManager({
         >
           <p>
             {deleting.usedElsewhere.length
-              ? p.deleteShared(deleting.usedElsewhere.join(", "))
+              ? p.deleteShared(deleting.usedElsewhere.map(say).join(", "))
               : p.deleteOnlyHere}
           </p>
           {deleting.blockedBy.length > 0 && (
             <p className="notice notice-info">
-              {p.needsOneElsewhere(deleting.blockedBy.join(", "))}
+              {p.needsOneElsewhere(deleting.blockedBy.map(say).join(", "))}
             </p>
           )}
         </ConfirmDialog>

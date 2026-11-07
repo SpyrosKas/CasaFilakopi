@@ -1,12 +1,16 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { mailHref, telHref, whatsappHref } from "@/lib/admin/contact";
-import { formatEuro, formatStay, nightsWord } from "@/lib/admin/format";
+import type { AdminI18n } from "@/lib/admin/i18n";
 import type { MoneyState, Stay, StayStatus } from "@/lib/admin/stays";
-import { t } from "@/lib/admin/strings";
 
 // The shared pieces of every admin screen. Plain markup and the classes in
-// app/admin/admin.css, with no library behind them.
+// app/admin/admin.css, with no library behind them. Panel and MoneyLines have
+// their own file, because client components use them and this file reads the
+// language cookie.
+
+export { MoneyLines, Panel } from "@/components/admin/panel";
 
 type Tone = "plain" | "ok" | "bad" | "warn" | "info";
 
@@ -52,32 +56,6 @@ export function BackLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-export function Panel({
-  title,
-  link,
-  children,
-}: {
-  title?: string;
-  link?: { href: string; label: string };
-  children: ReactNode;
-}) {
-  return (
-    <section className="panel">
-      {(title || link) && (
-        <div className="panel-head">
-          {title && <h2>{title}</h2>}
-          {link && (
-            <Link href={link.href} prefetch={false} className="panel-link">
-              {link.label}
-            </Link>
-          )}
-        </div>
-      )}
-      {children}
-    </section>
-  );
-}
-
 export function Stat({
   label,
   value,
@@ -109,11 +87,13 @@ export function Empty({ children }: { children: ReactNode }) {
   return <p className="empty">{children}</p>;
 }
 
-export function Tabs({
+export async function Tabs({
   items,
 }: {
   items: { href: string; label: string; count?: number; active: boolean }[];
 }) {
+  const { t } = await adminI18n();
+
   return (
     <nav className="tabs" aria-label={t.common.sections}>
       {items.map((item) => (
@@ -131,34 +111,6 @@ export function Tabs({
         </Link>
       ))}
     </nav>
-  );
-}
-
-export function MoneyLines({
-  lines,
-}: {
-  lines: {
-    label: string;
-    value: string;
-    note?: string;
-    strong?: boolean;
-  }[];
-}) {
-  return (
-    <dl className="money-table">
-      {lines.map((line) => (
-        <div
-          key={line.label}
-          className={line.strong ? "money-line money-strong" : "money-line"}
-        >
-          <dt>
-            {line.label}
-            {line.note && <span className="money-note">{line.note}</span>}
-          </dt>
-          <dd>{line.value}</dd>
-        </div>
-      ))}
-    </dl>
   );
 }
 
@@ -186,7 +138,9 @@ const MONEY_TONE: Record<MoneyState, Tone> = {
 /** A booking that ended owes nothing, so it gets no money warning (D9). */
 const OPEN_MONEY: StayStatus[] = ["confirmed", "checked_in", "completed"];
 
-export function StayBadges({ stay }: { stay: Stay }) {
+export async function StayBadges({ stay }: { stay: Stay }) {
+  const { t } = await adminI18n();
+
   return (
     <span className="row-badges">
       <Badge tone={STATUS_TONE[stay.status]}>
@@ -208,16 +162,19 @@ export function StayBadges({ stay }: { stay: Stay }) {
   );
 }
 
-export const stayName = (stay: Stay): string =>
+export const stayName = (stay: Stay, { t }: AdminI18n): string =>
   stay.name ?? stay.summary ?? t.stay.noName;
 
 /** One stay in any list. Links to its page. */
-export function StayRow({ stay, side }: { stay: Stay; side?: string }) {
+export async function StayRow({ stay, side }: { stay: Stay; side?: string }) {
+  const i18n = await adminI18n();
+  const { formatStay, nightsWord } = i18n;
+
   return (
     <li>
       <Link href={stay.href} prefetch={false} className="row">
         <span className="row-main">
-          <span className="row-title">{stayName(stay)}</span>
+          <span className="row-title">{stayName(stay, i18n)}</span>
           <span className="row-sub">
             {formatStay(stay.checkIn, stay.checkOut)}, {nightsWord(stay.nights)}
           </span>
@@ -229,19 +186,24 @@ export function StayRow({ stay, side }: { stay: Stay; side?: string }) {
   );
 }
 
-export const balanceText = (stay: Stay): string | undefined =>
+export const balanceText = (
+  stay: Stay,
+  { t, formatEuro }: AdminI18n,
+): string | undefined =>
   stay.balanceCents > 0
     ? t.stay.balanceDue(formatEuro(stay.balanceCents))
     : undefined;
 
 /** Tap to call, email or WhatsApp. Shows only what can really be used. */
-export function ContactButtons({
+export async function ContactButtons({
   phone,
   email,
 }: {
   phone: string | null;
   email: string | null;
 }) {
+  const { t } = await adminI18n();
+
   const candidates: { href: string | null; label: string }[] = [
     { href: telHref(phone), label: t.contact.call },
     { href: whatsappHref(phone), label: t.contact.whatsapp },

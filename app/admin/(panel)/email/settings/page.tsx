@@ -1,13 +1,14 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { ActionForm, Field } from "@/components/admin/form";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import { saveEmailSettings } from "@/lib/email/admin-actions";
 import { loadEmailSettings } from "@/lib/email/settings";
 
-const s = t.email.settings;
-
 export default async function EmailSettingsPage() {
+  const { t } = await adminI18n();
+  const s = t.email.settings;
+
   const admin = await requireOwner();
   const settings = await loadEmailSettings(admin.supabase);
 

@@ -1,9 +1,9 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { ActionForm, CheckField, Field } from "@/components/admin/form";
 import { BackLink, MoneyLines, PageHead, Panel } from "@/components/admin/ui";
 import { cancelBooking } from "@/lib/admin/actions/bookings";
-import { formatEuro } from "@/lib/admin/format";
 import { requireAdmin } from "@/lib/admin/session";
 import { loadBooking, loadBookingMoney } from "@/lib/admin/stay-data";
 import {
@@ -12,17 +12,17 @@ import {
   snapshotRules,
   summariseMoney,
 } from "@/lib/admin/stays";
-import { t } from "@/lib/admin/strings";
 import { athensDate, daysBetween } from "@/lib/domain/dates";
 import { sumCents } from "@/lib/domain/money";
-
-const c = t.cancel;
 
 export default async function CancelBookingPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { t, formatEuro } = await adminI18n();
+  const c = t.cancel;
+
   const admin = await requireAdmin();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();

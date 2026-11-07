@@ -1,6 +1,6 @@
 // The email section's words, kept apart so strings.ts stays short.
 
-export const emailStrings = {
+export const emailEn = {
   log: {
     title: "Emails",
     intro: "Every email the site sends, newest first.",

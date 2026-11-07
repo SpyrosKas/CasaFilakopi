@@ -516,7 +516,7 @@ describe("telling Yorgos about a release", () => {
     expect(alerts).toHaveLength(1);
     expect(alerts[0].template_key).toBe("host_sync_failure");
     expect(alerts[0].payload).toMatchObject({ failures: 1, channel: "Airbnb" });
-    expect(alerts[0].payload.error).toContain("2 future stays");
+    expect(alerts[0].payload.error).toContain("2 μελλοντικές διαμονές");
   });
 
   it("logs and alerts when a long-empty feed releases", async () => {

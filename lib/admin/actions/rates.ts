@@ -1,5 +1,6 @@
 "use server";
 
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { revalidatePath } from "next/cache";
 import {
   errorState,
@@ -20,7 +21,6 @@ import {
 } from "@/lib/admin/ops-schemas";
 import { requireAdmin, requireOwner } from "@/lib/admin/session";
 import { loadHouse } from "@/lib/admin/settings-data";
-import { t } from "@/lib/admin/strings";
 import { addDays, dayOfWeek, eachNight } from "@/lib/domain/dates";
 
 // Prices, fees and promo codes are the Owner's. Staff may edit stay rules
@@ -51,9 +51,11 @@ export async function setDailyPrices(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = bulkRatesSchema.safeParse(bulkFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { from, to, weekdays, price } = parsed.data;
 
   const house = await loadHouse(admin);
@@ -79,9 +81,11 @@ export async function clearDailyPrices(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = clearRatesSchema.safeParse(bulkFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { from, to, weekdays } = parsed.data;
 
   const house = await loadHouse(admin);
@@ -106,9 +110,11 @@ export async function saveBasePrices(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = basePricesSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { base, cleaning, extraGuest } = parsed.data;
 
   const house = await loadHouse(admin);
@@ -133,9 +139,11 @@ export async function saveSeason(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = seasonSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { id, name, from, to, night, weekend } = parsed.data;
 
   const house = await loadHouse(admin);
@@ -167,9 +175,11 @@ export async function deleteSeason(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = idSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { error } = await admin.supabase
     .from("seasons")
     .delete()
@@ -183,12 +193,14 @@ export async function saveRestriction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireAdmin();
   const parsed = restrictionSchema.safeParse({
     ...formFields(formData),
     days: formData.getAll("days").map(String),
   });
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const value = parsed.data;
 
   const house = await loadHouse(admin);
@@ -216,9 +228,11 @@ export async function deleteRestriction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireAdmin();
   const parsed = idSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { error } = await admin.supabase
     .from("restrictions")
     .delete()
@@ -232,9 +246,11 @@ export async function saveFee(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = feeSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const value = parsed.data;
 
   const row = {
@@ -259,9 +275,11 @@ export async function deleteFee(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = idSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { error } = await admin.supabase
     .from("taxes_fees")
     .delete()
@@ -275,9 +293,11 @@ export async function savePromo(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = promoSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const value = parsed.data;
 
   const row = {
@@ -307,9 +327,11 @@ export async function deletePromo(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = idSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { error } = await admin.supabase
     .from("promo_codes")
     .delete()

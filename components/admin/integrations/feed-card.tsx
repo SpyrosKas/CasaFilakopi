@@ -1,8 +1,8 @@
 "use client";
 
+import { useAdminI18n } from "@/components/admin/language-provider";
 import { useActionState, useRef, useTransition, type FormEvent } from "react";
 import { ActionForm, FormMessage } from "@/components/admin/form";
-import { formatMoment } from "@/components/admin/integrations/format";
 import { idleState, type ActionState } from "@/lib/admin/form-state";
 import {
   freeFeedDates,
@@ -11,9 +11,10 @@ import {
   saveFeed,
 } from "@/lib/channels/actions";
 import type { FeedView } from "@/lib/channels/data";
-import { channelStrings as s } from "@/lib/channels/strings";
 
 function LinkForm({ roomId, feed }: { roomId: string; feed: FeedView }) {
+  const { channels: s } = useAdminI18n();
+
   const form = useRef<HTMLFormElement>(null);
   const [state, formAction, pending] = useActionState(
     // A saved link must not stay on screen, and a refused one must, to fix it.
@@ -75,6 +76,8 @@ function LinkForm({ roomId, feed }: { roomId: string; feed: FeedView }) {
 
 /** Stays mounted after the link goes, so its message can still be read. */
 function RemoveLink({ roomId, feed }: { roomId: string; feed: FeedView }) {
+  const { channels: s } = useAdminI18n();
+
   const [state, formAction, pending] = useActionState(removeFeed, idleState);
   if (!feed.maskedUrl && state.status === "idle") return null;
 
@@ -101,6 +104,8 @@ function RemoveLink({ roomId, feed }: { roomId: string; feed: FeedView }) {
  * the last stay goes, so its message can still be read.
  */
 function FreeDates({ roomId, feed }: { roomId: string; feed: FeedView }) {
+  const { channels: s } = useAdminI18n();
+
   const [state, formAction, pending] = useActionState(freeFeedDates, idleState);
   const canFree = !feed.maskedUrl && feed.futureStays > 0;
   if (!canFree) return <FormMessage state={state} />;
@@ -128,6 +133,8 @@ export function SyncButton({
   label: string;
   channel?: string;
 }) {
+  const { channels: s } = useAdminI18n();
+
   return (
     <ActionForm
       action={runSyncNow}
@@ -140,6 +147,8 @@ export function SyncButton({
 }
 
 export function FeedCard({ roomId, feed }: { roomId: string; feed: FeedView }) {
+  const { channels: s, formatStamp: formatMoment } = useAdminI18n();
+
   const name = s.names[feed.channel];
   return (
     <section className="channel-section" data-channel={feed.channel}>

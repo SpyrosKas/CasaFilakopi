@@ -1,5 +1,6 @@
 "use server";
 
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { revalidatePath } from "next/cache";
 import { writeAudit } from "@/lib/admin/audit";
 import {
@@ -10,7 +11,6 @@ import {
   type ActionState,
 } from "@/lib/admin/form-state";
 import { requireOwner, type AdminContext } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import { createAdminClient } from "@/lib/db/admin";
 import { athensDate } from "@/lib/domain/dates";
 import { getPublicEnv } from "@/lib/env";
@@ -26,7 +26,6 @@ import {
 import { SETTINGS_KEY } from "./settings";
 import { isOwnSite } from "./safe-url";
 import { createChannelStore, saveFeedLink } from "./store";
-import { channelStrings as s } from "./strings";
 import { syncNow } from "./sync";
 import { CHANNELS, type Channel } from "./types";
 
@@ -55,9 +54,11 @@ export async function saveGeneral(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t, channels: s } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = generalSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { enabled, airbnb, booking_com, other_ical } = parsed.data;
 
   if (enabled) {
@@ -91,9 +92,11 @@ export async function saveFeed(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t, channels: s } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = feedSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { roomId, channel, url } = parsed.data;
 
   if (isOwnSite(url, getPublicEnv().NEXT_PUBLIC_SITE_URL)) {
@@ -137,9 +140,11 @@ export async function removeFeed(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t, channels: s } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = removeFeedSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
 
   try {
     await assertOwnerRole(admin);
@@ -172,9 +177,11 @@ export async function freeFeedDates(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, channels: s, t } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = removeFeedSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
 
   let freed: number;
   try {
@@ -212,9 +219,11 @@ export async function runSyncNow(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t, channels: s } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = syncNowSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
 
   let report;
   try {
@@ -265,9 +274,11 @@ export async function regenerateExport(
   _previous: ExportState,
   formData: FormData,
 ): Promise<ExportState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = tokenSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
 
   const token = createExportToken();
   try {

@@ -1,7 +1,8 @@
 import "server-only";
 import type { ActionState } from "@/lib/admin/form-state";
 import { errorState } from "@/lib/admin/form-state";
-import { ADMIN_LANGUAGE, t } from "@/lib/admin/strings";
+import { lookup, type AdminI18n } from "@/lib/admin/i18n";
+import type { AdminStrings } from "@/lib/admin/strings";
 import { createAdminClient } from "@/lib/db/admin";
 import { buildPriceBreakdown, QuoteError } from "@/lib/domain/breakdown";
 import type {
@@ -18,7 +19,6 @@ import {
   createPricingService,
 } from "@/lib/domain/services";
 import { parseBookingSettings, parsePaymentRules } from "@/lib/domain/settings";
-import { nightsWord } from "@/lib/admin/format";
 
 // Server helpers shared by the booking actions. Every price comes from
 // lib/domain, on the server. Settings and rates are read with the secret key,
@@ -39,19 +39,22 @@ export interface PreviewState extends ActionState {
 }
 
 /** The plain sentence for a message raised by the database. */
-export function dbErrorMessage(error: unknown): string {
+export function dbErrorMessage(error: unknown, t: AdminStrings): string {
   const code = (error as { message?: unknown } | null)?.message;
   return (
-    (typeof code === "string" ? t.act.errors[code] : undefined) ??
+    (typeof code === "string" ? lookup(t.act.errors, code) : undefined) ??
     t.common.somethingWrong
   );
 }
 
-export const dbErrorState = (error: unknown): ActionState =>
-  errorState(dbErrorMessage(error));
+export const dbErrorState = (error: unknown, t: AdminStrings): ActionState =>
+  errorState(dbErrorMessage(error, t));
 
-const lineLabel = (line: PriceBreakdown["lines"][number]): string => {
-  const name = line.label[ADMIN_LANGUAGE] ?? Object.values(line.label)[0] ?? "";
+const lineLabel = (
+  line: PriceBreakdown["lines"][number],
+  { lang, nightsWord }: AdminI18n,
+): string => {
+  const name = line.label[lang] ?? Object.values(line.label)[0] ?? "";
   return line.kind === "accommodation"
     ? `${name}, ${nightsWord(line.quantity)}`
     : name;
@@ -154,6 +157,7 @@ export async function quoteForAdmin(
     ownDatesAllowed: boolean;
     now?: Date;
   },
+  t: AdminStrings,
 ): Promise<QuoteResult> {
   const client = createAdminClient();
   const now = options.now ?? new Date();
@@ -167,7 +171,8 @@ export async function quoteForAdmin(
     if (error instanceof QuoteError) {
       return {
         ok: false,
-        message: t.stayForm.quoteError[error.code] ?? t.common.somethingWrong,
+        message:
+          lookup(t.stayForm.quoteError, error.code) ?? t.common.somethingWrong,
       };
     }
     throw error;
@@ -193,7 +198,7 @@ export async function quoteForAdmin(
     if (check.reason === "invalid_dates") {
       warnings.push(t.stayForm.warnPast);
     } else {
-      const reason = t.stayForm.warnReason[check.reason];
+      const reason = lookup(t.stayForm.warnReason, check.reason);
       if (reason) warnings.push(reason, t.stayForm.warnAllowed);
     }
   }
@@ -204,11 +209,12 @@ export async function quoteForAdmin(
 export function toPreview(
   breakdown: PriceBreakdown,
   warnings: string[],
+  i18n: AdminI18n,
 ): PricePreview {
   return {
     totalCents: breakdown.totalCents,
     lines: breakdown.lines.map((line) => ({
-      label: lineLabel(line),
+      label: lineLabel(line, i18n),
       cents: line.totalCents,
     })),
     warnings,

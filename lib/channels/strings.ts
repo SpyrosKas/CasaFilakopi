@@ -1,11 +1,12 @@
 import type { Channel, SyncErrorCode } from "./types";
 
-// Every word of the Channel sync screens. Plain language for Yorgos.
+// Every English word of the Channel sync screens. Plain language for Yorgos.
+// The Greek is in strings.el.ts, typed against this object.
 
 const failureHelp =
   "Check the link still works. Until a sync succeeds, new bookings on that site will not reach this calendar.";
 
-export const channelStrings = {
+export const channelsEn = {
   title: "Channel sync",
   intro:
     "Keeps Airbnb, Booking.com and this website showing the same taken dates, so the house is not sold twice.",
@@ -213,3 +214,5 @@ export const channelStrings = {
     interrupted: "The sync stopped part-way. It will try again.",
   } satisfies Record<SyncErrorCode, string>,
 };
+
+export type ChannelStrings = typeof channelsEn;

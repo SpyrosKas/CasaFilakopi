@@ -1,21 +1,33 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { AdminLanguageProvider } from "@/components/admin/language-provider";
+import { adminI18n, adminLanguage } from "@/lib/admin/i18n-server";
 import "./admin.css";
 
-export const metadata: Metadata = {
-  title: "Casa Filakopi Admin",
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await adminI18n();
+  return {
+    title: t.common.panelName,
+    robots: { index: false, follow: false },
+  };
+}
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
 };
 
-export default function AdminLayout({ children }: { children: ReactNode }) {
+export default async function AdminLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const lang = await adminLanguage();
   return (
-    <html lang="en">
-      <body className="admin">{children}</body>
+    <html lang={lang}>
+      <body className="admin">
+        <AdminLanguageProvider lang={lang}>{children}</AdminLanguageProvider>
+      </body>
     </html>
   );
 }

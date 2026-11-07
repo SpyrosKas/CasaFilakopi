@@ -6,7 +6,26 @@ export default defineConfig({
   testDir: "tests/e2e",
   globalSetup: "./tests/e2e/global-setup.ts",
   timeout: 60_000,
-  use: { baseURL: `http://localhost:${port}` },
+  use: {
+    baseURL: `http://localhost:${port}`,
+    // Admin is Greek by default (D25). Specs match the English text, so they
+    // ask for English. tests/e2e/admin-greek.spec.ts clears this.
+    storageState: {
+      cookies: [
+        {
+          name: "admin_lang",
+          value: "en",
+          domain: "localhost",
+          path: "/",
+          expires: -1,
+          httpOnly: false,
+          secure: false,
+          sameSite: "Lax",
+        },
+      ],
+      origins: [],
+    },
+  },
   webServer: {
     command: "pnpm dev",
     env: { CMS_TEST_PAGE: "1", CRON_SECRET: "cms-e2e-cron" },

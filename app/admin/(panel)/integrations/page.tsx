@@ -1,3 +1,4 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { ChannelAlertsPanel } from "@/components/admin/integrations/channel-alerts";
 import { ExportLinks } from "@/components/admin/integrations/export-links";
 import {
@@ -9,12 +10,13 @@ import { SyncLog } from "@/components/admin/integrations/sync-log";
 import { requireOwner } from "@/lib/admin/session";
 import { loadHouse } from "@/lib/admin/settings-data";
 import { loadIntegrations } from "@/lib/channels/data";
-import { channelStrings as s } from "@/lib/channels/strings";
 
 // Sync now runs inside this page's server action.
 export const maxDuration = 60;
 
 export default async function IntegrationsPage() {
+  const { channels: s } = await adminI18n();
+
   const admin = await requireOwner();
   const house = await loadHouse(admin);
 

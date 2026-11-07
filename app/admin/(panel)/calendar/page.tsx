@@ -1,14 +1,11 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { AvailabilityCalendar } from "@/components/admin/calendars";
 import { Empty, PageHead, Panel } from "@/components/admin/ui";
 import { buildMonth, isMonthKey, type NightKind } from "@/lib/admin/calendar";
-import { formatStay } from "@/lib/admin/format";
 import { requireAdmin } from "@/lib/admin/session";
 import { loadBlocks, loadStayBook } from "@/lib/admin/stay-data";
-import { t } from "@/lib/admin/strings";
 import { athensDate, isValidIsoDate } from "@/lib/domain/dates";
-
-const c = t.calendar;
 
 const LEGEND: NightKind[] = [
   "free",
@@ -28,6 +25,9 @@ export default async function CalendarPage({
     from?: string | string[];
   }>;
 }) {
+  const { t, formatStay } = await adminI18n();
+  const c = t.calendar;
+
   const admin = await requireAdmin();
   const today = athensDate(new Date());
   const query = await searchParams;

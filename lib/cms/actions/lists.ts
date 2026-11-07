@@ -1,5 +1,6 @@
 "use server";
 
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { revalidatePath } from "next/cache";
 import { requireOwner, type AdminContext } from "@/lib/admin/session";
 import { loadList, type ListEntry } from "@/lib/cms/data";
@@ -11,8 +12,9 @@ import {
   listStatusSchema,
   type ListKind,
 } from "@/lib/cms/schemas";
-import { t } from "@/lib/cms/strings";
 import type { Json } from "@/lib/db/types";
+import { later } from "@/lib/admin/later";
+import type { CmsStrings } from "@/lib/cms/strings";
 
 // Questions, reviews and places. These tables have a status and no separate
 // draft copy, so a saved change to a published entry is live, and the screen
@@ -22,10 +24,12 @@ export type ListResult =
   | { ok: true; entries: ListEntry[]; message: string; newId?: string }
   | { ok: false; message: string };
 
-const failed = (message: string = t.common.somethingWrong): ListResult => ({
-  ok: false,
-  message,
-});
+const failure =
+  (t: CmsStrings) =>
+  (message: string = t.common.somethingWrong): ListResult => ({
+    ok: false,
+    message,
+  });
 
 const publicPage: Record<ListKind, string> = {
   faq: "faq",
@@ -61,11 +65,14 @@ const result = async (
 });
 
 export async function saveListEntry(input: unknown): Promise<ListResult> {
+  const { cms: t } = await adminI18n();
+  const failed = failure(t);
+
   const admin = await requireOwner();
   const parsed = listEntrySchema.safeParse(input);
   if (!parsed.success) {
     const required = parsed.error.issues.some(
-      (issue) => issue.message === t.lists.required,
+      (issue) => issue.message === later.cms.lists.required,
     );
     return failed(required ? t.lists.required : t.common.somethingWrong);
   }
@@ -146,6 +153,9 @@ export async function saveListEntry(input: unknown): Promise<ListResult> {
 }
 
 export async function setListStatus(input: unknown): Promise<ListResult> {
+  const { cms: t } = await adminI18n();
+  const failed = failure(t);
+
   const admin = await requireOwner();
   const parsed = listStatusSchema.safeParse(input);
   if (!parsed.success) return failed();
@@ -168,6 +178,9 @@ export async function setListStatus(input: unknown): Promise<ListResult> {
 }
 
 export async function deleteListEntry(input: unknown): Promise<ListResult> {
+  const { cms: t } = await adminI18n();
+  const failed = failure(t);
+
   const admin = await requireOwner();
   const parsed = listDeleteSchema.safeParse(input);
   if (!parsed.success) return failed();
@@ -184,6 +197,9 @@ export async function deleteListEntry(input: unknown): Promise<ListResult> {
 
 /** Writes every position in one statement, so a reorder lands whole. */
 export async function reorderList(input: unknown): Promise<ListResult> {
+  const { cms: t } = await adminI18n();
+  const failed = failure(t);
+
   const admin = await requireOwner();
   const parsed = listReorderSchema.safeParse(input);
   if (!parsed.success) return failed();

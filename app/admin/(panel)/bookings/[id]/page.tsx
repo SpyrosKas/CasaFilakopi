@@ -1,3 +1,4 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -25,12 +26,6 @@ import {
   recordRefund,
   saveNotes,
 } from "@/lib/admin/actions/bookings";
-import {
-  formatDate,
-  formatEuro,
-  formatStamp,
-  nightsWord,
-} from "@/lib/admin/format";
 import { messageTemplates } from "@/lib/admin/message-templates";
 import { requireAdmin } from "@/lib/admin/session";
 import {
@@ -46,32 +41,40 @@ import {
   refundableOf,
   stayFromBooking,
 } from "@/lib/admin/stays";
-import { ADMIN_LANGUAGE, t } from "@/lib/admin/strings";
 import type { PriceBreakdown } from "@/lib/domain/contracts";
 import { athensDate } from "@/lib/domain/dates";
+import type { AdminI18n } from "@/lib/admin/i18n";
 
-const d = t.detail;
-const a = t.act;
+const manualMethods = ({ t }: AdminI18n) =>
+  (["cash", "bank_transfer", "pos"] as const).map((value) => ({
+    value,
+    label: t.stay.method[value],
+  }));
 
-const manualMethods = (["cash", "bank_transfer", "pos"] as const).map(
-  (value) => ({ value, label: t.stay.method[value] }),
-);
-
-function priceLines(breakdown: unknown, total: number) {
+function priceLines(
+  breakdown: unknown,
+  total: number,
+  { t, lang, formatEuro }: AdminI18n,
+) {
+  const d = t.detail;
   const lines = (breakdown as Partial<PriceBreakdown> | null)?.lines ?? [];
   return [
     ...lines.map((line) => ({
       label:
         line.kind === "accommodation"
           ? d.lineNights(line.quantity, formatEuro(line.unitCents))
-          : (line.label[ADMIN_LANGUAGE] ?? ""),
+          : (line.label[lang] ?? Object.values(line.label)[0] ?? ""),
       value: formatEuro(line.totalCents),
     })),
     { label: d.priceTotal, value: formatEuro(total), strong: true },
   ];
 }
 
-const historyLabel = (entry: HistoryEntry): string => {
+const historyLabel = (
+  entry: HistoryEntry,
+  { t, formatEuro }: AdminI18n,
+): string => {
+  const d = t.detail;
   const amount =
     typeof entry.after?.amount_cents === "number"
       ? formatEuro(entry.after.amount_cents)
@@ -87,6 +90,11 @@ export default async function BookingPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const i18n = await adminI18n();
+  const { t, formatEuro, formatDate, nightsWord, formatStamp } = i18n;
+  const a = t.act;
+  const d = t.detail;
+
   const admin = await requireAdmin();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
@@ -132,7 +140,7 @@ export default async function BookingPage({
     <div className="stack">
       <BackLink href="/admin/bookings" label={d.backToList} />
       <PageHead
-        title={stayName(stay)}
+        title={stayName(stay, i18n)}
         intro={
           booking.reference ? d.reference(booking.reference) : d.noReference
         }
@@ -278,7 +286,11 @@ export default async function BookingPage({
         <div className="stack">
           <Panel title={d.price}>
             <MoneyLines
-              lines={priceLines(booking.price_breakdown, booking.total_cents)}
+              lines={priceLines(
+                booking.price_breakdown,
+                booking.total_cents,
+                i18n,
+              )}
             />
           </Panel>
 
@@ -375,7 +387,7 @@ export default async function BookingPage({
                   label={a.method}
                   name="method"
                   defaultValue="cash"
-                  options={manualMethods}
+                  options={manualMethods(i18n)}
                 />
                 <Field label={a.noteOptional} name="note" />
               </ActionForm>
@@ -430,12 +442,17 @@ export default async function BookingPage({
         target="booking"
         id={id}
         email={booking.guest_email}
-        templates={messageTemplates({
-          name: booking.guest_name,
-          reference: booking.reference,
-          checkIn: booking.check_in,
-          checkOut: booking.check_out,
-        })}
+        locale={booking.locale}
+        templates={messageTemplates(
+          {
+            name: booking.guest_name,
+            reference: booking.reference,
+            checkIn: booking.check_in,
+            checkOut: booking.check_out,
+            locale: booking.locale,
+          },
+          i18n,
+        )}
       />
       <SentMessages messages={emails} />
       <GuestMessages messages={messages} />
@@ -445,7 +462,7 @@ export default async function BookingPage({
           {history.length > 0
             ? history.map((entry) => (
                 <li key={entry.id}>
-                  <span>{historyLabel(entry)}</span>
+                  <span>{historyLabel(entry, i18n)}</span>
                   <span className="row-sub">
                     {formatStamp(entry.at)}
                     {entry.actor ? `, ${d.by(entry.actor)}` : ""}

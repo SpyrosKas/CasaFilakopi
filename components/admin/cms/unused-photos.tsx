@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdminI18n } from "@/components/admin/language-provider";
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
@@ -10,9 +11,6 @@ import {
   type PhotoResult,
 } from "@/lib/cms/actions/photos";
 import type { PhotoItem } from "@/lib/cms/data";
-import { t } from "@/lib/cms/strings";
-
-const p = t.photos;
 
 export function UnusedPhotos({
   initialItems,
@@ -21,6 +19,9 @@ export function UnusedPhotos({
   initialItems: PhotoItem[];
   sections: { id: string; label: string }[];
 }) {
+  const { cms: t } = useAdminI18n();
+  const p = t.photos;
+
   const [items, setItems] = useState(initialItems);
   const [deleting, setDeleting] = useState<PhotoItem | null>(null);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(

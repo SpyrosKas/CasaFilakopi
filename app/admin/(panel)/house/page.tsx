@@ -1,10 +1,12 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { ActionForm, Field, TextAreaField } from "@/components/admin/form";
 import { saveHouse } from "@/lib/admin/actions/settings";
 import { requireOwner } from "@/lib/admin/session";
 import { loadHouse } from "@/lib/admin/settings-data";
-import { t } from "@/lib/admin/strings";
 
 export default async function HousePage() {
+  const { t } = await adminI18n();
+
   const admin = await requireOwner();
   const house = await loadHouse(admin);
   const h = t.house;

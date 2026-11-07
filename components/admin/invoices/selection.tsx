@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdminI18n } from "@/components/admin/language-provider";
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { MarkSentForm } from "@/components/admin/invoices/mark-sent-form";
@@ -10,7 +11,6 @@ import {
   useSelection,
   type SelectedDocument,
 } from "@/components/admin/invoices/selection-store";
-import { t } from "@/lib/admin/strings";
 import {
   reviewSelection,
   selectMatching,
@@ -19,8 +19,6 @@ import {
 import { SELECTION_LIMIT } from "@/lib/invoicing/filters";
 import { formatEuro } from "@/lib/invoicing/format";
 
-const s = t.invoices.selection;
-
 export function RowCheckbox({
   document,
   number,
@@ -28,6 +26,9 @@ export function RowCheckbox({
   document: SelectedDocument;
   number: string;
 }) {
+  const { t } = useAdminI18n();
+  const s = t.invoices.selection;
+
   const selected = useSelection();
   return (
     <label className="inv-check">
@@ -50,6 +51,9 @@ export function SelectionTools({
   matchingCount: number;
   query: string;
 }) {
+  const { t } = useAdminI18n();
+  const s = t.invoices.selection;
+
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -101,6 +105,9 @@ function Warnings({
 }: {
   review: Extract<ReviewResult, { status: "ok" }>;
 }) {
+  const { t } = useAdminI18n();
+  const s = t.invoices.selection;
+
   return (
     <>
       {review.missingPdf.length > 0 && (
@@ -146,6 +153,9 @@ function Warnings({
 type Step = "download" | "mark";
 
 export function SelectionBar({ query }: { query: string }) {
+  const { t } = useAdminI18n();
+  const s = t.invoices.selection;
+
   const selected = useSelection();
   const form = useRef<HTMLFormElement>(null);
   const [panel, setPanel] = useState<{

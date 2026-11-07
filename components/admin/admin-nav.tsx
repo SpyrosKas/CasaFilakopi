@@ -3,32 +3,36 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useAdminI18n } from "@/components/admin/language-provider";
+import { LanguageSwitch } from "@/components/admin/language-switch";
 import { logout } from "@/lib/admin/actions/auth";
-import { t } from "@/lib/admin/strings";
+import type { AdminStrings } from "@/lib/admin/strings";
 
-const TAB_LINKS = [
-  { href: "/admin", label: t.nav.home },
-  { href: "/admin/bookings", label: t.nav.bookings },
-  { href: "/admin/calendar", label: t.nav.calendar },
-  { href: "/admin/messages", label: t.nav.messages },
+type NavKey = keyof AdminStrings["nav"];
+
+const TAB_LINKS: { href: string; key: NavKey }[] = [
+  { href: "/admin", key: "home" },
+  { href: "/admin/bookings", key: "bookings" },
+  { href: "/admin/calendar", key: "calendar" },
+  { href: "/admin/messages", key: "messages" },
 ];
 
-const STAFF_LINKS = [
-  { href: "/admin/guests", label: t.nav.guests },
-  { href: "/admin/rates/restrictions", label: t.nav.restrictions },
+const STAFF_LINKS: { href: string; key: NavKey }[] = [
+  { href: "/admin/guests", key: "guests" },
+  { href: "/admin/rates/restrictions", key: "restrictions" },
 ];
 
-const OWNER_LINKS = [
-  { href: "/admin/reports", label: t.nav.reports },
-  { href: "/admin/rates", label: t.nav.rates },
-  { href: "/admin/content", label: t.nav.content },
-  { href: "/admin/property", label: t.nav.property },
-  { href: "/admin/house", label: t.nav.house },
-  { href: "/admin/booking", label: t.nav.booking },
-  { href: "/admin/rules", label: t.nav.rules },
-  { href: "/admin/invoices", label: t.nav.invoices },
-  { href: "/admin/integrations", label: t.nav.integrations },
-  { href: "/admin/email", label: t.nav.email },
+const OWNER_LINKS: { href: string; key: NavKey }[] = [
+  { href: "/admin/reports", key: "reports" },
+  { href: "/admin/rates", key: "rates" },
+  { href: "/admin/content", key: "content" },
+  { href: "/admin/property", key: "property" },
+  { href: "/admin/house", key: "house" },
+  { href: "/admin/booking", key: "booking" },
+  { href: "/admin/rules", key: "rules" },
+  { href: "/admin/invoices", key: "invoices" },
+  { href: "/admin/integrations", key: "integrations" },
+  { href: "/admin/email", key: "email" },
 ];
 
 // The slash matters: /admin/bookings is not under /admin/booking.
@@ -36,13 +40,15 @@ const isHere = (pathname: string, href: string) =>
   pathname === href || (href !== "/admin" && pathname.startsWith(`${href}/`));
 
 export function AdminNav({ isOwner }: { isOwner: boolean }) {
+  const { t } = useAdminI18n();
+
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
   const links = [
     ...STAFF_LINKS,
     ...(isOwner ? OWNER_LINKS : []),
-    { href: "/admin/account", label: t.nav.account },
+    { href: "/admin/account", key: "account" as const },
   ];
   // /admin/rates/restrictions sits under /admin/rates, so the longest match wins.
   const here = links
@@ -64,16 +70,17 @@ export function AdminNav({ isOwner }: { isOwner: boolean }) {
                 aria-current={link.href === here ? "page" : undefined}
                 onClick={() => setOpen(false)}
               >
-                {link.label}
+                {t.nav[link.key]}
               </Link>
             </li>
           ))}
-          <li>
+          <li className="menu-language">
             <form action={logout}>
               <button type="submit" className="menu-signout">
                 {t.nav.signOut}
               </button>
             </form>
+            <LanguageSwitch />
           </li>
         </ul>
       </div>
@@ -87,7 +94,7 @@ export function AdminNav({ isOwner }: { isOwner: boolean }) {
               aria-current={isHere(pathname, link.href) ? "page" : undefined}
               onClick={() => setOpen(false)}
             >
-              {link.label}
+              {t.nav[link.key]}
             </Link>
           </li>
         ))}

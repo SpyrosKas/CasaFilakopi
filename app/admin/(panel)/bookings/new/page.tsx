@@ -1,13 +1,14 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { Field, SelectField, TextAreaField } from "@/components/admin/form";
 import { PriceCheckForm } from "@/components/admin/price-check-form";
 import { BackLink, PageHead } from "@/components/admin/ui";
 import { createBooking, previewNewBooking } from "@/lib/admin/actions/bookings";
 import { requireAdmin } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
-
-const s = t.stayForm;
 
 export default async function NewBookingPage() {
+  const { t } = await adminI18n();
+  const s = t.stayForm;
+
   await requireAdmin();
 
   return (

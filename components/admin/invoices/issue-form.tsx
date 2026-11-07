@@ -1,12 +1,10 @@
 "use client";
 
+import { useAdminI18n } from "@/components/admin/language-provider";
 import { useState } from "react";
 import { ActionForm, Field } from "@/components/admin/form";
-import { t } from "@/lib/admin/strings";
 import { issueDocument } from "@/lib/invoicing/actions";
 import type { IssuableDocType } from "@/lib/invoicing/types";
-
-const s = t.invoices.issue;
 
 export function IssueForm({
   paymentId,
@@ -18,6 +16,9 @@ export function IssueForm({
   /** Characters in the guest's name that the PDF cannot show. */
   unprintable: string[];
 }) {
+  const { t } = useAdminI18n();
+  const s = t.invoices.issue;
+
   const [docType, setDocType] = useState<IssuableDocType>(defaultType);
   const options = [
     {

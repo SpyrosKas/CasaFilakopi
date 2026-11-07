@@ -1,7 +1,8 @@
-import { t } from "@/lib/cms/strings";
+import { adminI18n } from "@/lib/admin/i18n-server";
 
 /** Only ever rendered for a signed-in Owner in preview. */
-export function PreviewBanner() {
+export async function PreviewBanner() {
+  const { cms: t } = await adminI18n();
   return (
     <div
       role="status"

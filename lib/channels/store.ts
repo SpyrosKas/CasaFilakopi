@@ -2,7 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database, Json } from "../db/types";
 import { parseChannelSettings, SETTINGS_KEY } from "./settings";
-import { channelStrings } from "./strings";
+import { loadEmailSettings } from "@/lib/email/settings";
+import { channelsEn, type ChannelStrings } from "./strings";
+import { channelsEl } from "./strings.el";
 import type { ChannelStore, ClaimOnRoom, Feed, HostAlert } from "./sync";
 import { isChannel, type Channel } from "./types";
 
@@ -36,7 +38,10 @@ export function parseStay(stay: unknown): { start: string; end: string } {
  * `error` says what really happened. calendar_id and alert_kind are not used by
  * the templates: they are how a repeat is found.
  */
-function alertEmail(alert: HostAlert): {
+function alertEmail(
+  alert: HostAlert,
+  channelStrings: ChannelStrings,
+): {
   template_key: "host_sync_conflict" | "host_sync_failure";
   payload: NonNullable<Json>;
 } {
@@ -343,8 +348,12 @@ export function createChannelStore(db: Db): ChannelStore {
       if (error) throw error;
       if (!data?.email) return false;
 
+      // The sentence goes into the host's email, so it is in their language.
+      const { hostLocale } = await loadEmailSettings(db);
+      const words = hostLocale === "el" ? channelsEl : channelsEn;
       const { error: insertError } = await db.from("email_logs").insert({
-        ...alertEmail(alert),
+        ...alertEmail(alert, words),
+        locale: hostLocale,
         recipient: data.email,
         status: "queued",
       });

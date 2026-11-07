@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { adminI18n } from "@/lib/admin/i18n-server";
 import {
   PageEditor,
   type EditorPhoto,
@@ -12,9 +13,11 @@ type Props = { params: Promise<{ slug: string }> };
 
 export default async function EditContentPage({ params }: Props) {
   const admin = await requireOwner();
+  const { sayAll } = await adminI18n();
   const { slug } = await params;
-  const page = findPage(slug);
-  if (!page) notFound();
+  const found = findPage(slug);
+  if (!found) notFound();
+  const page = sayAll(found);
 
   const { blocks, dirty, versions, hasPrevious } = await loadEditor(
     admin,

@@ -1,9 +1,11 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { RulesForm } from "@/components/admin/rules-form";
 import { requireOwner } from "@/lib/admin/session";
 import { loadRules } from "@/lib/admin/settings-data";
-import { t } from "@/lib/admin/strings";
 
 export default async function RulesPage() {
+  const { t } = await adminI18n();
+
   const admin = await requireOwner();
   const { rules, unreadable } = await loadRules(admin);
 

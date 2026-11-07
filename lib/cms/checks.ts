@@ -1,4 +1,4 @@
-import { t } from "@/lib/cms/strings";
+import type { CmsStrings } from "@/lib/cms/strings";
 import {
   LANGS,
   type BlockData,
@@ -25,6 +25,7 @@ export function emptyLanguage(
 export function findMissingRequired(
   page: PageDef,
   blocks: Record<string, BlockData | undefined>,
+  t: CmsStrings,
 ): string[] {
   const found: string[] = [];
   const check = (
@@ -62,6 +63,7 @@ export function findMissingRequired(
 export function findEmptyLanguages(
   page: PageDef,
   blocks: Record<string, BlockData | undefined>,
+  t: CmsStrings,
 ): string[] {
   const found: string[] = [];
   for (const section of page.sections) {

@@ -1,4 +1,4 @@
-import { t } from "@/lib/cms/strings";
+import { later } from "@/lib/admin/later";
 import type {
   ChoiceDef,
   CollectionDef,
@@ -8,7 +8,8 @@ import type {
   SectionDef,
 } from "@/lib/cms/types";
 
-const l = t.labels;
+// Labels are markers: a page puts them into words with `sayAll`.
+const l = later.cms.labels;
 
 // The map of everything Yorgos can edit: each page, its sections in the order
 // they appear on the page, and a plain label for every field. The editor is

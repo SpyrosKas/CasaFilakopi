@@ -1,10 +1,12 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { ActionForm, Field } from "@/components/admin/form";
 import { saveProperty } from "@/lib/admin/actions/settings";
 import { requireOwner } from "@/lib/admin/session";
 import { loadProperty } from "@/lib/admin/settings-data";
-import { t } from "@/lib/admin/strings";
 
 export default async function PropertyPage() {
+  const { t } = await adminI18n();
+
   const admin = await requireOwner();
   const property = await loadProperty(admin);
   const p = t.property;

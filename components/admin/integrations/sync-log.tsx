@@ -1,8 +1,9 @@
-import { formatMoment } from "@/components/admin/integrations/format";
+import { adminI18n } from "@/lib/admin/i18n-server";
 import type { SyncLogView } from "@/lib/channels/data";
-import { channelStrings as s } from "@/lib/channels/strings";
 
-export function SyncLog({ rows }: { rows: SyncLogView[] }) {
+export async function SyncLog({ rows }: { rows: SyncLogView[] }) {
+  const { channels: s, formatStamp: formatMoment } = await adminI18n();
+
   return (
     <section className="channel-section" data-testid="sync-log">
       <h2>{s.log.heading}</h2>

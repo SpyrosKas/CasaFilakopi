@@ -1,13 +1,14 @@
 "use client";
 
+import { useAdminI18n } from "@/components/admin/language-provider";
 import { useActionState, useState } from "react";
 import { FormMessage } from "@/components/admin/form";
-import { formatMoment } from "@/components/admin/integrations/format";
 import { idleState } from "@/lib/admin/form-state";
 import { regenerateExport, type ExportState } from "@/lib/channels/actions";
-import { channelStrings as s } from "@/lib/channels/strings";
 
 function CopyButton({ text }: { text: string }) {
+  const { channels: s } = useAdminI18n();
+
   const [label, setLabel] = useState(s.export.copy);
 
   const copy = async () => {
@@ -38,6 +39,8 @@ export function ExportLinks({
   roomId: string;
   createdAt: string | null;
 }) {
+  const { channels: s, formatStamp: formatMoment } = useAdminI18n();
+
   const [state, formAction, pending] = useActionState<ExportState, FormData>(
     regenerateExport,
     idleState,
