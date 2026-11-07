@@ -820,6 +820,79 @@ describe("details added to imported bookings (D19)", () => {
       ),
     ).rejects.toThrow(/permission denied/);
   });
+
+  it("no signed-in session reads the amount directly", async () => {
+    const { eventId } = await importEvent();
+    await save(eventId, 42000);
+    const staff = await createAdmin("staff");
+    await expect(
+      admin(staff.id, "aal1", (c) =>
+        c.query(`select amount_cents from public.external_events`),
+      ),
+    ).rejects.toThrow(/permission denied/);
+    const contacts = await admin(staff.id, "aal1", (c) =>
+      c.query(`select guest_name from public.external_events where id = $1`, [
+        eventId,
+      ]),
+    );
+    expect(contacts.rows[0].guest_name).toBe("Maria");
+  });
+
+  it("saving contacts can leave the amount alone", async () => {
+    const { eventId } = await importEvent();
+    await save(eventId, 42000);
+    await db.query(
+      `select public.update_external_event_details($1, 'New', null, null, null, 1, null, false)`,
+      [eventId],
+    );
+    const { rows } = await db.query(
+      `select guest_name, amount_cents from public.external_events where id = $1`,
+      [eventId],
+    );
+    expect(rows[0]).toEqual({ guest_name: "New", amount_cents: 42000 });
+  });
+});
+
+describe("ADMIN-OPS review fixes", () => {
+  it("dates a refund when it completes", async () => {
+    const { id, paymentId } = await paid();
+    const reserved = await db.query(
+      `select public.reserve_refund($1, $2, 100) as r`,
+      [id, paymentId],
+    );
+    const refundId = reserved.rows[0].r as string;
+    const settled = async () =>
+      (
+        await db.query(`select settled_at from public.refunds where id = $1`, [
+          refundId,
+        ])
+      ).rows[0].settled_at;
+
+    expect(await settled()).toBeNull();
+    await db.query(`select public.settle_refund($1, 'succeeded')`, [refundId]);
+    expect(await settled()).not.toBeNull();
+
+    const direct = await db.query(
+      `select public.record_refund($1, $2, 100) as r`,
+      [id, paymentId],
+    );
+    const { rows } = await db.query(
+      `select settled_at from public.refunds where id = $1`,
+      [direct.rows[0].r],
+    );
+    expect(rows[0].settled_at).not.toBeNull();
+  });
+
+  it("counts a disputed payment toward the hand-entered cap", async () => {
+    const { id, paymentId } = await paid();
+    await db.query(
+      `update public.payments set status = 'disputed' where id = $1`,
+      [paymentId],
+    );
+    await expect(
+      db.query(`select public.record_payment($1, 'extra', 'cash', 100)`, [id]),
+    ).rejects.toThrow("overpayment");
+  });
 });
 
 describe("booking notes and price history", () => {
