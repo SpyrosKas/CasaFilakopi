@@ -44,15 +44,26 @@ export const countWord = (
   locale: EmailLocale,
 ) => `${count} ${WORDS[kind][locale][count === 1 ? 0 : 1]}`;
 
-function refundWords(percent: number, locale: EmailLocale): string {
-  if (locale === "el") {
-    return percent === 0
-      ? "δεν επιστρέφεται κάποιο ποσό"
-      : `επιστρέφεται το ${percent}% της αξίας της κράτησης`;
+/**
+ * Mirrors calculateRefund: a tier sets a charge, a share of the booking price.
+ * What the guest paid above the charge comes back, and a shortfall is never
+ * collected (D24). So "kept" is a ceiling, not an amount the guest must find.
+ */
+function outcomeWords(refundPercent: number, locale: EmailLocale): string {
+  const kept = Math.round((100 - refundPercent) * 100) / 100;
+  if (kept <= 0) {
+    return locale === "el"
+      ? "δεν κρατείται κάποιο ποσό και επιστρέφεται ό,τι έχετε πληρώσει"
+      : "nothing is kept, and everything you have paid is refunded";
   }
-  return percent === 0
-    ? "no refund"
-    : `${percent}% of the booking price is refunded`;
+  if (kept >= 100) {
+    return locale === "el"
+      ? "κρατούμε ό,τι έχετε πληρώσει, έως το πλήρες ποσό της κράτησης. Δεν οφείλετε κάτι επιπλέον"
+      : "we keep what you have paid, up to the full booking price. Nothing further is owed";
+  }
+  return locale === "el"
+    ? `κρατούμε ό,τι έχετε πληρώσει, έως το ${kept}% της αξίας της κράτησης. Ό,τι έχετε πληρώσει πέραν αυτού επιστρέφεται και δεν οφείλετε κάτι επιπλέον`
+    : `we keep what you have paid, up to ${kept}% of the booking price. Anything you have paid above that is refunded, and nothing further is owed`;
 }
 
 /** further is the next tier further from arrival, if there is one. */
@@ -61,22 +72,22 @@ function tierLine(
   further: CancellationTier | undefined,
   locale: EmailLocale,
 ): string {
-  const refund = refundWords(tier.refundPercent, locale);
+  const outcome = outcomeWords(tier.refundPercent, locale);
   const days = (value: number) => dayCount(value, locale);
 
   if (further) {
     return locale === "el"
-      ? `Ακύρωση λιγότερο από ${days(further.daysBefore)} πριν από την άφιξη: ${refund}.`
-      : `Cancelling less than ${days(further.daysBefore)} before arrival: ${refund}.`;
+      ? `Ακύρωση λιγότερο από ${days(further.daysBefore)} πριν από την άφιξη: ${outcome}.`
+      : `Cancelling less than ${days(further.daysBefore)} before arrival: ${outcome}.`;
   }
   if (tier.daysBefore === 0) {
     return locale === "el"
-      ? `Ακύρωση οποτεδήποτε πριν από την άφιξη: ${refund}.`
-      : `Cancelling any time before arrival: ${refund}.`;
+      ? `Ακύρωση οποτεδήποτε πριν από την άφιξη: ${outcome}.`
+      : `Cancelling any time before arrival: ${outcome}.`;
   }
   return locale === "el"
-    ? `Ακύρωση ${days(tier.daysBefore)} ή περισσότερο πριν από την άφιξη: ${refund}.`
-    : `Cancelling ${days(tier.daysBefore)} or more before arrival: ${refund}.`;
+    ? `Ακύρωση ${days(tier.daysBefore)} ή περισσότερο πριν από την άφιξη: ${outcome}.`
+    : `Cancelling ${days(tier.daysBefore)} or more before arrival: ${outcome}.`;
 }
 
 /**
@@ -91,13 +102,20 @@ export function describeCancellation(
 ): string | null {
   if (!rules) return null;
   if (rules.isNonRefundable) {
+    const outcome = outcomeWords(0, locale);
     return locale === "el"
-      ? "Για αυτή την κράτηση δεν προβλέπεται επιστροφή χρημάτων σε περίπτωση ακύρωσης."
-      : "This booking cannot be refunded if cancelled.";
+      ? `Αν ακυρώσετε, ${outcome}.`
+      : `If you cancel, ${outcome}.`;
   }
   if (!Array.isArray(rules.tiers) || rules.tiers.length === 0) return null;
   const tiers = [...rules.tiers].sort((a, b) => b.daysBefore - a.daysBefore);
-  return tiers
-    .map((tier, index) => tierLine(tier, tiers[index - 1], locale))
-    .join("\n");
+  const lines = tiers.map((tier, index) =>
+    tierLine(tier, tiers[index - 1], locale),
+  );
+  // Past the last tier no tier is in force, which calculateRefund treats as 0%.
+  const last = tiers[tiers.length - 1];
+  if (last.daysBefore > 0) {
+    lines.push(tierLine({ daysBefore: 0, refundPercent: 0 }, last, locale));
+  }
+  return lines.join("\n");
 }

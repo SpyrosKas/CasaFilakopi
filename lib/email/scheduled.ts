@@ -23,8 +23,6 @@ const rulesKey = "scheduled_messages";
 /** Days a rule keeps trying after its date. Stops a new rule mailing old stays. */
 const RULE_CATCH_UP_DAYS = 2;
 const THANK_YOU_CATCH_UP_DAYS = 14;
-/** The earliest stays a run looks at: nothing later than this matters. */
-const LOOK_BACK_DAYS = 30;
 
 const copySchema = z.object({
   subject: z.string().trim().min(1).max(200),
@@ -58,12 +56,14 @@ export async function loadScheduledRules(
     .eq("key", rulesKey)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  const parsed = z.array(ruleSchema).safeParse(data?.value ?? []);
-  if (!parsed.success) {
-    console.error(`scheduled rules unreadable: ${parsed.error.message}`);
+  const stored: unknown[] = Array.isArray(data?.value) ? data.value : [];
+  // One bad rule must not silence the others.
+  return stored.flatMap((value) => {
+    const parsed = ruleSchema.safeParse(value);
+    if (parsed.success) return [parsed.data];
+    console.error(`scheduled rule unreadable: ${parsed.error.message}`);
     return [];
-  }
-  return parsed.data;
+  });
 }
 
 export const SCHEDULED_RULES_KEY = rulesKey;
@@ -98,8 +98,13 @@ export interface ScheduledResult {
   failed: number;
 }
 
-async function loadStays(db: EmailDb, today: IsoDate) {
-  const { data, error } = await db
+async function loadStays(
+  db: EmailDb,
+  today: IsoDate,
+  lookBackDays: number,
+  onlyIds?: string[],
+) {
+  let query = db
     .from("bookings")
     .select(
       "id, status, source, locale, check_in, check_out, total_cents, price_breakdown, guest_email",
@@ -108,7 +113,9 @@ async function loadStays(db: EmailDb, today: IsoDate) {
     .in("status", ["confirmed", "checked_in", "completed"])
     .in("source", ["direct", "manual"])
     .not("guest_email", "is", null)
-    .gte("check_out", addDays(today, -LOOK_BACK_DAYS));
+    .gte("check_out", addDays(today, -lookBackDays));
+  if (onlyIds) query = query.in("id", onlyIds);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data;
 }
@@ -124,9 +131,12 @@ export async function sendScheduledEmails(
   const settings = await loadEmailSettings(db);
   const rules = (await loadScheduledRules(db)).filter((rule) => rule.enabled);
   const sendAt = sendMoment(now, settings);
-  const stays = (await loadStays(db, today)).filter(
-    (stay) => !only || only.bookingIds.includes(stay.id),
+  // The furthest back after check-out that anything could still be due.
+  const lookBackDays = Math.max(
+    settings.thankYouDays + THANK_YOU_CATCH_UP_DAYS,
+    ...rules.map((rule) => Math.abs(rule.offsetDays) + RULE_CATCH_UP_DAYS),
   );
+  const stays = await loadStays(db, today, lookBackDays, only?.bookingIds);
 
   const result: ScheduledResult = {
     today,
@@ -152,7 +162,15 @@ export async function sendScheduledEmails(
     const arrivalNotice = addDays(stay.check_in, -settings.preArrivalDays);
     const beforeArrival = stay.status === "confirmed" && today <= stay.check_in;
     if (beforeArrival && today >= arrivalNotice) {
-      tally(await queueEmailWith(db, "pre_arrival", { bookingId }, { sendAt }));
+      // Keyed by arrival date, so a moved stay gets the new dates (D28).
+      tally(
+        await queueEmailWith(
+          db,
+          "pre_arrival",
+          { bookingId },
+          { sendAt, dedupeKey: `pre_arrival:${bookingId}:${stay.check_in}` },
+        ),
+      );
     }
 
     if (settings.thankYouEnabled) {
@@ -189,6 +207,23 @@ export async function sendScheduledEmails(
   return result;
 }
 
+async function requestPredates(
+  db: EmailDb,
+  bookingId: string,
+  today: IsoDate,
+): Promise<boolean> {
+  const { data, error } = await db
+    .from("email_logs")
+    .select("created_at")
+    .eq("booking_id", bookingId)
+    .eq("template_key", "balance_request")
+    .order("created_at")
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return !!data && athensDate(new Date(data.created_at)) < today;
+}
+
 async function queueBalance(
   db: EmailDb,
   stay: Stay,
@@ -206,10 +241,15 @@ async function queueBalance(
     await queueEmailWith(db, "balance_request", { bookingId }, { sendAt }),
   );
 
-  // A late run sends the request first. The reminder waits for a later run,
-  // so a guest never gets both on one morning.
+  // A late run sends the request first. The reminder waits for a later day,
+  // so a guest never gets both on one morning, however often this runs.
   const reminderDay = addDays(dueOn, settings.balanceReminderDays);
-  if (request.ok && request.duplicate && today >= reminderDay) {
+  if (
+    request.ok &&
+    request.duplicate &&
+    today >= reminderDay &&
+    (await requestPredates(db, bookingId, today))
+  ) {
     tally(
       await queueEmailWith(db, "balance_reminder", { bookingId }, { sendAt }),
     );

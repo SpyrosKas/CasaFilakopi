@@ -136,8 +136,8 @@ test("a message reaches the host and the guest, in English", async ({
   expect(reply.From.Address).toBe("bookings@mail.miloscasa.com");
   expect(reply.From.Name).toBe("Casa Filakopi");
   expect(reply.ReplyTo[0].Address).toBe("host@miloscasa.com");
-  expect(reply.Text).toContain(guest.name);
-  // The auto-reply repeats nothing else, so it cannot carry someone's spam.
+  // The auto-reply repeats nothing typed, so it cannot carry someone's spam.
+  expect(reply.Text).not.toContain(guest.name);
   expect(reply.Text).not.toContain("Is the house free");
 
   const host = await readMail(
@@ -174,6 +174,28 @@ test("a Greek message gets a Greek reply", async ({ browser }) => {
   expect(reply.Subject).toContain("Λάβαμε το μήνυμά σας");
   expect(reply.Text).toContain("Γεια σας");
   await page.context().close();
+});
+
+test("one address gets one auto-reply a day", async ({ browser }) => {
+  const guest = visitor();
+  for (const message of ["First", "Second"]) {
+    const { page } = await openForm(browser, "/en/contact");
+    await fill(page, guest, english, message);
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(page.getByRole("status")).toContainText("Thank you");
+    await page.context().close();
+  }
+
+  const saved = await db.query(
+    `select id from public.contact_messages where email = $1`,
+    [guest.email],
+  );
+  expect(saved.rows).toHaveLength(2);
+  await waitForMail(`to:"${guest.email}"`);
+  await expect
+    .poll(async () => (await findMail(`subject:"${guest.name}"`)).length)
+    .toBe(2);
+  expect(await findMail(`to:"${guest.email}"`)).toHaveLength(1);
 });
 
 test("explains what is wrong, and keeps what was typed", async ({

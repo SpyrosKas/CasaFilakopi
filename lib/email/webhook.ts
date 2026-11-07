@@ -1,5 +1,7 @@
 import { Resend } from "resend";
+import { findTemplate } from "@/emails/registry";
 import type { EmailDb } from "./db";
+import { queueEmailWith } from "./queue";
 
 // Delivery events from Resend (EML-08).
 
@@ -101,7 +103,39 @@ export async function applyEvent(
     })
     .eq("id", logId)
     .in("status", transition.from)
-    .select("id");
+    .select("template_key, recipient, booking_id");
   if (updateError) throw new Error(updateError.message);
-  return updated.length ? "updated" : "unchanged";
+
+  const [row] = updated;
+  if (!row) return "unchanged";
+  if (transition.to !== "delivered") await tellHost(db, logId, row, detail);
+  return "updated";
+}
+
+/**
+ * A guest who never got their email cannot say so. Never for an email to the
+ * host, which would loop, nor for an auto-reply: those go to whatever address
+ * someone typed, so a wrong one is not worth a notification.
+ */
+async function tellHost(
+  db: EmailDb,
+  logId: string,
+  row: { template_key: string; recipient: string; booking_id: string | null },
+  reason: string | undefined,
+): Promise<void> {
+  const template = findTemplate(row.template_key);
+  if (template?.audience === "host") return;
+  if (row.template_key === "contact_auto_reply") return;
+
+  await queueEmailWith(
+    db,
+    "host_email_bounced",
+    {
+      recipient: row.recipient,
+      emailName: template?.label ?? row.template_key,
+      ...(row.booking_id ? { bookingId: row.booking_id } : {}),
+      ...(reason ? { reason: reason.slice(0, 500) } : {}),
+    },
+    { dedupeKey: `bounce:${logId}` },
+  );
 }

@@ -8,7 +8,9 @@ import type {
 // email and a guest's words can never become markup:
 //
 //   {{name}}             a value, always escaped
-//   [Label]({{link}})    alone on a line, a button
+//   [Label]({{someLink}}) alone on a line, a button. Only a value whose name
+//                         ends in Link can sit behind one, so a guest's name
+//                         or message can never become a link in an email.
 //   ## Heading           alone on a line, a heading
 //   - item               a list
 //
@@ -20,7 +22,8 @@ import type {
 
 const PLACEHOLDER = /\{\{\s*([A-Za-z][A-Za-z0-9]*)\s*\}\}/g;
 const BUTTON =
-  /^\[([^\]\n]+)\]\(\s*(\{\{\s*[A-Za-z][A-Za-z0-9]*\s*\}\}|https:\/\/[^\s)]+)\s*\)$/;
+  /^\[([^\]\n]+)\]\(\s*(\{\{\s*[A-Za-z][A-Za-z0-9]*Link\s*\}\})\s*\)$/;
+const BUTTON_SHAPED = /^\[[^\]\n]+\]\(.*\)$/;
 
 export const MAX_SUBJECT_LENGTH = 200;
 export const MAX_BODY_LENGTH = 10_000;
@@ -72,6 +75,12 @@ export function validateText(
   if (/\{\{|\}\}/.test(whole.replace(PLACEHOLDER, ""))) {
     problems.push("broken_braces");
   }
+  const badButton = copy.body
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .some((line) => BUTTON_SHAPED.test(line) && !BUTTON.test(line));
+  if (badButton) problems.push("bad_button");
+
   const used = placeholdersIn(whole);
   for (const name of used) {
     if (!allowed.includes(name)) problems.push(`unknown:${name}`);

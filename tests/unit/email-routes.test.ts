@@ -5,14 +5,18 @@ const mocks = vi.hoisted(() => ({
   runEmailQueue: vi.fn(),
   sendScheduledEmails: vi.fn(),
   applyEventDb: vi.fn(),
-  jobInsert: vi.fn(),
+  jobUpdate: vi.fn(),
 }));
 
 const chain = () => {
   const link: Record<string, unknown> = {};
-  for (const name of ["insert", "update", "eq", "select", "order", "limit"]) {
+  for (const name of ["insert", "eq", "select", "order", "limit"]) {
     link[name] = () => link;
   }
+  link.update = (values: unknown) => {
+    mocks.jobUpdate(values);
+    return link;
+  };
   link.single = async () => ({ data: { id: 1 }, error: null });
   link.then = (done: (value: unknown) => void) =>
     done({ data: [], error: null });
@@ -42,6 +46,7 @@ beforeEach(() => {
   vi.stubEnv("CRON_SECRET", "cron-secret");
   vi.spyOn(console, "error").mockImplementation(() => {});
   mocks.applyEventDb.mockReset();
+  mocks.jobUpdate.mockReset();
   mocks.runEmailQueue.mockReset().mockResolvedValue({
     status: "ok",
     claimed: 0,
@@ -101,6 +106,46 @@ describe("cron routes", () => {
     });
   });
 
+  it("records a run with failed emails as failed", async () => {
+    mocks.runEmailQueue.mockResolvedValue({
+      status: "ok",
+      claimed: 2,
+      failed: 1,
+    });
+    const response = await cronGet(
+      new Request(url, { headers: bearer("cron-secret") }),
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.jobUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed" }),
+    );
+  });
+
+  it("records a refused key as failed, and answers with an error", async () => {
+    mocks.runEmailQueue.mockResolvedValue({
+      status: "config_error",
+      configError: "resend 401",
+      claimed: 0,
+      failed: 0,
+    });
+    const response = await cronGet(
+      new Request(url, { headers: bearer("cron-secret") }),
+    );
+    expect(response.status).toBe(500);
+    expect(mocks.jobUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed" }),
+    );
+  });
+
+  it("refuses a short secret in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const response = await cronGet(
+      new Request(url, { headers: bearer("cron-secret") }),
+    );
+    expect(response.status).toBe(401);
+    expect(mocks.runEmailQueue).not.toHaveBeenCalled();
+  });
+
   it("logs the scheduled run", async () => {
     const response = await scheduledPost(
       new Request(url, { method: "POST", headers: bearer("cron-secret") }),
@@ -158,6 +203,12 @@ describe("webhook route", () => {
     );
     expect(response.status).toBe(401);
     expect(mocks.applyEventDb).not.toHaveBeenCalled();
+  });
+
+  it("refuses an oversized body", async () => {
+    vi.stubEnv("RESEND_WEBHOOK_SECRET", secret);
+    const big = "x".repeat(300_000);
+    expect((await post(big, signed(big))).status).toBe(413);
   });
 
   it("refuses an unsigned event", async () => {

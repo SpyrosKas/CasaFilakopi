@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
+import { readCapped } from "@/lib/email/read-body";
 import { applyEvent, verifyEvent } from "@/lib/email/webhook";
+
+const MAX_BODY_BYTES = 256 * 1024;
 
 /** Resend delivery events (EML-08). The signature covers the exact raw bytes. */
 export async function POST(request: Request) {
@@ -10,7 +13,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "not_configured" }, { status: 503 });
   }
 
-  const rawBody = await request.text();
+  const rawBody = await readCapped(request, MAX_BODY_BYTES);
+  if (rawBody === null) {
+    return NextResponse.json({ error: "too_large" }, { status: 413 });
+  }
   const event = verifyEvent(
     rawBody,
     {

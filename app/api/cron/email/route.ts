@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { runEmailQueue } from "@/lib/email";
 import { isCronAuthorised } from "@/lib/email/cron-auth";
+import { emailSecrets } from "@/lib/email/env";
 import { alertIfRepeating, finishJob, startJob } from "@/lib/email/jobs";
 
 export const maxDuration = 60;
@@ -16,7 +17,7 @@ async function handle(request: Request) {
   if (
     !isCronAuthorised(
       request.headers.get("authorization"),
-      process.env.CRON_SECRET,
+      emailSecrets().cronSecret,
     )
   ) {
     return NextResponse.json({ error: "unauthorised" }, { status: 401 });
@@ -24,12 +25,18 @@ async function handle(request: Request) {
 
   try {
     const result = await runEmailQueue();
-    if (result.claimed > 0) {
+    const stopped = result.status === "config_error";
+    const failed = stopped || result.failed > 0;
+    if (result.claimed > 0 || failed) {
       const db = createAdminClient();
+      const detail = JSON.stringify(result);
       const run = await startJob(db, JOB);
-      await finishJob(db, run, "success", JSON.stringify(result));
+      await finishJob(db, run, failed ? "failed" : "success", detail);
+      if (failed) {
+        await alertIfRepeating(db, JOB, "Email queue", detail, new Date());
+      }
     }
-    return NextResponse.json(result);
+    return NextResponse.json(result, { status: stopped ? 500 : 200 });
   } catch (error) {
     const detail = error instanceof Error ? error.message : "unknown error";
     console.error(`email queue failed: ${detail}`);

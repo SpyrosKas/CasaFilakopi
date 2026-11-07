@@ -315,6 +315,8 @@ export async function buildContext(
         failures: text(payload.failures),
         errorDetail: text(payload.error),
         jobName: text(payload.job),
+        recipient: text(payload.recipient),
+        emailName: text(payload.emailName),
         documentNumber: text(payload.documentNumber),
         checkIn: dateText(payload.checkIn, locale),
         checkOut: dateText(payload.checkOut, locale),

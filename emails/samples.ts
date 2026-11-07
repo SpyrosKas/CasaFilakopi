@@ -24,7 +24,7 @@ export const SAMPLE_VALUES: Record<EmailLocale, Record<string, string>> = {
     paymentAmount: "€420.00",
     refundAmount: "€420.00",
     cancellationPolicy:
-      "Cancelling 30 days or more before arrival: 100% of the booking price is refunded.\nCancelling less than 30 days before arrival: no refund.",
+      "Cancelling 30 days or more before arrival: nothing is kept, and everything you have paid is refunded.\nCancelling less than 30 days before arrival: we keep what you have paid, up to the full booking price. Nothing further is owed.",
     bookingLink: "https://example.com/en/booking/sample",
     directionsLink: "https://example.com/en/directions",
     siteLink: "https://example.com/en",
@@ -46,6 +46,8 @@ export const SAMPLE_VALUES: Record<EmailLocale, Record<string, string>> = {
     failures: "3",
     errorDetail: "The feed did not answer.",
     jobName: "Scheduled emails",
+    recipient: "alex@example.com",
+    emailName: "Booking confirmation",
   },
   el: {
     guestName: "Αλέξης Δείγμα",
@@ -67,7 +69,7 @@ export const SAMPLE_VALUES: Record<EmailLocale, Record<string, string>> = {
     paymentAmount: "420,00 €",
     refundAmount: "420,00 €",
     cancellationPolicy:
-      "Ακύρωση 30 ημέρες ή περισσότερο πριν από την άφιξη: επιστρέφεται το 100% της αξίας της κράτησης.\nΑκύρωση λιγότερο από 30 ημέρες πριν από την άφιξη: δεν επιστρέφεται κάποιο ποσό.",
+      "Ακύρωση 30 ημέρες ή περισσότερο πριν από την άφιξη: δεν κρατείται κάποιο ποσό και επιστρέφεται ό,τι έχετε πληρώσει.\nΑκύρωση λιγότερο από 30 ημέρες πριν από την άφιξη: κρατούμε ό,τι έχετε πληρώσει, έως το πλήρες ποσό της κράτησης. Δεν οφείλετε κάτι επιπλέον.",
     bookingLink: "https://example.com/el/booking/sample",
     directionsLink: "https://example.com/el/directions",
     siteLink: "https://example.com/el",
@@ -90,5 +92,7 @@ export const SAMPLE_VALUES: Record<EmailLocale, Record<string, string>> = {
     failures: "3",
     errorDetail: "Η ροή δεν απάντησε.",
     jobName: "Προγραμματισμένα email",
+    recipient: "alex@example.com",
+    emailName: "Επιβεβαίωση κράτησης",
   },
 };

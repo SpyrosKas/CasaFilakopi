@@ -209,6 +209,17 @@ export async function retryEmail(formData: FormData): Promise<void> {
   const id = z.uuid().parse(formData.get("id"));
   const db = await secretClient(admin);
 
+  const { data: row, error: readError } = await db
+    .from("email_logs")
+    .select("status, payload")
+    .eq("id", id)
+    .maybeSingle();
+  if (readError) throw readError;
+  if (!row || !["failed", "bounced"].includes(row.status)) return;
+
+  // A new generation is a new send to the provider, not a replay of the old
+  // one. The old id goes, so late events cannot land on the new attempt.
+  const payload = (row.payload ?? {}) as Record<string, Json | undefined>;
   const { error } = await db
     .from("email_logs")
     .update({
@@ -216,9 +227,15 @@ export async function retryEmail(formData: FormData): Promise<void> {
       attempts: 0,
       next_attempt_at: new Date().toISOString(),
       last_error: null,
+      resend_id: null,
+      sent_at: null,
+      payload: {
+        ...payload,
+        sendGeneration: (Number(payload.sendGeneration) || 0) + 1,
+      },
     })
     .eq("id", id)
-    .eq("status", "failed");
+    .eq("status", row.status);
   if (error) throw error;
 
   await writeAudit(admin, {
@@ -362,6 +379,49 @@ export async function scheduleOneOff(
   });
   revalidatePath("/admin/email/scheduled");
   return okState(s.scheduled.queued);
+}
+
+/** Goes out again, in full, to the booking's current address. */
+export async function resendConfirmation(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const admin = await requireOwner();
+  const reference = String(formData.get("reference") ?? "").trim();
+  const strings = s.log;
+
+  const { data: booking, error } = await admin.supabase
+    .from("bookings")
+    .select("id, status, guest_email")
+    .eq("reference", reference)
+    .maybeSingle();
+  if (error) return errorState(t.common.somethingWrong);
+  if (!booking) return errorState(s.scheduled.badReference);
+  if (!["confirmed", "checked_in", "completed"].includes(booking.status)) {
+    return errorState(strings.notConfirmed);
+  }
+  if (!booking.guest_email) return errorState(s.scheduled.noEmail);
+
+  const db = await secretClient(admin);
+  const minute = Math.floor(Date.now() / 60_000);
+  const result = await queueEmailWith(
+    db,
+    "booking_confirmation",
+    { bookingId: booking.id },
+    // Explicit, as the usual key allows one ever. A double tap still sends one.
+    { dedupeKey: `resend_confirmation:${booking.id}:${minute}` },
+  );
+  if (!result.ok) return errorState(t.common.somethingWrong);
+
+  if (result.ids[0]) {
+    await writeAudit(admin, {
+      action: "resend",
+      entity: "email_logs",
+      entityId: result.ids[0],
+    });
+  }
+  revalidatePath("/admin/email");
+  return okState(strings.resentConfirmation);
 }
 
 export async function cancelScheduled(formData: FormData): Promise<void> {

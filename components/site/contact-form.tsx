@@ -2,6 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useState, type FormEvent } from "react";
+import { contact } from "@/content/contact";
 import { Link } from "@/i18n/navigation";
 import { useConsent } from "./consent-store";
 import { Turnstile } from "./turnstile";
@@ -12,6 +13,9 @@ import { Turnstile } from "./turnstile";
 // allow it for this one form with a button, and is not shut out.
 
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+
+/** Required in production (D28), so without it the form stays shut. */
+const CLOSED = process.env.NODE_ENV === "production" && !SITE_KEY;
 
 type Status = "idle" | "sending" | "sent";
 
@@ -83,6 +87,11 @@ export function ContactForm() {
   const error = (name: string) =>
     invalid.includes(name) ? t(`errors.${name}`) : undefined;
 
+  const closedText = t("closed", {
+    phone: contact.phoneDisplay,
+    email: contact.email,
+  });
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (status === "sending") return;
@@ -138,9 +147,20 @@ export function ContactForm() {
       setProblem(t("errors.rateLimited"));
     } else if (code === "verification_failed") {
       setProblem(t("errors.verification"));
+    } else if (code === "closed") {
+      setProblem(closedText);
     } else {
       setProblem(t("errors.unavailable"));
     }
+  }
+
+  if (CLOSED) {
+    return (
+      <div className="contact-sent">
+        <h2>{t("title")}</h2>
+        <p>{closedText}</p>
+      </div>
+    );
   }
 
   if (status === "sent") {

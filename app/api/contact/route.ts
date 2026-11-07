@@ -1,13 +1,16 @@
 import { after, NextResponse } from "next/server";
 import { attemptHash } from "@/lib/admin/activity";
+import { athensDate } from "@/lib/domain/dates";
 import { pickClientAddress } from "@/lib/admin/client-address";
 import { createAdminClient } from "@/lib/db/admin";
 import { kickEmails, queueEmail } from "@/lib/email";
 import {
   CONTACT_POLICY_VERSION,
   contactSchema,
+  turnstileMode,
   verifyTurnstile,
 } from "@/lib/email/contact";
+import { readCapped } from "@/lib/email/read-body";
 import { getServerEnv } from "@/lib/env.server";
 
 const MAX_BODY_BYTES = 16 * 1024;
@@ -88,7 +91,12 @@ async function isLimited(
 async function notify(contactMessageId: string): Promise<string[]> {
   const results = await Promise.all([
     queueEmail("host_contact_message", { contactMessageId }),
-    queueEmail("contact_auto_reply", { contactMessageId }),
+    // One a day per address, so the form cannot be used to mail-bomb someone.
+    queueEmail(
+      "contact_auto_reply",
+      { contactMessageId },
+      { dedupeKey: `contact_auto_reply:${athensDate(new Date())}` },
+    ),
   ]);
   return results.flatMap((result) => (result.ok ? result.ids : []));
 }
@@ -98,12 +106,9 @@ export async function POST(request: Request) {
   if (!origin || !allowedOrigins(request).includes(origin)) {
     return fail("forbidden", 403);
   }
-  if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) {
-    return fail("too_large", 413);
-  }
 
-  const raw = await request.text();
-  if (raw.length > MAX_BODY_BYTES) return fail("too_large", 413);
+  const raw = await readCapped(request, MAX_BODY_BYTES);
+  if (raw === null) return fail("too_large", 413);
 
   let json: unknown;
   try {
@@ -123,16 +128,21 @@ export async function POST(request: Request) {
   // Looks like success, so a bot learns nothing.
   if (input.website) return NextResponse.json({ ok: true });
 
+  const check = turnstileMode(process.env);
+  if (check === "closed") return fail("closed", 503);
+
   const db = createAdminClient();
   let id: string;
   try {
     if (await isLimited(db, request)) return tooMany();
 
-    const passed = await verifyTurnstile(
-      input.turnstileToken,
-      process.env.TURNSTILE_SECRET_KEY,
-    );
-    if (!passed) return fail("verification_failed", 403);
+    if (check === "enforced") {
+      const passed = await verifyTurnstile(
+        input.turnstileToken,
+        process.env.TURNSTILE_SECRET_KEY!,
+      );
+      if (!passed) return fail("verification_failed", 403);
+    }
 
     const { data, error } = await db
       .from("contact_messages")
@@ -156,12 +166,20 @@ export async function POST(request: Request) {
 
   // Everything after the save is best effort. The message is in the inbox.
   try {
-    await db.from("consent_log").insert({
+    const { error } = await db.from("consent_log").insert({
       kind: "contact_form",
       subject: id,
       policy_version: CONTACT_POLICY_VERSION,
       granted: true,
     });
+    if (error) throw new Error(error.message);
+  } catch (error) {
+    // The tick is proven by the form refusing without it, so email still goes.
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.error(`contact message ${id}: consent not logged: ${message}`);
+  }
+
+  try {
     const ids = await notify(id);
     after(() => kickEmails(ids));
   } catch (error) {

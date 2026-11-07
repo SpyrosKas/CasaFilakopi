@@ -65,6 +65,59 @@ test("the log shows a failed email, and it can be tried again", async () => {
     .toEqual({ status: "queued", attempts: 0 });
 });
 
+test("a bounced email counts, and retries as a new send", async () => {
+  const { rows } = await db.query(
+    `insert into public.email_logs
+       (template_key, recipient, status, attempts, last_error, resend_id, sent_at, payload)
+     values ('thank_you', $1, 'bounced', 1, 'No mailbox', $2, now(), '{"sendGeneration": 1}')
+     returning id`,
+    [`${marker}@example.test`, randomUUID()],
+  );
+
+  await page.goto("/admin/email?status=bounced");
+  await expect(page.getByText("could not be sent or delivered")).toBeVisible();
+  const item = page.locator(".eml-item", { hasText: "No mailbox" });
+  await item.getByRole("button", { name: "Try again" }).click();
+
+  await expect
+    .poll(async () => {
+      const result = await db.query(
+        `select status, resend_id, sent_at, payload from public.email_logs where id = $1`,
+        [rows[0].id],
+      );
+      return result.rows[0];
+    })
+    .toMatchObject({
+      status: "queued",
+      resend_id: null,
+      sent_at: null,
+      payload: { sendGeneration: 2 },
+    });
+});
+
+test("a refused key shows until a run succeeds", async () => {
+  const detail = JSON.stringify({ status: "config_error" });
+  const { rows } = await db.query(
+    `insert into public.job_runs (job, status, detail, started_at)
+     values ('email_queue', 'failed', $1, now() + interval '1 hour') returning id`,
+    [detail],
+  );
+  try {
+    await page.goto("/admin/email");
+    await expect(page.getByText("Sending has stopped")).toBeVisible();
+    expect(await findOverflow(page)).toEqual([]);
+  } finally {
+    await db.query(`delete from public.job_runs where id = $1`, [rows[0].id]);
+  }
+});
+
+test("resending a confirmation needs a confirmed booking", async () => {
+  await page.goto("/admin/email");
+  await page.getByLabel("Booking reference").fill("NO-SUCH-REF");
+  await page.getByRole("button", { name: "Resend confirmation" }).click();
+  await expect(page.getByText("No booking has that reference.")).toBeVisible();
+});
+
 test("settings save, and a bad address is refused", async () => {
   await page.goto("/admin/email/settings");
   await expect(page.getByLabel("Sender name")).toHaveValue("Casa Filakopi");

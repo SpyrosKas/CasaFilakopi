@@ -7,7 +7,12 @@ import type { RenderedEmail, TemplateCopy } from "@/emails/types";
 import type { EmailDb, EmailLogRow } from "./db";
 import type { GuestLinkEnv } from "./guest-link";
 import { buildStayIcs } from "./ics";
-import { invoiceIsBlocked, type AttachmentRef } from "./queue";
+import {
+  attachmentRefs,
+  invoiceAttachment,
+  invoiceIsBlocked,
+  type AttachmentRef,
+} from "./queue";
 import { renderCopy, renderEmail } from "./render";
 import { loadEmailSettings, type EmailSettings } from "./settings";
 import { validateText } from "./template-text";
@@ -43,11 +48,22 @@ class Skip extends Error {}
 
 export const SKIPPED_PREFIX = "skipped:";
 
+/**
+ * Older than this, an email is news nobody needs (D28), so adding the key late
+ * cannot flood people. A confirmation is still the guest's only record.
+ */
+const MAX_AGE_MS = 72 * 3_600_000;
+
+/** Has been paid for and not called off. */
+const LIVE_STATUSES = ["confirmed", "checked_in", "completed"];
+
 const backoffMs = (attempts: number) =>
   BACKOFF_MINUTES[Math.min(attempts - 1, BACKOFF_MINUTES.length - 1)] * 60_000;
 
 export interface WorkerResult {
-  status: "ok" | "not_configured";
+  status: "ok" | "not_configured" | "config_error";
+  /** Why the batch stopped, when status is config_error. */
+  configError?: string;
   claimed: number;
   sent: number;
   retried: number;
@@ -132,6 +148,7 @@ async function finish(
   update: {
     status: "sent" | "queued" | "failed";
     last_error: string | null;
+    attempts?: number;
     next_attempt_at?: string;
     resend_id?: string;
     sent_at?: string;
@@ -190,9 +207,36 @@ async function checkStillWanted(
   row: EmailLogRow,
   context: EmailContext,
 ): Promise<void> {
-  if (!TIMED.includes(row.template_key)) return;
   const { booking } = context;
-  if (!booking) throw new PermanentFailure("booking_not_found");
+  const def = findTemplate(row.template_key);
+  const isTimed = TIMED.includes(row.template_key);
+
+  if (!booking) {
+    if (def?.needsBooking || isTimed) {
+      throw new PermanentFailure("booking_not_found");
+    }
+    return;
+  }
+
+  if (
+    row.template_key === "booking_confirmation" &&
+    !LIVE_STATUSES.includes(booking.status)
+  ) {
+    throw new Skip(`booking is ${booking.status}`);
+  }
+
+  // The address may have been corrected since. A note about a contact message
+  // goes to whoever wrote it, who need not be the guest on the booking.
+  const isToGuest = def?.audience !== "host";
+  if (
+    isToGuest &&
+    !row.contact_message_id &&
+    row.recipient.toLowerCase() !== booking.guest_email?.toLowerCase()
+  ) {
+    throw new Skip("the booking's email address has changed");
+  }
+
+  if (!isTimed) return;
   if (isClosedBooking(booking.status)) {
     throw new Skip(`booking is ${booking.status}`);
   }
@@ -200,34 +244,41 @@ async function checkStillWanted(
 }
 
 /**
- * Rule two for D17, at the last step: covers rows another track wrote directly
- * and documents that turned provisional after queueing.
+ * Rule two for D17, at the last step. It also covers rows other tracks wrote
+ * directly, and documents that turned provisional after queueing. Nothing from
+ * the row is trusted: refs are parsed again, and an invoice email takes its
+ * file from the invoice itself. Any other invoice file may only reach the host.
  */
-async function assertNotProvisional(
+async function resolveAttachments(
   db: EmailDb,
   row: EmailLogRow,
-  attachments: AttachmentRef[],
   settings: EmailSettings,
-): Promise<void> {
-  const invoiceFiles = attachments.filter((file) => file.bucket === "invoices");
-  const invoiceId = (row.payload as { invoiceId?: unknown } | null)?.invoiceId;
-  const isGuest = findTemplate(row.template_key)?.audience !== "host";
-  const concernsDocument =
-    row.template_key === "invoice_document" || invoiceFiles.length > 0;
-  if (!concernsDocument || !isGuest) return;
+): Promise<AttachmentRef[]> {
+  const payload = (row.payload ?? {}) as Record<string, unknown>;
+  const refs = attachmentRefs.safeParse(payload.attachments ?? []);
+  if (!refs.success) throw new PermanentFailure("bad attachment reference");
 
-  if (typeof invoiceId !== "string") {
-    throw new PermanentFailure("provisional_blocked: no invoice on the row");
+  if (row.template_key === "invoice_document") {
+    const { invoiceId } = payload;
+    if (typeof invoiceId !== "string") {
+      throw new PermanentFailure("provisional_blocked: no invoice on the row");
+    }
+    if (await invoiceIsBlocked(db, invoiceId, settings)) {
+      throw new PermanentFailure("provisional_blocked");
+    }
+    const document = await invoiceAttachment(db, invoiceId, row.booking_id);
+    if (!document) throw new PermanentFailure("invoice file not found");
+    return [document.ref];
   }
-  if (await invoiceIsBlocked(db, invoiceId, settings)) {
-    throw new PermanentFailure("provisional_blocked");
+
+  const toHost = settings.hostRecipients.some(
+    (address) => address.toLowerCase() === row.recipient.toLowerCase(),
+  );
+  if (!toHost && refs.data.some((file) => file.bucket === "invoices")) {
+    throw new PermanentFailure("provisional_blocked: invoice file to a guest");
   }
+  return refs.data;
 }
-
-const attachmentRefs = (row: EmailLogRow): AttachmentRef[] => {
-  const value = (row.payload as { attachments?: unknown } | null)?.attachments;
-  return Array.isArray(value) ? (value as AttachmentRef[]) : [];
-};
 
 async function loadAttachments(
   db: EmailDb,
@@ -332,6 +383,9 @@ async function renderRow(
     // usual cause, so this retries rather than failing at once.
     throw new Error("guest link unavailable");
   }
+  for (const name of def.required) {
+    if (!context.values[name]) throw new PermanentFailure(`no value: ${name}`);
+  }
 
   return renderEmail(def, {
     locale,
@@ -354,8 +408,7 @@ async function deliver(
   const context = await buildContext(db, row, settings, env, now);
   await checkStillWanted(db, row, context);
 
-  const refs = attachmentRefs(row);
-  await assertNotProvisional(db, row, refs, settings);
+  const refs = await resolveAttachments(db, row, settings);
 
   const payloadReplyTo = (row.payload as { replyTo?: unknown } | null)?.replyTo;
   const replyTo =
@@ -369,8 +422,12 @@ async function deliver(
     if (calendar) attachments.push(calendar);
   }
 
+  const payload = (row.payload ?? {}) as { sendGeneration?: unknown };
+  const generation = Number(payload.sendGeneration) || 0;
+
   const { id } = await transport.send({
     logId: row.id,
+    idempotencyKey: `email-log/${row.id}/${generation}`,
     from: { name: settings.senderName, address: settings.fromAddress },
     to: row.recipient,
     replyTo,
@@ -385,8 +442,19 @@ async function handleFailure(
   row: EmailLogRow,
   error: unknown,
   now: Date,
-): Promise<"retried" | "failed" | "skipped"> {
+): Promise<"retried" | "failed" | "skipped" | "sent"> {
   const message = error instanceof Error ? error.message : "unknown error";
+
+  if (error instanceof TransportError && error.kind === "already_accepted") {
+    // Resend holds this key from an earlier try, so the email went out and only
+    // the answer was lost. The webhook still finds the row by its tag.
+    await finish(db, row.id, {
+      status: "sent",
+      sent_at: now.toISOString(),
+      last_error: `accepted on an earlier try: ${message}`.slice(0, 500),
+    });
+    return "sent";
+  }
 
   if (error instanceof Skip) {
     await finish(db, row.id, {
@@ -398,7 +466,7 @@ async function handleFailure(
 
   const permanent =
     error instanceof PermanentFailure ||
-    (error instanceof TransportError && !error.retryable);
+    (error instanceof TransportError && error.kind === "permanent");
 
   if (permanent || row.attempts >= MAX_ATTEMPTS) {
     await finish(db, row.id, {
@@ -424,6 +492,16 @@ async function countWaiting(db: EmailDb): Promise<number> {
     .eq("status", "queued");
   if (error) throw new Error(error.message);
   return count ?? 0;
+}
+
+function isTooOld(row: EmailLogRow, now: Date): boolean {
+  if (row.template_key === "booking_confirmation") return false;
+  const { notBefore } = (row.payload ?? {}) as { notBefore?: unknown };
+  const start = Math.max(
+    Date.parse(row.created_at),
+    typeof notBefore === "string" ? Date.parse(notBefore) : 0,
+  );
+  return now.getTime() - start > MAX_AGE_MS;
 }
 
 /** Sends what is due. Safe to run at any time, as often as you like. */
@@ -476,6 +554,15 @@ export async function processQueue(
       continue;
     }
 
+    if (isTooOld(row, clock())) {
+      await finish(db, row.id, {
+        status: "failed",
+        last_error: `${SKIPPED_PREFIX} too old to send`,
+      });
+      result.skipped += 1;
+      continue;
+    }
+
     try {
       const id = await deliver(
         { ...options, transport },
@@ -486,6 +573,21 @@ export async function processQueue(
       await recordSent(db, row.id, id, clock());
       result.sent += 1;
     } catch (error) {
+      if (error instanceof TransportError && error.kind === "config") {
+        // Every row would fail the same way. Give this one its try back, stop,
+        // and let the run report it, so a bad key costs no email.
+        await finish(db, row.id, {
+          status: "queued",
+          attempts: row.attempts - 1,
+          next_attempt_at: clock().toISOString(),
+          last_error: error.message.slice(0, 500),
+        });
+        result.claimed -= 1;
+        result.status = "config_error";
+        result.configError = error.message;
+        console.error(`EMAIL STOPPED, check the Resend key: ${error.message}`);
+        break;
+      }
       result[await handleFailure(db, row, error, clock())] += 1;
     }
   }

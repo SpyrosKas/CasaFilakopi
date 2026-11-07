@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { isCronAuthorised } from "@/lib/email/cron-auth";
+import { emailSecrets } from "@/lib/email/env";
 import { alertIfRepeating, finishJob, startJob } from "@/lib/email/jobs";
 import { sendScheduledEmails } from "@/lib/email/scheduled";
 
@@ -13,7 +14,7 @@ async function handle(request: Request) {
   if (
     !isCronAuthorised(
       request.headers.get("authorization"),
-      process.env.CRON_SECRET,
+      emailSecrets().cronSecret,
     )
   ) {
     return NextResponse.json({ error: "unauthorised" }, { status: 401 });

@@ -18,8 +18,11 @@ import type { EmailDb } from "./db";
 export const guestBookingPath = (locale: EmailLocale, token: string) =>
   `/${locale}/booking/${token}`;
 
-/** A manual booking has no expiry of its own to go by. */
-const MANUAL_LINK_DAYS_AFTER_CHECK_OUT = 30;
+/** A link keeps working for a while after the stay, for receipts and refunds. */
+const LINK_DAYS_AFTER_CHECK_OUT = 30;
+
+const linkExpiry = (checkOut: string) =>
+  `${addDays(checkOut, LINK_DAYS_AFTER_CHECK_OUT)}T00:00:00Z`;
 
 export function deriveGuestToken(secret: string, bookingId: string): string {
   return createHmac("sha256", secret)
@@ -43,13 +46,28 @@ export async function issueGuestToken(
 ): Promise<string> {
   if (!secret) throw new Error("GUEST_TOKEN_SECRET is not set");
   const token = deriveGuestToken(secret, bookingId);
-  const { data, error } = await db
+
+  const { data: booking, error: readError } = await db
     .from("bookings")
-    .update({ access_token_hash: hashGuestToken(token) })
+    .select("check_out, access_token_expires_at")
     .eq("id", bookingId)
-    .select("id");
+    .maybeSingle();
+  if (readError) throw new Error(readError.message);
+  if (!booking) throw new Error("booking_not_found");
+
+  // Never shortens a later expiry that create_hold was given.
+  const stayExpiry = linkExpiry(booking.check_out);
+  const stored = booking.access_token_expires_at;
+  const keepStored = stored && Date.parse(stored) > Date.parse(stayExpiry);
+
+  const { error } = await db
+    .from("bookings")
+    .update({
+      access_token_hash: hashGuestToken(token),
+      access_token_expires_at: keepStored ? stored : stayExpiry,
+    })
+    .eq("id", bookingId);
   if (error) throw new Error(error.message);
-  if (data.length !== 1) throw new Error("booking_not_found");
   return token;
 }
 
@@ -83,7 +101,7 @@ export async function resolveGuestLink(
 
   if (booking.access_token_hash === null) {
     // A manual booking starts with no token, so there is none to disturb.
-    expiresAt ??= `${addDays(booking.check_out, MANUAL_LINK_DAYS_AFTER_CHECK_OUT)}T00:00:00Z`;
+    expiresAt ??= linkExpiry(booking.check_out);
     const { error } = await db
       .from("bookings")
       .update({ access_token_hash: hash, access_token_expires_at: expiresAt })

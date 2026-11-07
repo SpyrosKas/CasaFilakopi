@@ -75,8 +75,9 @@ const post = (body: unknown = valid, headers: Record<string, string> = {}) =>
 
 beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_SITE_URL", site);
-  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("NODE_ENV", "test");
   vi.stubEnv("TURNSTILE_SECRET_KEY", "");
+  vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "");
   vi.spyOn(console, "info").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -114,9 +115,15 @@ describe("POST /api/contact", () => {
     expect(mocks.queueEmail).toHaveBeenCalledWith("host_contact_message", {
       contactMessageId: "m1",
     });
-    expect(mocks.queueEmail).toHaveBeenCalledWith("contact_auto_reply", {
-      contactMessageId: "m1",
-    });
+    expect(mocks.queueEmail).toHaveBeenCalledWith(
+      "contact_auto_reply",
+      { contactMessageId: "m1" },
+      {
+        dedupeKey: expect.stringMatching(
+          /^contact_auto_reply:\d{4}-\d\d-\d\d$/,
+        ),
+      },
+    );
     expect(mocks.kickEmails).toHaveBeenCalledWith(["e1", "e1"]);
   });
 
@@ -156,11 +163,6 @@ describe("POST /api/contact", () => {
     expect(mocks.insertMessage).not.toHaveBeenCalled();
   });
 
-  it("refuses a link in the name, which the auto-reply repeats", async () => {
-    const response = await POST(post({ ...valid, name: "https://spam.test" }));
-    expect(response.status).toBe(400);
-  });
-
   it("refuses another site's form", async () => {
     const response = await POST(post(valid, { origin: "https://evil.test" }));
     expect(response.status).toBe(403);
@@ -171,6 +173,32 @@ describe("POST /api/contact", () => {
       post({ ...valid, message: "x".repeat(20_000) }),
     );
     expect(response.status).toBe(413);
+  });
+
+  it("stops reading a stream that lies about its size", async () => {
+    const big = new TextEncoder().encode("x".repeat(20_000));
+    const stream = new ReadableStream({
+      pull(controller) {
+        controller.enqueue(big);
+      },
+    });
+    const request = new Request(`${site}/api/contact`, {
+      method: "POST",
+      body: stream,
+      duplex: "half",
+      headers: { origin: site, "content-length": "10" },
+    } as RequestInit);
+    expect((await POST(request)).status).toBe(413);
+  });
+
+  it("still sends the emails if the consent log fails", async () => {
+    mocks.insertConsent.mockResolvedValue({ error: { message: "down" } });
+    const response = await POST(post());
+    expect(response.status).toBe(200);
+    expect(mocks.queueEmail).toHaveBeenCalledTimes(2);
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("consent not logged"),
+    );
   });
 
   it("limits by address, once the count is over", async () => {
@@ -242,8 +270,35 @@ describe("Turnstile", () => {
     );
   });
 
-  it("is enforced when the secret is set", async () => {
+  const setKeys = () => {
     vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
+    vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site");
+  };
+
+  it("closes the form in production with no keys, saving nothing", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const response = await POST(post());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "closed" });
+    expect(mocks.insertMessage).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("CONTACT FORM CLOSED"),
+    );
+  });
+
+  it.each([
+    ["TURNSTILE_SECRET_KEY", "the secret key"],
+    ["NEXT_PUBLIC_TURNSTILE_SITE_KEY", "the site key"],
+  ])("treats %s alone as a loud mistake", async (name, words) => {
+    vi.stubEnv(name, "value");
+    const response = await POST(post());
+    expect(response.status).toBe(503);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining(words));
+    expect(mocks.insertMessage).not.toHaveBeenCalled();
+  });
+
+  it("is enforced when both keys are set", async () => {
+    setKeys();
     vi.stubGlobal("fetch", siteverify(true));
     const response = await POST(post());
     expect(response.status).toBe(403);
@@ -251,7 +306,7 @@ describe("Turnstile", () => {
   });
 
   it("passes a good token, and sends no address to Cloudflare", async () => {
-    vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
+    setKeys();
     const fetchMock = siteverify(true);
     vi.stubGlobal("fetch", fetchMock);
     const response = await POST(post({ ...valid, turnstileToken: "tok" }));
@@ -266,7 +321,7 @@ describe("Turnstile", () => {
   });
 
   it("refuses a bad token", async () => {
-    vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
+    setKeys();
     vi.stubGlobal("fetch", siteverify(false));
     const response = await POST(post({ ...valid, turnstileToken: "bad" }));
     expect(response.status).toBe(403);
@@ -274,7 +329,7 @@ describe("Turnstile", () => {
   });
 
   it("refuses when Cloudflare cannot be reached", async () => {
-    vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
+    setKeys();
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     const response = await POST(post({ ...valid, turnstileToken: "tok" }));
     expect(response.status).toBe(403);

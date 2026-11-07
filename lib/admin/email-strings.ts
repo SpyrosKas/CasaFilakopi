@@ -9,14 +9,22 @@ export const emailStrings = {
     scheduledLink: "Scheduled messages",
     notConnected:
       "Sending is not connected yet. Emails wait here and go out once Resend is set up.",
+    keyProblem:
+      "Sending has stopped: Resend refused our key or domain. No email has been lost. They wait here and go out once this is fixed.",
     testMode: (name: string) =>
       `Test mode: emails go to ${name}, not to guests.`,
     all: "All",
     empty: "No emails here.",
     needsAttention: (count: number) =>
       count === 1
-        ? "1 email could not be sent."
-        : `${count} emails could not be sent.`,
+        ? "1 email could not be sent or delivered."
+        : `${count} emails could not be sent or delivered.`,
+    resendHeading: "Send a confirmation again",
+    resendHint:
+      "For a guest who lost it, or whose email address was corrected.",
+    resendSubmit: "Resend confirmation",
+    resentConfirmation: "The confirmation is on its way.",
+    notConfirmed: "That booking is not confirmed.",
     to: "To",
     when: "Created",
     attempts: "Tries",
@@ -96,6 +104,8 @@ export const emailStrings = {
       subject_line_break: "The subject must stay on one line.",
       subject_too_long: "The subject is too long.",
       body_too_long: "The text is too long.",
+      bad_button:
+        "A button can only use a link value, such as [Open]({{bookingLink}}).",
       broken_braces:
         "Something is wrong with the braces. Each value is written {{likeThis}}.",
       unknown: (name: string) =>

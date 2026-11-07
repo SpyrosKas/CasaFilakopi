@@ -255,7 +255,6 @@
     "checkAllow": "Allow the security check",
     "errors": {
       "form": "Please check the marked fields.",
-      "name": "Please type your name, without links.",
       "email": "Please type a valid email address.",
       "phone": "Please use only numbers and + ( ) - in the phone number.",
       "dates": "Please keep this to one short line.",
@@ -264,8 +263,10 @@
       "rateLimited": "You have sent several messages already. Please try again later, or use the email or phone number above.",
       "verification": "The security check did not pass. Please try again.",
       "checkBlocked": "The security check could not load. Please use the email or phone number above.",
-      "unavailable": "Your message could not be sent. Please try again, or use the email or phone number above."
-    }
+      "unavailable": "Your message could not be sent. Please try again, or use the email or phone number above.",
+      "name": "Please type your name."
+    },
+    "closed": "The contact form is not available right now. Please call {phone} or email {email}."
   },
   "Placeholder": {
     "title": "Content coming soon",

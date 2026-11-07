@@ -22,6 +22,29 @@ const cents = z.number().int().min(0);
 const shortText = z.string().trim().min(1).max(500);
 const longText = z.string().trim().min(1).max(MAX_BODY_LENGTH);
 
+const attachmentRef = z.strictObject({
+  bucket: z.enum(["invoices", "uploads-private"]),
+  // Plain relative paths only: no "..", no leading slash, no backslash.
+  path: z
+    .string()
+    .max(500)
+    .regex(/^[A-Za-z0-9_-][A-Za-z0-9._/-]*$/)
+    .refine((path) => !path.includes("..")),
+  filename: z
+    .string()
+    .max(200)
+    .regex(/^[^/\\\r\n\0]+$/),
+  contentType: z
+    .string()
+    .max(100)
+    .regex(/^[a-z]+\/[a-z0-9.+-]+(; ?charset=[a-z0-9-]+)?$/i),
+});
+
+/** Checked when a row is queued and again when it is sent. */
+export const attachmentRefs = z.array(attachmentRef).max(10);
+
+export type AttachmentRef = z.output<typeof attachmentRef>;
+
 const alert = {
   bookingId: id.optional(),
   amountCents: cents.optional(),
@@ -60,6 +83,12 @@ export const EMAIL_DATA = {
   host_payment_failed: z.strictObject(alert),
   host_dispute_opened: z.strictObject(alert),
   host_contact_message: contactOnly,
+  host_email_bounced: z.strictObject({
+    bookingId: id.optional(),
+    recipient: z.email(),
+    emailName: shortText,
+    reason: shortText.optional(),
+  }),
   host_guest_message: z.strictObject({ bookingId: id, message: longText }),
   host_sync_conflict: z.strictObject({
     channel: shortText,
@@ -85,13 +114,6 @@ export const EMAIL_DATA = {
 
 export type EmailType = keyof typeof EMAIL_DATA;
 export type EmailData<T extends EmailType> = z.input<(typeof EMAIL_DATA)[T]>;
-
-export interface AttachmentRef {
-  bucket: "invoices" | "uploads-private";
-  path: string;
-  filename: string;
-  contentType: string;
-}
 
 export interface QueueOptions {
   /** Not before this moment. Default: as soon as the worker runs. */
@@ -205,17 +227,20 @@ export async function invoiceIsBlocked(
   return !data || data.is_provisional || data.status !== "issued";
 }
 
-async function invoiceAttachment(
+/** Built from the invoice itself, so a row can never name another's file. */
+export async function invoiceAttachment(
   db: EmailDb,
   invoiceId: string,
+  bookingId: string | null,
 ): Promise<{ ref: AttachmentRef; documentNumber: string } | null> {
   const { data, error } = await db
     .from("invoices")
-    .select("pdf_path, document_number")
+    .select("pdf_path, document_number, booking_id")
     .eq("id", invoiceId)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data?.pdf_path || !data.document_number) return null;
+  if (data.booking_id !== bookingId) return null;
   return {
     documentNumber: data.document_number,
     ref: {
@@ -271,14 +296,21 @@ async function enqueue<T extends EmailType>(
   if (typeof payload.subject === "string") {
     payload.subject = headerSafe(payload.subject);
   }
-  const attachments = [...(options.attachments ?? [])];
+  const refs = attachmentRefs.safeParse(options.attachments ?? []);
+  if (!refs.success) {
+    console.error(`queueEmail ${type}: bad attachment reference`);
+    return { ok: false, reason: "invalid_data", detail: refs.error.message };
+  }
+  const attachments = refs.data;
+  // The 72-hour limit counts from here for an email meant for later.
+  if (options.sendAt) payload.notBefore = options.sendAt.toISOString();
 
   if (type === "invoice_document") {
     const invoiceId = String(data.invoiceId);
     if (await invoiceIsBlocked(db, invoiceId, settings)) {
       return { ok: false, reason: "provisional_blocked" };
     }
-    const document = await invoiceAttachment(db, invoiceId);
+    const document = await invoiceAttachment(db, invoiceId, String(bookingId));
     if (!document) return { ok: false, reason: "invalid_data" };
     attachments.push(document.ref);
     payload.documentNumber = document.documentNumber;

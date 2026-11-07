@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { findTemplate, TEMPLATES } from "@/emails/registry";
 import { EMAIL_LOCALES, type EmailLocale } from "@/emails/types";
+import { addDays } from "@/lib/domain/dates";
+import { calculateRefund } from "@/lib/domain/refund";
 import { describeCancellation } from "@/lib/email/format";
 import { renderCopy, renderEmail } from "@/lib/email/render";
 import {
@@ -115,17 +117,15 @@ describe("Greek text", () => {
 });
 
 describe("what a guest can never be told", () => {
-  const owed = /owe|still to pay|left to pay|outstanding|οφείλ|υπόλοιπο/i;
-
   it.each(["en", "el"] as const)(
-    "cancellation mentions no debt once the balance is gone (%s)",
+    "cancellation shows no amount owed once the balance is gone (%s)",
     (locale) => {
-      const { text, html } = render("booking_cancellation", locale, {
+      const { text } = render("booking_cancellation", locale, {
         balanceAmount: null,
         balanceDueDate: null,
       });
-      expect(text).not.toMatch(owed);
-      expect(html).not.toMatch(owed);
+      expect(text).not.toContain("980");
+      expect(text).not.toMatch(/left to pay|υπόλοιπο/i);
     },
   );
 
@@ -134,6 +134,14 @@ describe("what a guest can never be told", () => {
       const { body } = findTemplate("booking_cancellation")!.copy[locale];
       expect(body).not.toContain("balance");
     }
+  });
+
+  it("the auto-reply repeats nothing a stranger typed", () => {
+    const def = findTemplate("contact_auto_reply")!;
+    expect(def.placeholders).toEqual(["houseName", "hostPhone", "siteLink"]);
+    expect(validateCopy(def, { subject: "Hi", body: "{{guestName}}" })).toEqual(
+      ["unknown:guestName"],
+    );
   });
 });
 
@@ -186,21 +194,38 @@ describe("the small template language", () => {
   });
 
   it("makes a button only from a web link", () => {
-    const copy = { subject: "S", body: "[Open]({{link}})" };
+    const copy = { subject: "S", body: "[Open]({{bookingLink}})" };
     const options = { ...shell, locale: "en" as const };
     const good = renderCopy(copy, {
       ...options,
-      values: { link: "https://example.com/a?b=1&c=2" },
+      values: { bookingLink: "https://example.com/a?b=1&c=2" },
     });
     expect(good.html).toContain(`href="https://example.com/a?b=1&amp;c=2"`);
     expect(good.text).toContain("Open: https://example.com/a?b=1&c=2");
 
     const bad = renderCopy(copy, {
       ...options,
-      values: { link: "javascript:alert(1)" },
+      values: { bookingLink: "javascript:alert(1)" },
     });
     expect(bad.html).not.toContain("javascript:");
     expect(bad.html).not.toContain("<a ");
+  });
+
+  it("never makes a button from a value that is not a link", () => {
+    const copy = { subject: "S", body: "[Win a prize]({{guestName}})" };
+    expect(validateText(copy, ["guestName"])).toContain("bad_button");
+    const { html } = renderCopy(copy, {
+      ...shell,
+      locale: "en",
+      values: { guestName: "https://evil.example" },
+    });
+    expect(html).not.toContain("<a ");
+  });
+
+  it("refuses a button with a typed-in address", () => {
+    expect(
+      validateText({ subject: "S", body: "[Go](https://x.example)" }, []),
+    ).toEqual(["bad_button"]);
   });
 
   it("keeps a value in a subject on one line", () => {
@@ -251,21 +276,58 @@ describe("cancellation terms come from the snapshot", () => {
     ],
   };
 
-  it("words each tier, furthest from arrival first", () => {
+  it("words each tier as calculateRefund works it out", () => {
     expect(describeCancellation(rules, "en")).toBe(
       [
-        "Cancelling 30 days or more before arrival: 100% of the booking price is refunded.",
-        "Cancelling less than 30 days before arrival: 50% of the booking price is refunded.",
-        "Cancelling less than 14 days before arrival: no refund.",
+        "Cancelling 30 days or more before arrival: nothing is kept, and everything you have paid is refunded.",
+        "Cancelling less than 30 days before arrival: we keep what you have paid, up to 50% of the booking price. Anything you have paid above that is refunded, and nothing further is owed.",
+        "Cancelling less than 14 days before arrival: we keep what you have paid, up to the full booking price. Nothing further is owed.",
       ].join("\n"),
     );
     expect(describeCancellation(rules, "el")).toContain("30 ημέρες");
+    expect(describeCancellation(rules, "el")).toContain("έως το 50%");
   });
 
-  it("states a non-refundable booking", () => {
+  // The words promise a ceiling: check the sum agrees at each tier.
+  it.each([
+    [40, 40_000, 40_000],
+    [20, 80_000, 30_000],
+    [20, 20_000, 0],
+    [5, 40_000, 0],
+  ])("matches calculateRefund %i days out, paid %i", (days, paid, refund) => {
+    const outcome = calculateRefund({
+      rules,
+      checkIn: "2027-07-31",
+      cancelledOn: addDays("2027-07-31", -days),
+      totalCents: 100_000,
+      paidCents: paid,
+    });
+    expect(outcome.refundCents).toBe(refund);
+  });
+
+  it("covers the days after the last tier, which refund nothing", () => {
+    const only = { isNonRefundable: false, tiers: [rules.tiers[1]] };
+    const lines = describeCancellation(only, "en")!.split("\n");
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain("less than 30 days");
+    expect(lines[1]).toContain("up to the full booking price");
+    expect(
+      calculateRefund({
+        rules: only,
+        checkIn: "2027-07-31",
+        cancelledOn: "2027-07-25",
+        totalCents: 1000,
+        paidCents: 1000,
+      }).refundCents,
+    ).toBe(0);
+  });
+
+  it("states a non-refundable booking the same way", () => {
     expect(
       describeCancellation({ isNonRefundable: true, tiers: [] }, "en"),
-    ).toBe("This booking cannot be refunded if cancelled.");
+    ).toBe(
+      "If you cancel, we keep what you have paid, up to the full booking price. Nothing further is owed.",
+    );
   });
 
   it("guesses nothing when the snapshot has no terms", () => {

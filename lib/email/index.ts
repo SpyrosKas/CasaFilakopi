@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getPublicEnv } from "@/lib/env";
+import { emailSecrets } from "./env";
 import { issueGuestToken as issueToken } from "./guest-link";
 import {
   queueEmailWith,
@@ -41,7 +42,7 @@ export function queueEmail<T extends EmailType>(
 
 export const workerEnv = () => ({
   siteUrl: getPublicEnv().NEXT_PUBLIC_SITE_URL,
-  guestTokenSecret: process.env.GUEST_TOKEN_SECRET,
+  guestTokenSecret: emailSecrets().guestTokenSecret,
 });
 
 /** Runs the queue now, for the cron route and the kick below. */
@@ -74,6 +75,6 @@ export function issueGuestToken(bookingId: string): Promise<string> {
   return issueToken(
     createAdminClient(),
     bookingId,
-    process.env.GUEST_TOKEN_SECRET,
+    emailSecrets().guestTokenSecret,
   );
 }

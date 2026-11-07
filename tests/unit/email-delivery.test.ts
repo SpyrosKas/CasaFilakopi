@@ -1,13 +1,14 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isCronAuthorised } from "@/lib/email/cron-auth";
+import { emailSecrets } from "@/lib/email/env";
 import {
   deriveGuestToken,
   guestBookingPath,
   hashGuestToken,
 } from "@/lib/email/guest-link";
 import { buildStayIcs } from "@/lib/email/ics";
-import { dedupeId, EMAIL_DATA } from "@/lib/email/queue";
+import { attachmentRefs, dedupeId, EMAIL_DATA } from "@/lib/email/queue";
 import { athensInstant, sendMoment } from "@/lib/email/scheduled";
 import {
   DEFAULT_EMAIL_SETTINGS,
@@ -24,6 +25,7 @@ afterEach(() => {
 
 const email = {
   logId: "00000000-0000-4000-8000-000000000001",
+  idempotencyKey: "email-log/00000000-0000-4000-8000-000000000001/0",
   from: { name: "Casa Filakopi", address: "bookings@mail.example.com" },
   to: "guest@example.com",
   replyTo: "host@example.com",
@@ -81,24 +83,28 @@ describe("Resend transport", () => {
     });
     const [, init] = fetchMock.mock.calls[0];
     const headers = new Headers(init.headers);
-    expect(headers.get("idempotency-key")).toBe(`email-log/${email.logId}`);
+    expect(headers.get("idempotency-key")).toBe(email.idempotencyKey);
+    expect(init.signal).toBeInstanceOf(AbortSignal);
     const sent = JSON.parse(String(init.body));
     expect(sent.reply_to).toBe("host@example.com");
     expect(sent.tags).toEqual([{ name: "email_log_id", value: email.logId }]);
   });
 
   it.each([
-    [429, true],
-    [500, true],
-    [422, false],
-    [403, false],
-  ])("treats a %i as retryable: %s", async (status, retryable) => {
-    stubFetch(status, { name: "x", message: "no", statusCode: status });
+    [429, "rate_limit_exceeded", "retry"],
+    [500, "internal_server_error", "retry"],
+    [422, "validation_error", "permanent"],
+    [401, "missing_api_key", "config"],
+    [403, "invalid_api_key", "config"],
+    [409, "concurrent_idempotent_requests", "retry"],
+    [409, "invalid_idempotent_request", "already_accepted"],
+  ])("sorts a %i %s as %s", async (status, name, kind) => {
+    stubFetch(status, { name, message: "no", statusCode: status });
     const failure = await resendTransport("re_x")
       .send(email)
       .catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(TransportError);
-    expect((failure as TransportError).retryable).toBe(retryable);
+    expect((failure as TransportError).kind).toBe(kind);
   });
 
   it("retries when the network fails", async () => {
@@ -106,7 +112,7 @@ describe("Resend transport", () => {
     const failure = await resendTransport("re_x")
       .send(email)
       .catch((error: unknown) => error);
-    expect((failure as TransportError).retryable).toBe(true);
+    expect((failure as TransportError).kind).toBe("retry");
   });
 
   it("keeps a sender name inside its quotes", () => {
@@ -169,6 +175,38 @@ describe("webhook signature", () => {
   });
 });
 
+describe("production secrets", () => {
+  const long = "x".repeat(32);
+
+  it("keeps good secrets", () => {
+    expect(
+      emailSecrets({
+        NODE_ENV: "production",
+        CRON_SECRET: long,
+        GUEST_TOKEN_SECRET: long,
+      }),
+    ).toEqual({ cronSecret: long, guestTokenSecret: long });
+  });
+
+  it("treats a short secret as none, and says so", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(
+      emailSecrets({
+        NODE_ENV: "production",
+        CRON_SECRET: "short",
+        GUEST_TOKEN_SECRET: long,
+      }),
+    ).toEqual({ cronSecret: undefined, guestTokenSecret: long });
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("CRON_SECRET"));
+  });
+
+  it("does not bother local work", () => {
+    expect(emailSecrets({ NODE_ENV: "development", CRON_SECRET: "a" })).toEqual(
+      { cronSecret: "a", guestTokenSecret: undefined },
+    );
+  });
+});
+
 describe("cron secret", () => {
   it("accepts only the exact bearer value", () => {
     expect(isCronAuthorised("Bearer s3cret", "s3cret")).toBe(true);
@@ -226,6 +264,41 @@ describe("what callers can pass", () => {
         stillOwedCents: 5000,
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("attachment references", () => {
+  const good = {
+    bucket: "invoices",
+    path: "2027/TEST-1.pdf",
+    filename: "TEST-1.pdf",
+    contentType: "application/pdf",
+  };
+
+  it("accepts a plain path", () => {
+    expect(attachmentRefs.safeParse([good]).success).toBe(true);
+  });
+
+  it.each([
+    ["path", "../secret.pdf"],
+    ["path", "a/../../secret.pdf"],
+    ["path", "/etc/passwd"],
+    ["path", "a\\b.pdf"],
+    ["path", ""],
+    ["bucket", "media"],
+    ["filename", "a\r\nBcc: x"],
+    ["filename", "../x.pdf"],
+    ["contentType", "text/html\r\nX: y"],
+  ])("refuses %s %j", (field, value) => {
+    expect(
+      attachmentRefs.safeParse([{ ...good, [field]: value }]).success,
+    ).toBe(false);
+  });
+
+  it("refuses a field it does not know", () => {
+    expect(attachmentRefs.safeParse([{ ...good, url: "x" }]).success).toBe(
+      false,
+    );
   });
 });
 

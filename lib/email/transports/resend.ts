@@ -1,9 +1,11 @@
 import { Resend } from "resend";
 import {
-  isRetryableStatus,
+  classifyFailure,
   TransportError,
   type EmailTransport,
 } from "../transport";
+
+const SEND_TIMEOUT_MS = 15_000;
 
 export const quoteSender = (name: string, address: string) =>
   `"${name.replace(/[\\"\r\n]/g, "")}" <${address}>`;
@@ -32,21 +34,26 @@ export function resendTransport(apiKey: string): EmailTransport {
             })),
           },
           // A retry after a lost answer cannot deliver the email twice.
-          { idempotencyKey: `email-log/${email.logId}` },
+          {
+            idempotencyKey: email.idempotencyKey,
+            signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+          },
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : "unknown";
-        throw new TransportError(`resend: ${message}`, true);
+        throw new TransportError(`resend: ${message}`, "retry");
       }
 
       if (result.error) {
-        const { message, statusCode } = result.error;
+        const { message, name, statusCode } = result.error;
         throw new TransportError(
-          `resend ${statusCode ?? "?"}: ${message}`,
-          isRetryableStatus(statusCode),
+          `resend ${statusCode ?? "?"} ${name}: ${message}`,
+          classifyFailure(statusCode, name),
         );
       }
-      if (!result.data) throw new TransportError("resend: no answer", true);
+      if (!result.data) {
+        throw new TransportError("resend: no answer", "retry");
+      }
       return { id: result.data.id };
     },
   };

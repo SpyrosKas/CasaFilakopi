@@ -24,6 +24,8 @@ export interface HostTemplate {
   label: string;
   placeholders: readonly string[];
   required?: readonly string[];
+  /** Pointless without its booking, so it fails rather than going hollow. */
+  needsBooking?: true;
   en: TemplateCopy;
   el: TemplateCopy;
 }
@@ -53,6 +55,7 @@ export const HOST_TEMPLATES: HostTemplate[] = [
   {
     key: "host_new_booking",
     label: "Host: new booking",
+    needsBooking: true,
     placeholders: BOOKING_FACTS,
     en: {
       subject: "New booking: {{checkIn}} to {{checkOut}}, {{guestName}}",
@@ -78,6 +81,7 @@ ${openEl}`,
   {
     key: "host_booking_modified",
     label: "Host: booking changed",
+    needsBooking: true,
     placeholders: [...BOOKING_FACTS, "changes"],
     en: {
       subject: "Booking changed: {{reference}}",
@@ -103,6 +107,7 @@ ${openEl}`,
   {
     key: "host_booking_cancelled",
     label: "Host: booking cancelled",
+    needsBooking: true,
     placeholders: [...BOOKING_FACTS, "refundAmount"],
     en: {
       subject: "Booking cancelled: {{reference}}",
@@ -228,6 +233,7 @@ ${openEl}`,
   {
     key: "host_guest_message",
     label: "Host: message from a booked guest",
+    needsBooking: true,
     placeholders: [...BOOKING_FACTS, "message"],
     required: ["message"],
     en: {
@@ -311,6 +317,43 @@ ${openEn}`,
       body: `Το παραστατικό {{documentNumber}} δεν διαβιβάστηκε.
 
 - Σφάλμα: {{errorDetail}}
+
+${openEl}`,
+    },
+  },
+  {
+    key: "host_email_bounced",
+    label: "Host: an email could not be delivered",
+    placeholders: [
+      "emailName",
+      "recipient",
+      "reason",
+      "guestName",
+      "reference",
+      "adminLink",
+    ],
+    required: ["recipient"],
+    en: {
+      subject: "An email did not reach {{recipient}}",
+      body: `An email to a guest could not be delivered. Please check the address, or reach them another way.
+
+- Email: {{emailName}}
+- To: {{recipient}}
+- Reason: {{reason}}
+- Guest: {{guestName}}
+- Reference: {{reference}}
+
+${openEn}`,
+    },
+    el: {
+      subject: "Ένα email δεν έφτασε στο {{recipient}}",
+      body: `Ένα email προς επισκέπτη δεν παραδόθηκε. Ελέγξτε τη διεύθυνση ή επικοινωνήστε μαζί του με άλλο τρόπο.
+
+- Email: {{emailName}}
+- Προς: {{recipient}}
+- Αιτία: {{reason}}
+- Επισκέπτης: {{guestName}}
+- Κωδικός: {{reference}}
 
 ${openEl}`,
     },

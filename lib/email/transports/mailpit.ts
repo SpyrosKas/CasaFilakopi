@@ -1,5 +1,5 @@
 import {
-  isRetryableStatus,
+  classifyFailure,
   TransportError,
   type EmailTransport,
 } from "../transport";
@@ -30,13 +30,13 @@ export function mailpitTransport(baseUrl: string): EmailTransport {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "unknown";
-        throw new TransportError(`mailpit: ${message}`, true);
+        throw new TransportError(`mailpit: ${message}`, "retry");
       }
 
       if (!response.ok) {
         throw new TransportError(
           `mailpit ${response.status}: ${await response.text()}`,
-          isRetryableStatus(response.status),
+          classifyFailure(response.status),
         );
       }
       const { ID } = (await response.json()) as { ID: string };

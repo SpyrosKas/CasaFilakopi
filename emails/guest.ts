@@ -45,6 +45,7 @@ export const GUEST_TEMPLATES: GuestTemplate[] = [
   {
     key: "booking_confirmation",
     label: "Booking confirmation",
+    needsGuestLink: true,
     required: ["reference"],
     en: {
       subject: "Your stay at {{houseName}} is confirmed: {{reference}}",
@@ -299,10 +300,12 @@ If you have any questions, please reply to this email.`,
     key: "contact_auto_reply",
     label: "Contact form: automatic reply",
     standalone: true,
-    extra: ["guestName", "houseName", "hostPhone", "siteLink"],
+    // No guest-typed value here: anyone can type someone else's address, so
+    // this email must not be able to carry their words.
+    extra: ["houseName", "hostPhone", "siteLink"],
     en: {
       subject: "We received your message: {{houseName}}",
-      body: `Hello {{guestName}},
+      body: `Hello,
 
 Thank you for writing to {{houseName}}. We received your message and will answer as soon as we can.
 
@@ -310,7 +313,7 @@ For anything urgent, please call {{hostPhone}}.`,
     },
     el: {
       subject: "Λάβαμε το μήνυμά σας: {{houseName}}",
-      body: `Γεια σας {{guestName}},
+      body: `Γεια σας,
 
 Σας ευχαριστούμε που επικοινωνήσατε με το {{houseName}}. Λάβαμε το μήνυμά σας και θα σας απαντήσουμε το συντομότερο δυνατό.
 

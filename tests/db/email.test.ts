@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/lib/db/types";
+import { addDays, athensDate } from "@/lib/domain/dates";
 import type { EmailDb } from "@/lib/email/db";
 import {
   deriveGuestToken,
@@ -16,7 +17,11 @@ import {
   type QueueOptions,
 } from "@/lib/email/queue";
 import { sendScheduledEmails } from "@/lib/email/scheduled";
-import { TransportError, type EmailTransport } from "@/lib/email/transport";
+import {
+  TransportError,
+  type EmailTransport,
+  type FailureKind,
+} from "@/lib/email/transport";
 import { memoryTransport } from "@/lib/email/transports/memory";
 import { applyEvent } from "@/lib/email/webhook";
 import { MAX_ATTEMPTS, processQueue } from "@/lib/email/worker";
@@ -51,8 +56,10 @@ const env = {
 const bookings: string[] = [];
 const contactIds: string[] = [];
 const storedFiles: string[] = [];
+const storedInvoices: string[] = [];
+const hostRows: string[] = [];
 let roomId: string;
-let year = 2200 + Math.floor(Math.random() * 500);
+let year = 3000 + Math.floor(Math.random() * 500);
 
 beforeAll(async () => {
   roomId = await createRoom();
@@ -63,7 +70,8 @@ afterAll(async () => {
   await db.query(
     `delete from public.email_logs where booking_id = any($1::uuid[])
        or contact_message_id = any($2::uuid[])
-       or recipient like 'email-db-%@example.test'`,
+       or recipient like 'email-db-%@example.test'
+       or payload->>'recipient' like 'email-db-%@example.test'`,
     [bookings, contactIds],
   );
   await db.query(`delete from public.contact_messages where id = any($1)`, [
@@ -77,6 +85,12 @@ afterAll(async () => {
   if (storedFiles.length) {
     await client.storage.from("uploads-private").remove(storedFiles);
   }
+  if (storedInvoices.length) {
+    await client.storage.from("invoices").remove(storedInvoices);
+  }
+  await db.query(`delete from public.email_logs where id = any($1::uuid[])`, [
+    hostRows,
+  ]);
   await db.end();
 });
 
@@ -121,6 +135,7 @@ async function booking(options: BookingOptions = {}) {
       options.locale ?? "en",
     ],
   );
+  await issueGuestToken(client, id, env.guestTokenSecret);
   return { id, email, checkIn, checkOut };
 }
 
@@ -246,7 +261,7 @@ describe("worker", () => {
     expect(sent.replyTo).toBe("host@miloscasa.com");
     expect(sent.subject).toContain("επιβεβαιώθηκε");
     expect(sent.html).toContain("Mia");
-    expect(sent.text).toContain("100%");
+    expect(sent.text).toContain("επιστρέφεται ό,τι έχετε πληρώσει");
     expect(sent.attachments.map((file) => file.filename)).toEqual([
       "casa-filakopi.ics",
     ]);
@@ -336,7 +351,7 @@ describe("worker", () => {
     const transport: EmailTransport = {
       name: "broken",
       send: async () => {
-        throw new TransportError("provider down", true);
+        throw new TransportError("provider down", "retry");
       },
     };
 
@@ -366,7 +381,7 @@ describe("worker", () => {
     const transport: EmailTransport = {
       name: "refusing",
       send: async () => {
-        throw new TransportError("invalid address", false);
+        throw new TransportError("invalid address", "permanent");
       },
     };
     expect(await worker(transport, [logId])).toMatchObject({ failed: 1 });
@@ -465,6 +480,324 @@ describe("worker", () => {
   });
 });
 
+describe("provider failures", () => {
+  const failing = (kind: FailureKind, message = "resend 401: bad key") => {
+    const calls: string[] = [];
+    const transport: EmailTransport = {
+      name: "failing",
+      send: async (email) => {
+        calls.push(email.logId);
+        throw new TransportError(message, kind);
+      },
+    };
+    return { transport, calls };
+  };
+
+  it("stops at a bad key, using up no attempts, and picks up after", async () => {
+    const stays = await Promise.all([booking(), booking(), booking()]);
+    const ids = await Promise.all(
+      stays.map((stay) => queued("thank_you", { bookingId: stay.id })),
+    );
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { transport, calls } = failing("config");
+
+    const result = await worker(transport, ids);
+
+    expect(result).toMatchObject({
+      status: "config_error",
+      configError: "resend 401: bad key",
+      failed: 0,
+      retried: 0,
+    });
+    expect(calls).toHaveLength(1);
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining("EMAIL STOPPED"),
+    );
+    error.mockRestore();
+
+    for (const id of ids) {
+      expect(await logRow(id)).toMatchObject({ status: "queued", attempts: 0 });
+    }
+
+    const fixed = memoryTransport();
+    await worker(fixed, ids);
+    expect(fixed.sent).toHaveLength(3);
+    expect(await logRow(calls[0])).toMatchObject({
+      status: "sent",
+      attempts: 1,
+      last_error: null,
+    });
+  });
+
+  it("does not fail a row however long the key stays bad", async () => {
+    const { id } = await booking();
+    const logId = await queued("thank_you", { bookingId: id });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { transport } = failing("config", "resend 403: domain");
+    for (let run = 0; run < MAX_ATTEMPTS + 2; run += 1) {
+      await worker(transport, [logId]);
+    }
+    error.mockRestore();
+    expect(await logRow(logId)).toMatchObject({
+      status: "queued",
+      attempts: 0,
+      last_error: "resend 403: domain",
+    });
+  });
+
+  it("retries a request still running elsewhere (409)", async () => {
+    const { id } = await booking();
+    const logId = await queued("thank_you", { bookingId: id });
+    const { transport } = failing("retry", "concurrent_idempotent_requests");
+    expect(await worker(transport, [logId])).toMatchObject({ retried: 1 });
+    expect((await logRow(logId)).status).toBe("queued");
+  });
+
+  it("treats a used key as sent, and never as failed (409)", async () => {
+    const { id } = await booking();
+    const logId = await queued("thank_you", { bookingId: id });
+    const { transport } = failing(
+      "already_accepted",
+      "resend 409 invalid_idempotent_request",
+    );
+
+    expect(await worker(transport, [logId])).toMatchObject({
+      sent: 1,
+      failed: 0,
+    });
+    const row = await logRow(logId);
+    expect(row.status).toBe("sent");
+    expect(row.sent_at).toBeTruthy();
+    expect(row.resend_id).toBeNull();
+    expect(row.last_error).toContain("accepted on an earlier try");
+
+    // The webhook still reaches it, through the tag.
+    await applyEvent(client, {
+      type: "email.delivered",
+      data: { email_id: randomUUID(), tags: { email_log_id: logId } },
+    });
+    expect((await logRow(logId)).status).toBe("delivered");
+  });
+
+  it("delivers once when the answer to an accepted send is lost", async () => {
+    const { id } = await booking();
+    const logId = await queued("thank_you", { bookingId: id });
+
+    // Behaves as Resend does: the first request lands, its answer does not,
+    // and a repeat of the key returns the same email without sending it.
+    const delivered = new Map<string, string>();
+    let tries = 0;
+    const keys: string[] = [];
+    const transport: EmailTransport = {
+      name: "lossy",
+      send: async (email) => {
+        tries += 1;
+        keys.push(email.idempotencyKey);
+        const known = delivered.get(email.idempotencyKey);
+        if (known) return { id: known };
+        delivered.set(email.idempotencyKey, randomUUID());
+        throw new TransportError("connection lost", "retry");
+      },
+    };
+
+    await worker(transport, [logId]);
+    expect((await logRow(logId)).status).toBe("queued");
+    await db.query(
+      `update public.email_logs set next_attempt_at = now() where id = $1`,
+      [logId],
+    );
+    await worker(transport, [logId]);
+
+    expect(tries).toBe(2);
+    expect(new Set(keys)).toEqual(new Set([`email-log/${logId}/0`]));
+    expect(delivered.size).toBe(1);
+    expect(await logRow(logId)).toMatchObject({
+      status: "sent",
+      attempts: 2,
+      resend_id: [...delivered.values()][0],
+    });
+  });
+
+  it("uses a new key for a new generation", async () => {
+    const { id } = await booking();
+    const logId = await queued("thank_you", { bookingId: id });
+    await db.query(
+      `update public.email_logs
+       set payload = payload || '{"sendGeneration": 2}' where id = $1`,
+      [logId],
+    );
+    const transport = memoryTransport();
+    await worker(transport, [logId]);
+    expect(transport.sent[0].idempotencyKey).toBe(`email-log/${logId}/2`);
+  });
+
+  it("gives an expired lease to exactly one of many workers", async () => {
+    const { id } = await booking();
+    const logId = await queued("thank_you", { bookingId: id });
+    await db.query(
+      `update public.email_logs
+       set status = 'sending', attempts = 1, next_attempt_at = now() - interval '1 minute'
+       where id = $1`,
+      [logId],
+    );
+    const transport = memoryTransport(
+      () => new Promise((resolve) => setTimeout(resolve, 50)),
+    );
+
+    await Promise.all(
+      Array.from({ length: 12 }, () => worker(transport, [logId])),
+    );
+
+    expect(transport.sent).toHaveLength(1);
+    expect(await logRow(logId)).toMatchObject({ status: "sent", attempts: 2 });
+  });
+});
+
+describe("rows that should not go", () => {
+  const rawRow = async (
+    key: string,
+    recipient: string,
+    bookingId: string | null,
+    extra = "now()",
+    payload: object = {},
+  ) => {
+    const { rows } = await db.query(
+      `insert into public.email_logs (template_key, recipient, booking_id, payload, created_at)
+       values ($1, $2, $3, $4, ${extra}) returning id`,
+      [key, recipient, bookingId, JSON.stringify(payload)],
+    );
+    return rows[0].id as string;
+  };
+
+  it.each(["pending_payment", "expired", "cancelled"])(
+    "skips a confirmation for a %s booking",
+    async (status) => {
+      const { id } = await booking();
+      const logId = await queued("booking_confirmation", { bookingId: id });
+      await db.query(`update public.bookings set status = $2 where id = $1`, [
+        id,
+        status,
+      ]);
+      const transport = memoryTransport();
+      expect(await worker(transport, [logId])).toMatchObject({ skipped: 1 });
+      expect(transport.sent).toHaveLength(0);
+    },
+  );
+
+  it.each(["booking_confirmation", "booking_cancellation", "host_new_booking"])(
+    "never sends a hollow %s",
+    async (key) => {
+      const logId = await rawRow(
+        key,
+        `email-db-${randomUUID()}@example.test`,
+        null,
+      );
+      const transport = memoryTransport();
+      await worker(transport, [logId]);
+      expect(transport.sent).toHaveLength(0);
+      expect(await logRow(logId)).toMatchObject({
+        status: "failed",
+        last_error: "booking_not_found",
+      });
+    },
+  );
+
+  it("fails a host message with nothing in it", async () => {
+    const logId = await rawRow(
+      "host_message",
+      `email-db-${randomUUID()}@example.test`,
+      null,
+    );
+    const transport = memoryTransport();
+    await worker(transport, [logId]);
+    expect(transport.sent).toHaveLength(0);
+    expect((await logRow(logId)).status).toBe("failed");
+  });
+
+  it("skips a guest email if the booking's address changed", async () => {
+    const { id } = await booking();
+    const logId = await queued("thank_you", { bookingId: id });
+    await db.query(
+      `update public.bookings set guest_email = $2 where id = $1`,
+      [id, `email-db-${randomUUID()}@example.test`],
+    );
+    const transport = memoryTransport();
+    expect(await worker(transport, [logId])).toMatchObject({ skipped: 1 });
+    expect(transport.sent).toHaveLength(0);
+    expect((await logRow(logId)).last_error).toContain("address has changed");
+  });
+
+  it("ignores letter case when matching the address", async () => {
+    const { id, email } = await booking();
+    const logId = await rawRow("thank_you", email.toUpperCase(), id);
+    const transport = memoryTransport();
+    await worker(transport, [logId]);
+    expect(transport.sent).toHaveLength(1);
+  });
+
+  it("expires a row older than 72 hours as not sent", async () => {
+    const { id, email } = await booking();
+    const logId = await rawRow(
+      "thank_you",
+      email,
+      id,
+      `now() - interval '73 hours'`,
+    );
+    const transport = memoryTransport();
+    expect(await worker(transport, [logId])).toMatchObject({ skipped: 1 });
+    expect(transport.sent).toHaveLength(0);
+    expect((await logRow(logId)).last_error).toBe("skipped: too old to send");
+  });
+
+  it("keeps a confirmation however old", async () => {
+    const { id, email } = await booking();
+    const logId = await rawRow(
+      "booking_confirmation",
+      email,
+      id,
+      `now() - interval '30 days'`,
+    );
+    const transport = memoryTransport();
+    await worker(transport, [logId]);
+    expect(transport.sent).toHaveLength(1);
+  });
+
+  it("counts a later send from its date, not from when it was set", async () => {
+    const { id, email } = await booking();
+    const logId = await rawRow(
+      "scheduled_message",
+      email,
+      id,
+      `now() - interval '30 days'`,
+      { subject: "One", body: "Hi", notBefore: new Date().toISOString() },
+    );
+    const transport = memoryTransport();
+    await worker(transport, [logId]);
+    expect(transport.sent).toHaveLength(1);
+  });
+
+  it("emails the same address once a day from the contact form", async () => {
+    const email = `email-db-${randomUUID()}@example.test`;
+    const ids: string[] = [];
+    for (let count = 0; count < 2; count += 1) {
+      const { rows } = await db.query(
+        `insert into public.contact_messages (name, email, message)
+         values ('A', $1, 'Hi') returning id`,
+        [email],
+      );
+      contactIds.push(rows[0].id);
+      const result = await queueEmailWith(
+        client,
+        "contact_auto_reply",
+        { contactMessageId: rows[0].id },
+        { dedupeKey: "contact_auto_reply:2027-07-01" },
+      );
+      if (result.ok) ids.push(...result.ids);
+    }
+    expect(ids).toHaveLength(1);
+  });
+});
+
 describe("attachments", () => {
   it("keeps a storage path in the row and sends the bytes", async () => {
     const { id } = await booking();
@@ -524,6 +857,96 @@ describe("attachments", () => {
   });
 });
 
+describe("attachment safety", () => {
+  it("refuses a bad path when queueing", async () => {
+    const { id } = await booking();
+    vi.spyOn(console, "error").mockImplementationOnce(() => {});
+    const result = await queueEmailWith(
+      client,
+      "thank_you",
+      { bookingId: id },
+      {
+        attachments: [
+          {
+            bucket: "uploads-private",
+            path: "../invoices/x.pdf",
+            filename: "x.pdf",
+            contentType: "application/pdf",
+          },
+        ],
+      },
+    );
+    expect(result).toMatchObject({ ok: false, reason: "invalid_data" });
+  });
+
+  it("refuses a bad path in a row written directly", async () => {
+    const { id, email } = await booking();
+    const { rows } = await db.query(
+      `insert into public.email_logs (template_key, recipient, booking_id, payload)
+       values ('thank_you', $1, $2, $3) returning id`,
+      [
+        email,
+        id,
+        JSON.stringify({
+          attachments: [
+            {
+              bucket: "uploads-private",
+              path: "/etc/passwd",
+              filename: "x",
+              contentType: "text/plain",
+            },
+          ],
+        }),
+      ],
+    );
+    const transport = memoryTransport();
+    await worker(transport, [rows[0].id]);
+    expect(transport.sent).toHaveLength(0);
+    expect((await logRow(rows[0].id)).last_error).toBe(
+      "bad attachment reference",
+    );
+  });
+
+  it("lets an invoice file reach the host, by actual recipient", async () => {
+    const path = `email-tests/${randomUUID()}.pdf`;
+    const bytes = Buffer.from("%PDF-1.4 invoice");
+    const upload = await client.storage
+      .from("invoices")
+      .upload(path, bytes, { contentType: "application/pdf" });
+    expect(upload.error).toBeNull();
+    storedInvoices.push(path);
+    const attachments = [
+      {
+        bucket: "invoices",
+        path,
+        filename: "x.pdf",
+        contentType: "application/pdf",
+      },
+    ];
+    const row = async (recipient: string) => {
+      const { rows } = await db.query(
+        `insert into public.email_logs (template_key, recipient, payload)
+         values ('host_message', $1, $2) returning id`,
+        [
+          recipient,
+          JSON.stringify({ subject: "Doc", body: "Attached", attachments }),
+        ],
+      );
+      hostRows.push(rows[0].id);
+      return rows[0].id as string;
+    };
+
+    const toHost = await row("HOST@miloscasa.com");
+    const toGuest = await row(`email-db-${randomUUID()}@example.test`);
+    const transport = memoryTransport();
+    await worker(transport, [toHost, toGuest]);
+
+    expect(transport.sent.map((email) => email.logId)).toEqual([toHost]);
+    expect(transport.sent[0].attachments[0].content.equals(bytes)).toBe(true);
+    expect((await logRow(toGuest)).last_error).toContain("provisional_blocked");
+  });
+});
+
 describe("provisional documents (D17)", () => {
   it("refuses to queue the invoice email", async () => {
     const { id } = await booking();
@@ -569,6 +992,90 @@ describe("provisional documents (D17)", () => {
     expect((await logRow(rows[0].id)).last_error).toContain(
       "provisional_blocked",
     );
+  });
+
+  it("takes the file from the invoice, not from the row", async () => {
+    const { id, email } = await booking();
+    const real = `email-tests/${randomUUID()}.pdf`;
+    const other = `email-tests/${randomUUID()}.pdf`;
+    for (const [path, text] of [
+      [real, "%PDF real"],
+      [other, "%PDF someone else"],
+    ]) {
+      const upload = await client.storage
+        .from("invoices")
+        .upload(path, Buffer.from(text), { contentType: "application/pdf" });
+      expect(upload.error).toBeNull();
+      storedInvoices.push(path);
+    }
+
+    const invoiceId = randomUUID();
+    const { rows: series } = await db.query(
+      `select id from public.invoice_series limit 1`,
+    );
+    const stored = await db.query(
+      `select value from public.settings where key = 'invoicing'`,
+    );
+    const invoice = await db.connect();
+    try {
+      await invoice.query(`set session_replication_role = replica`);
+      await invoice.query(
+        `insert into public.invoices
+           (id, booking_id, series_id, number, doc_type, status, is_provisional,
+            document_number, pdf_path, issued_at)
+         values ($1, $2, $3, $4, 'receipt', 'issued', false, 'MAIL-TEST-1', $5, now())`,
+        [invoiceId, id, series[0].id, 900_000_000 + (year % 90_000), real],
+      );
+      await db.query(
+        `update public.settings
+         set value = value || '{"isProvisional": false}' where key = 'invoicing'`,
+      );
+      await db.query(
+        `insert into public.settings (key, value)
+         values ('email', '{"invoiceEmailEnabled": true}')`,
+      );
+
+      const { rows } = await db.query(
+        `insert into public.email_logs (template_key, recipient, booking_id, payload)
+         values ('invoice_document', $1, $2, $3) returning id`,
+        [
+          email,
+          id,
+          JSON.stringify({
+            invoiceId,
+            documentNumber: "MAIL-TEST-1",
+            attachments: [
+              {
+                bucket: "invoices",
+                path: other,
+                filename: "other.pdf",
+                contentType: "application/pdf",
+              },
+            ],
+          }),
+        ],
+      );
+      const transport = memoryTransport();
+      await worker(transport, [rows[0].id]);
+
+      const [file] = transport.sent[0].attachments;
+      expect(file.filename).toBe("MAIL-TEST-1.pdf");
+      expect(file.content.toString()).toBe("%PDF real");
+      await db.query(`delete from public.email_logs where id = $1`, [
+        rows[0].id,
+      ]);
+    } finally {
+      await db.query(`delete from public.settings where key = 'email'`);
+      await db.query(
+        `update public.settings set value = $1 where key = 'invoicing'`,
+        [JSON.stringify(stored.rows[0].value)],
+      );
+      await invoice.query(`delete from public.invoices where id = $1`, [
+        invoiceId,
+      ]);
+      await invoice.query(`set session_replication_role = origin`);
+      invoice.release();
+    }
   });
 
   it("blocks an invoice file attached to any other guest email", async () => {
@@ -650,11 +1157,15 @@ describe("guest links", () => {
 
   it("never replaces a token it did not issue", async () => {
     const { id } = await booking();
+    await db.query(
+      `update public.bookings set access_token_hash = $2 where id = $1`,
+      [id, randomUUID()],
+    );
     const before = await db.query(
       `select access_token_hash from public.bookings where id = $1`,
       [id],
     );
-    const logId = await queued("booking_confirmation", { bookingId: id });
+    const logId = await queued("pre_arrival", { bookingId: id });
     const transport = memoryTransport();
     await worker(transport, [logId]);
 
@@ -664,6 +1175,40 @@ describe("guest links", () => {
       [id],
     );
     expect(after.rows[0]).toEqual(before.rows[0]);
+  });
+
+  it("sets an expiry when it issues a token", async () => {
+    const { id } = await booking({
+      checkIn: "2400-07-10",
+      checkOut: "2400-07-17",
+    });
+    await db.query(
+      `update public.bookings set access_token_expires_at = null where id = $1`,
+      [id],
+    );
+    const token = await issueGuestToken(client, id, env.guestTokenSecret);
+    const { rows } = await db.query(
+      `select access_token_expires_at as at from public.bookings where id = $1`,
+      [id],
+    );
+    expect(rows[0].at.toISOString()).toBe("2400-08-16T00:00:00.000Z");
+    const found = await db.query(
+      `select public.booking_for_token($1) as booking`,
+      [token],
+    );
+    expect(found.rows[0].booking.id).toBe(id);
+  });
+
+  it("will not send a confirmation with no link", async () => {
+    const { id } = await booking();
+    await db.query(
+      `update public.bookings set access_token_hash = $2 where id = $1`,
+      [id, randomUUID()],
+    );
+    const logId = await queued("booking_confirmation", { bookingId: id });
+    const transport = memoryTransport();
+    expect(await worker(transport, [logId])).toMatchObject({ retried: 1 });
+    expect(transport.sent).toHaveLength(0);
   });
 
   it("will not send a balance request with no way to pay", async () => {
@@ -728,6 +1273,52 @@ describe("webhook events", () => {
     });
     await applyEvent(client, event("email.delivered", resendId));
     expect((await logRow(logId)).status).toBe("bounced");
+  });
+
+  const alerts = async (logRecipient: string) =>
+    (
+      await db.query(
+        `select recipient, payload from public.email_logs
+         where template_key = 'host_email_bounced' and payload->>'recipient' = $1`,
+        [logRecipient],
+      )
+    ).rows;
+
+  it("tells the host once when a guest's email bounces", async () => {
+    const { resendId, logId } = await sent();
+    const { recipient } = await logRow(logId);
+    const bounce = event("email.bounced", resendId, {
+      bounce: { message: "No mailbox" },
+    });
+    await applyEvent(client, bounce);
+    await applyEvent(client, bounce);
+
+    const rows = await alerts(recipient);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].recipient).toBe("host@miloscasa.com");
+    expect(rows[0].payload.reason).toBe("No mailbox");
+  });
+
+  it("does not loop on a bounce of the host's own email", async () => {
+    const { rows } = await db.query(
+      `insert into public.email_logs (template_key, recipient, status, resend_id)
+       values ('host_sync_failure', $1, 'sent', $2) returning id`,
+      [`email-db-${randomUUID()}@example.test`, randomUUID()],
+    );
+    const { recipient, resend_id } = await logRow(rows[0].id);
+    await applyEvent(client, event("email.bounced", resend_id));
+    expect(await alerts(recipient)).toEqual([]);
+  });
+
+  it("does not bother the host over an auto-reply", async () => {
+    const { rows } = await db.query(
+      `insert into public.email_logs (template_key, recipient, status, resend_id)
+       values ('contact_auto_reply', $1, 'sent', $2) returning id`,
+      [`email-db-${randomUUID()}@example.test`, randomUUID()],
+    );
+    const { recipient, resend_id } = await logRow(rows[0].id);
+    await applyEvent(client, event("email.bounced", resend_id));
+    expect(await alerts(recipient)).toEqual([]);
   });
 
   it("finds a row by tag if the event beats the worker", async () => {
@@ -854,6 +1445,19 @@ describe("sendScheduledEmails", () => {
     ]);
   });
 
+  it("never sends both on the same real day, however many runs", async () => {
+    const now = new Date();
+    const today = athensDate(now);
+    const stay = await dueBooking(addDays(today, -10), {
+      checkIn: addDays(today, 20),
+      checkOut: addDays(today, 25),
+    });
+    await owing(stay.id);
+    await sendScheduledEmails(client, now, { bookingIds: [stay.id] });
+    await sendScheduledEmails(client, now, { bookingIds: [stay.id] });
+    expect(await keysOf(stay.id)).toEqual(["balance_request"]);
+  });
+
   it("catches up after a missed day, one email at a time", async () => {
     const stay = await dueBooking("2503-06-28", {
       checkIn: "2503-07-20",
@@ -922,6 +1526,57 @@ describe("sendScheduledEmails", () => {
     await run("2507-07-17T10:00:00Z", stay.id);
     await run("2507-07-18T10:00:00Z", stay.id);
     expect(await keysOf(stay.id)).toEqual(["pre_arrival"]);
+  });
+
+  it("sends pre-arrival again when the stay moves", async () => {
+    const stay = await booking({
+      checkIn: "2507-09-20",
+      checkOut: "2507-09-25",
+    });
+    await run("2507-09-18T10:00:00Z", stay.id);
+    await db.query(
+      `update public.bookings set check_in = '2507-09-22', check_out = '2507-09-27'
+       where id = $1`,
+      [stay.id],
+    );
+    await run("2507-09-19T10:00:00Z", stay.id);
+    await run("2507-09-19T11:00:00Z", stay.id);
+    expect(await keysOf(stay.id)).toEqual(["pre_arrival", "pre_arrival"]);
+  });
+
+  it("looks back as far as the longest rule reaches", async () => {
+    const stay = await booking({
+      checkIn: "2510-01-10",
+      checkOut: "2510-01-12",
+    });
+    const rule = {
+      id: "long",
+      name: "long",
+      enabled: true,
+      anchor: "check_out",
+      offsetDays: 60,
+      copy: {
+        en: { subject: "S", body: "B" },
+        el: { subject: "S", body: "B" },
+      },
+    };
+    await db.query(
+      `insert into public.settings (key, value) values ('scheduled_messages', $1)`,
+      [JSON.stringify([{ id: "broken" }, rule])],
+    );
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await run("2510-03-13T10:00:00Z", stay.id);
+      expect(await keysOf(stay.id)).toEqual(["scheduled_message"]);
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining("scheduled rule unreadable"),
+      );
+    } finally {
+      error.mockRestore();
+      await db.query(
+        `delete from public.settings where key = 'scheduled_messages'`,
+      );
+    }
   });
 
   it("leaves the thank-you off by default", async () => {

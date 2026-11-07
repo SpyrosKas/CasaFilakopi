@@ -8,11 +8,8 @@ export const CONTACT_POLICY_VERSION = "draft-1";
 /** A value that could become a mail header stays on one line. */
 const oneLine = (value: string) => !/[\r\n\0]/.test(value);
 
-/** The name is echoed in the auto-reply, so it must not carry a link. */
-const noLink = (value: string) => !/:\/\/|www\./i.test(value);
-
 export const contactSchema = z.strictObject({
-  name: z.string().trim().min(1).max(100).refine(oneLine).refine(noLink),
+  name: z.string().trim().min(1).max(100).refine(oneLine),
   email: z.email().max(254).refine(oneLine),
   phone: z
     .string()
@@ -33,20 +30,47 @@ export type ContactInput = z.output<typeof contactSchema>;
 
 const SITEVERIFY = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
+interface TurnstileEnv {
+  NODE_ENV?: string;
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
+}
+
 /**
- * Enforced as soon as the secret is set, and skipped before that. Fails closed:
- * if Cloudflare cannot be asked, the visitor sees an error and can try again or
- * use the phone or email on the page, and nothing unverified is stored. No IP
- * is passed along, as Cloudflare does not need one.
+ * Required in production (D28). `closed` means the form takes nothing, and the
+ * visitor is pointed to the phone and email instead. Skipped only outside
+ * production, and never with one key of the pair set, which is a mistake.
+ */
+export function turnstileMode(
+  env: TurnstileEnv,
+): "enforced" | "skipped" | "closed" {
+  const hasSite = !!env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const hasSecret = !!env.TURNSTILE_SECRET_KEY;
+  if (hasSite && hasSecret) return "enforced";
+
+  if (hasSite || hasSecret) {
+    console.error(
+      `CONTACT FORM CLOSED: only ${hasSite ? "the site key" : "the secret key"} of Turnstile is set`,
+    );
+    return "closed";
+  }
+  if (env.NODE_ENV === "production") {
+    console.error("CONTACT FORM CLOSED: Turnstile keys are not set");
+    return "closed";
+  }
+  console.info("contact: Turnstile not configured, check skipped");
+  return "skipped";
+}
+
+/**
+ * Fails closed: if Cloudflare cannot be asked, the visitor sees an error and
+ * can try again or use the phone or email on the page, and nothing unverified
+ * is stored. No IP is passed along, as Cloudflare does not need one.
  */
 export async function verifyTurnstile(
   token: string | undefined,
-  secret: string | undefined,
+  secret: string,
 ): Promise<boolean> {
-  if (!secret) {
-    console.info("contact: Turnstile not configured, check skipped");
-    return true;
-  }
   if (!token) return false;
   try {
     const response = await fetch(SITEVERIFY, {

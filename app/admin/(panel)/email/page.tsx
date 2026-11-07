@@ -2,7 +2,8 @@ import Link from "next/link";
 import { findTemplate } from "@/emails/registry";
 import { requireOwner } from "@/lib/admin/session";
 import { t } from "@/lib/admin/strings";
-import { retryEmail } from "@/lib/email/admin-actions";
+import { ActionForm, Field } from "@/components/admin/form";
+import { resendConfirmation, retryEmail } from "@/lib/email/admin-actions";
 import { selectTransport } from "@/lib/email/transport";
 import { SKIPPED_PREFIX } from "@/lib/email/worker";
 
@@ -51,6 +52,26 @@ export default async function EmailLogPage({
     .not("last_error", "like", `${SKIPPED_PREFIX}%`);
   if (countError) throw countError;
 
+  const { count: bounces, error: bounceError } = await admin.supabase
+    .from("email_logs")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "bounced");
+  if (bounceError) throw bounceError;
+
+  const needAttention = (failures ?? 0) + (bounces ?? 0);
+
+  // A refused key leaves the rows queued, so only the last run shows it.
+  const { data: lastRun, error: runError } = await admin.supabase
+    .from("job_runs")
+    .select("status, detail")
+    .eq("job", "email_queue")
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (runError) throw runError;
+  const keyRefused =
+    lastRun?.status === "failed" && !!lastRun.detail?.includes("config_error");
+
   const transport = selectTransport();
 
   return (
@@ -88,12 +109,25 @@ export default async function EmailLogPage({
       </ul>
 
       {!transport && <p className="notice notice-bad">{s.notConnected}</p>}
+      {keyRefused && <p className="notice notice-bad">{s.keyProblem}</p>}
       {transport && transport.name !== "resend" && (
         <p className="notice notice-info">{s.testMode(transport.name)}</p>
       )}
-      {!!failures && (
-        <p className="notice notice-bad">{s.needsAttention(failures)}</p>
+      {needAttention > 0 && (
+        <p className="notice notice-bad">{s.needsAttention(needAttention)}</p>
       )}
+
+      <section className="stack">
+        <h2>{s.resendHeading}</h2>
+        <p className="hint">{s.resendHint}</p>
+        <ActionForm
+          action={resendConfirmation}
+          submitLabel={s.resendSubmit}
+          pendingLabel={t.common.saving}
+        >
+          <Field label={t.email.scheduled.reference} name="reference" />
+        </ActionForm>
+      </section>
 
       <ul className="eml-filters">
         <li>
@@ -145,14 +179,15 @@ export default async function EmailLogPage({
                   {s.error}: {row.last_error.replace(SKIPPED_PREFIX, "").trim()}
                 </p>
               )}
-              {row.status === "failed" && !skipped && (
-                <form action={retryEmail}>
-                  <input type="hidden" name="id" value={row.id} />
-                  <button type="submit" className="button button-quiet">
-                    {s.resend}
-                  </button>
-                </form>
-              )}
+              {(row.status === "failed" || row.status === "bounced") &&
+                !skipped && (
+                  <form action={retryEmail}>
+                    <input type="hidden" name="id" value={row.id} />
+                    <button type="submit" className="button button-quiet">
+                      {s.resend}
+                    </button>
+                  </form>
+                )}
             </li>
           );
         })}

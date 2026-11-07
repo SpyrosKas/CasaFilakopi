@@ -14,6 +14,8 @@ const samplesFor = (placeholders: readonly string[]) => {
 interface RegistryEntry extends EmailTemplateDef {
   /** False for text the host types each time. */
   editable: boolean;
+  /** Without its booking this would be a hollow email, so it never sends. */
+  needsBooking: boolean;
 }
 
 const guests: RegistryEntry[] = GUEST_TEMPLATES.map((template) => {
@@ -30,6 +32,7 @@ const guests: RegistryEntry[] = GUEST_TEMPLATES.map((template) => {
     sample: samplesFor(placeholders),
     needsGuestLink: template.needsGuestLink,
     editable: !template.fixed,
+    needsBooking: !template.standalone,
   };
 });
 
@@ -42,6 +45,7 @@ const hosts: RegistryEntry[] = HOST_TEMPLATES.map((template) => ({
   copy: { en: template.en, el: template.el },
   sample: samplesFor(template.placeholders),
   editable: true,
+  needsBooking: !!template.needsBooking,
 }));
 
 export const TEMPLATES: readonly RegistryEntry[] = [...guests, ...hosts];
