@@ -38,6 +38,8 @@ export function useSnapTrack<T extends HTMLElement>(total: number) {
       if (!frame) frame = requestAnimationFrame(measure);
     };
     track.addEventListener("scroll", onScroll, { passive: true });
+    // Swiping works before the scripts load, so the strip may already have moved.
+    frame = requestAnimationFrame(measure);
     return () => {
       track.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(frame);
