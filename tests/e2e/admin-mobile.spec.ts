@@ -66,7 +66,13 @@ function findLayoutProblems(minTap: number): LayoutProblem[] {
         getComputedStyle(el).visibility !== "hidden" &&
         // A closed <details> keeps its layout box but shows nothing.
         (!el.closest("details:not([open])") || el.closest("summary") !== null),
-    );
+    )
+    .filter(({ el, box }) => {
+      // A long menu scrolls inside its own panel. Items at or below its fold
+      // are clipped there, so they cannot sit on anything.
+      const panel = el.closest(".menu");
+      return !panel || box.bottom <= panel.getBoundingClientRect().bottom + 1;
+    });
 
   for (const { el, box } of targets) {
     if (box.height < minTap - 0.5 || box.width < minTap - 0.5) {
