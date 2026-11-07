@@ -2,6 +2,8 @@
 // with the same keys. Greek comes later (D25): add `el` to `languages` below
 // and choose the language per user instead of the constant.
 
+import { invoiceStrings } from "@/lib/admin/invoice-strings";
+
 const dayWord = (days: number) => (days === 1 ? "1 day" : `${days} days`);
 
 const en = {
@@ -968,6 +970,7 @@ const en = {
         `we keep the ${kept} and you owe nothing more`,
     },
   },
+  invoices: invoiceStrings,
   validation: {
     required: "Please fill this in.",
     tooLong: "This is too long.",

@@ -124,19 +124,21 @@ test.describe("fixtures", () => {
 });
 
 test.describe("the real site, with each defect put back", () => {
-  test("D1: scroll-down over the title", async ({ page }) => {
+  test("D1: a hero control over the title", async ({ page }) => {
     await page.setViewportSize({ width: 667, height: 375 });
     await skipCookieBanner(page);
     await page.goto("/en");
     await page.waitForLoadState("load");
-    await page.addStyleTag({
-      content: `.site-hero { position: static !important }
-                .site-hero .scroll-down { display: block !important }`,
-    });
     await freezeMotion(page);
+    await page.evaluate(() => {
+      const title = document.querySelector<HTMLElement>(".site-hero h1")!;
+      const button = document.querySelector<HTMLElement>(".site-hero .btn")!;
+      button.style.position = "absolute";
+      button.style.top = `${title.offsetTop + title.offsetHeight / 2}px`;
+    });
     expect(
       (await findLayoutProblems(page, { firstViewOnly: true })).join(),
-    ).toContain("scroll-down");
+    ).toContain("overlaps text");
   });
 
   test("D3: legacy 700 px hero on a short screen", async ({ page }) => {
@@ -154,29 +156,30 @@ test.describe("the real site, with each defect put back", () => {
     );
   });
 
-  test("the legacy round photo on phones", async ({ page }) => {
+  test("a photo over the room text on phones", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 });
     await skipCookieBanner(page);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/en");
     await page.waitForLoadState("load");
     await page.addStyleTag({
-      content: `.img-absolute { right: 0 !important; bottom: -100px !important }
-                .img-absolute img { max-width: 160px !important }`,
+      content: `.room > :first-child { margin-bottom: -160px !important; position: relative; z-index: 1 }`,
     });
     await freezeMotion(page);
     expect((await findLayoutProblems(page)).join()).toContain("is covered by");
   });
 
-  test("the Pause pill on the indicators at 320 px", async ({ page }) => {
+  test("Close on the arrows of the full-screen view at 320 px", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     await skipCookieBanner(page);
     await page.goto("/en");
     await page.waitForLoadState("load");
-    await page.getByRole("button", { name: "View more" }).first().click();
+    await page.locator(".house-pair .gallery__open").first().click();
     await page.addStyleTag({
-      content: `.carousel-toggle { top: auto !important; left: auto !important;
-                bottom: 4px !important; right: 40px !important }`,
+      content: `.site-dialog__close { position: fixed !important; top: auto !important;
+                bottom: 12px !important; right: 20px !important }`,
     });
     await freezeMotion(page);
     expect(
@@ -196,14 +199,14 @@ test.describe("the real site, with each defect put back", () => {
     ).toContain("clipped by");
   });
 
-  test("menu text over the map panel", async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
+  test("menu text under the map panel", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
     await skipCookieBanner(page);
     await page.goto("/en");
     await page.waitForLoadState("load");
     await page.locator(".site-menu-toggle").click();
     await page.addStyleTag({
-      content: `#site-navbar .menu a { position: relative; left: 320px }`,
+      content: `#site-navbar .map-placeholder { position: absolute; top: 100px; left: 0; right: 0 }`,
     });
     await freezeMotion(page);
     expect(

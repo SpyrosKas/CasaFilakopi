@@ -11,16 +11,17 @@ type Options = {
 };
 
 const obstacleSelector = [
-  "img",
+  "img:not([data-backdrop])",
   "figure",
   "iframe",
   "video",
   ".map-placeholder",
   ".placeholder-notice",
   ".box",
-  ".timeline-panel",
+  ".step",
   ".cookie-banner",
-  ".carousel-indicators li",
+  ".gallery__controls",
+  ".lightbox__controls",
   ".site-menu-toggle",
 ].join(",");
 
@@ -46,7 +47,7 @@ export async function findOverflow(page: Page): Promise<string[]> {
  * panels it is not part of; clear of other text; on screen; not clipped by a
  * container; and the top thing at its own position (elementFromPoint), which
  * catches anything painted over it, whatever that thing is.
- * CSS background photos do not count: heroes are meant to have text on them.
+ * Hero photos (data-backdrop) do not count: they are meant to have text on them.
  */
 export async function findLayoutProblems(
   page: Page,
@@ -143,10 +144,8 @@ export async function findLayoutProblems(
           report(`"${label}" runs off the screen`);
         }
 
-        // Anything over a carousel photo (its buttons) sits there by design.
-        const overPhotoOnPurpose = parent.closest(
-          ".carousel, .site-dialog__bar",
-        );
+        // The dialog's Close button sits over its content by design.
+        const overPhotoOnPurpose = parent.closest(".site-dialog__bar");
         for (const { element, rect: box, name } of obstacles) {
           if (element.contains(node)) continue;
           if (overPhotoOnPurpose && element.matches("img, figure")) continue;
@@ -192,9 +191,7 @@ export async function findLayoutProblems(
       // Controls placed over a photo must not sit on one another. These have
       // little or no text, so the text checks above cannot see them.
       const controls = [
-        ...scope.querySelectorAll(
-          ".carousel-toggle, .carousel-indicators li, .site-dialog__close",
-        ),
+        ...scope.querySelectorAll(".arrows button, .site-dialog__close"),
       ].filter(isShown);
       controls.forEach((control, i) => {
         for (const other of controls.slice(i + 1)) {

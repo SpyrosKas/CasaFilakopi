@@ -36,11 +36,9 @@ export function PlaceholderPage({ page }: { page: PlaceholderPageKey }) {
   return (
     <>
       <PageHero image={heroImages.page} title={t(`${page}.title`)} />
-      <section className="section bg-pattern">
-        <div className="container">
-          <div className="page-content">
-            <PlaceholderNotice />
-          </div>
+      <section className="section">
+        <div className="wrap page-content">
+          <PlaceholderNotice />
         </div>
       </section>
       <ReserveBand />

@@ -6,7 +6,7 @@ export default function NotFound() {
   const t = useTranslations("NotFound");
   return (
     <ErrorScreen title={t("title")} body={t("body")}>
-      <Link href="/" className="btn btn-primary text-white">
+      <Link href="/" className="btn btn-primary">
         {t("home")}
       </Link>
     </ErrorScreen>

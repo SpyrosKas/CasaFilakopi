@@ -25,9 +25,9 @@ export default function ContactPage({ params }: Props) {
   return (
     <>
       <PageHero image={heroImages.page} title={t("title")} />
-      <section className="section bg-pattern">
-        <div className="container">
-          <div className="page-content">
+      <section className="section">
+        <div className="wrap contact-layout">
+          <div>
             <dl className="contact-list">
               <dt>{t("nameLabel")}</dt>
               <dd>{t("name")}</dd>
@@ -58,8 +58,9 @@ export default function ContactPage({ params }: Props) {
               <h2>{t("formSlotTitle")}</h2>
               <p>{t("formSlotBody")}</p>
             </div>
-
-            <h2 className="mb-3">{t("mapHeading")}</h2>
+          </div>
+          <div>
+            <h2 className="contact-map-heading">{t("mapHeading")}</h2>
             <MapEmbed />
           </div>
         </div>

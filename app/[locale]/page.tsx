@@ -1,20 +1,46 @@
 import { useTranslations } from "next-intl";
 import { setRequestLocale } from "next-intl/server";
 import { use } from "react";
+import { Gallery } from "@/components/site/gallery";
 import { heroButtonClass, Hero } from "@/components/site/hero";
 import { Icon, type IconName } from "@/components/site/icon";
+import { LineIcon, type LineIconName } from "@/components/site/line-icon";
 import { Photo } from "@/components/site/photo";
-import { PhotoModalButton } from "@/components/site/photo-buttons";
 import { ReserveBand } from "@/components/site/reserve-band";
 import { ReviewButton } from "@/components/site/review-button";
 import { richTags } from "@/components/site/rich-text";
 import {
   heroImages,
   houseSections,
+  landscapePhoto,
   photoKey,
   reviews,
   type HouseSection,
+  type HouseSectionKey,
 } from "@/content/house";
+
+/** In the order of Home.amenitiesBody, which lists them separated by commas. */
+const amenityIcons: LineIconName[] = [
+  "hammock",
+  "shower",
+  "flame",
+  "snowflake",
+  "wifi",
+  "tv",
+  "wind",
+  "yogaMat",
+  "waves",
+  "towels",
+];
+
+const pairSizes = {
+  large: "(min-width: 900px) 56vw, 88vw",
+  small: "(min-width: 900px) 40vw, 88vw",
+};
+
+function sectionFor(key: HouseSectionKey) {
+  return houseSections.find((section) => section.key === key)!;
+}
 
 export default function HomePage({
   params,
@@ -25,6 +51,8 @@ export default function HomePage({
   setRequestLocale(locale);
   const t = useTranslations("Home");
   const tCommon = useTranslations("Common");
+  const tHero = useTranslations("Hero");
+  const tPhotos = useTranslations("Photos");
 
   return (
     <>
@@ -32,130 +60,140 @@ export default function HomePage({
         image={heroImages.home}
         welcome={t("welcomeTo")}
         title={tCommon("siteName")}
-        scrollTarget="section-housestructure"
+        sky
         action={
           <a href="#section-housestructure" className={heroButtonClass}>
-            <ExploreLabel />
+            {tHero("explore")}
           </a>
         }
       />
-      {houseSections.map((section, index) => (
-        <HouseSectionBlock
-          key={section.key}
-          section={section}
-          id={index === 0 ? "section-housestructure" : undefined}
-        />
-      ))}
-      <section className="section visit-section">
-        <div className="container">
-          <VisitBlock title={t("overallTitle")} body={t("overallBody")} />
-          <VisitBlock
-            title={t("amenitiesTitle")}
-            body={t("amenitiesBody")}
-            spaced
-          />
-          <VisitBlock title={t("placesTitle")} body={t("placesBody")} />
+
+      <section
+        className="section house-section house-intro"
+        id="section-housestructure"
+      >
+        <div className="wrap">
+          <Room section={sectionFor("welcome")} sizes={pairSizes.large} />
         </div>
       </section>
+
+      <section className="section house-section house-tinted">
+        <div className="wrap house-pair">
+          <Room section={sectionFor("masterBedroom")} sizes={pairSizes.large} />
+          <Room section={sectionFor("secondBedroom")} sizes={pairSizes.small} />
+        </div>
+      </section>
+
+      <WideRoom section={sectionFor("kitchen")} />
+
+      <section className="section house-section house-tinted">
+        <div className="wrap house-pair house-pair--flipped">
+          <Room
+            section={sectionFor("interiorBathroom")}
+            sizes={pairSizes.small}
+          />
+          <Room
+            section={sectionFor("exteriorBathroom")}
+            sizes={pairSizes.large}
+          />
+        </div>
+      </section>
+
+      <WideRoom section={sectionFor("coolOff")} />
+
+      <figure className="full-bleed">
+        <Photo
+          src={landscapePhoto}
+          alt={tPhotos(photoKey(landscapePhoto))}
+          sizes="100vw"
+        />
+      </figure>
+
+      <section className="section visit-section">
+        <div className="wrap visit-grid">
+          <VisitBlock title={t("overallTitle")} body={t("overallBody")} />
+          <VisitBlock title={t("placesTitle")} body={t("placesBody")} />
+          <div className="visit-amenities" data-reveal="fade-up">
+            <h2>{t("amenitiesTitle")}</h2>
+            <ul className="amenities">
+              {t("amenitiesBody")
+                .split(/,\s*/)
+                .map((amenity, index) => (
+                  <li key={amenity}>
+                    {amenityIcons[index] && (
+                      <LineIcon name={amenityIcons[index]} />
+                    )}
+                    <span>{amenity}</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <Reviews locale={locale} />
       <ReserveBand />
     </>
   );
 }
 
-function ExploreLabel() {
-  const t = useTranslations("Hero");
-  return t("explore");
-}
-
-function HouseSectionBlock({
-  section,
-  id,
-}: {
-  section: HouseSection;
-  id?: string;
-}) {
+function useRoom(section: HouseSection) {
   const t = useTranslations("Home");
   const tPhotos = useTranslations("Photos");
-  const { key, photoSide, photo, round, slides } = section;
-  const title = t(`sections.${key}.title`);
-  const photoRight = photoSide === "right";
+  const { key, photo, slides, mainPhotoLast } = section;
+  const main = { src: photo, alt: t(`sections.${key}.alt`) };
+  const rest = slides.map((src) => ({ src, alt: tPhotos(photoKey(src)) }));
+  return {
+    title: t(`sections.${key}.title`),
+    body: t.rich(`sections.${key}.body`, {
+      ...richTags,
+      br: () => <span className="paragraph-gap" />,
+    }),
+    photos: mainPhotoLast ? [...rest, main] : [main, ...rest],
+  };
+}
 
-  const mediaClass = photoRight
-    ? "col-md-12 col-lg-7 ml-auto order-lg-2 position-relative mb-5"
-    : "col-md-12 col-lg-7 order-lg-1 house-media";
-  const textClass = photoRight
-    ? "col-md-12 col-lg-4 order-lg-1"
-    : "col-md-12 col-lg-4 ml-auto order-lg-2 position-relative mb-5";
-
+function Room({ section, sizes }: { section: HouseSection; sizes: string }) {
+  const { title, body, photos } = useRoom(section);
   return (
-    <section className="section house-section" id={id}>
-      <div className="container">
-        <div className="row align-items-center">
-          <div className={mediaClass} data-reveal="fade-up">
-            <figure className="img-absolute">
-              <Photo
-                src={round}
-                alt={t(`sections.${key}.roundAlt`)}
-                className="img-fluid"
-                sizes="250px"
-                data-reveal={photoRight ? "fade-left" : "fade-right"}
-              />
-            </figure>
-            <Photo
-              src={photo}
-              alt={t(`sections.${key}.alt`)}
-              className="img-fluid rounded"
-              sizes="(min-width: 1200px) 635px, (min-width: 992px) 530px, 100vw"
-            />
-          </div>
-          <div className={textClass} data-reveal="fade-up">
-            <h2 className="heading">{title}</h2>
-            <p className="mb-4">{t.rich(`sections.${key}.body`, richTags)}</p>
-            {slides.length > 0 && (
-              <div className="mb-3">
-                <PhotoModalButton
-                  label={t("viewMore")}
-                  title={title}
-                  photos={slides.map((src) => ({
-                    src,
-                    alt: tPhotos(photoKey(src)),
-                  }))}
-                />
-              </div>
-            )}
-          </div>
-        </div>
+    <article className="room">
+      <div data-reveal="fade-up">
+        <Gallery photos={photos} label={title} sizes={sizes} />
+      </div>
+      <div className="room__text" data-reveal="fade-up">
+        <h2>{title}</h2>
+        <p>{body}</p>
+      </div>
+    </article>
+  );
+}
+
+/** Heading and text on the margin, photos running off the edge of the screen. */
+function WideRoom({ section }: { section: HouseSection }) {
+  const { title, body, photos } = useRoom(section);
+  return (
+    <section className="section house-section house-wide">
+      <div className="wrap room__text room__text--wide" data-reveal="fade-up">
+        <h2>{title}</h2>
+        <p>{body}</p>
+      </div>
+      <div data-reveal="fade-up">
+        <Gallery
+          photos={photos}
+          label={title}
+          sizes="(min-width: 900px) 70vw, 88vw"
+          wide
+        />
       </div>
     </section>
   );
 }
 
-function VisitBlock({
-  title,
-  body,
-  spaced = false,
-}: {
-  title: string;
-  body: string;
-  spaced?: boolean;
-}) {
+function VisitBlock({ title, body }: { title: string; body: string }) {
   return (
-    <div className="row">
-      <div className="col-md-12">
-        <h2 className="heading" data-reveal="fade-right">
-          {title}
-        </h2>
-        <p data-reveal="fade-left">
-          {body}
-          {spaced && (
-            <>
-              <br />
-              <br />
-            </>
-          )}
-        </p>
-      </div>
+    <div className="visit-block" data-reveal="fade-up">
+      <h2>{title}</h2>
+      <p>{body}</p>
     </div>
   );
 }
@@ -168,47 +206,30 @@ function Reviews({ locale }: { locale: string }) {
   return (
     <section
       className="section testimonial-section"
-      aria-label={t("heading")}
+      aria-labelledby="reviews-heading"
       data-reveal="fade"
-      data-reveal-delay="200"
     >
-      <div className="container">
-        <div className="wrapper">
-          {reviews.map(({ key, stars, reveal, delay }) => {
+      <div className="wrap">
+        <h2 id="reviews-heading">{t("heading")}</h2>
+        <div className="reviews">
+          {reviews.map(({ key, stars }) => {
             const name = t(`items.${key}.name`);
             return (
-              <div
-                className="box"
-                key={key}
-                data-reveal={reveal}
-                data-reveal-delay={delay}
-              >
-                <i className="quote" aria-hidden="true">
-                  <Icon name="quoteLeft" />
-                </i>
-                <p lang={reviewLang}>
-                  {t(`items.${key}.teaser`)}{" "}
-                  <i className="quote" aria-hidden="true">
-                    <Icon name="quoteRight" />
-                  </i>
-                </p>
-                <div className="mb-3">
-                  <ReviewButton
-                    label={t("readMore")}
-                    title={t("reviewBy", { name })}
-                    text={t(`items.${key}.text`)}
-                  />
-                </div>
-                <div className="content">
-                  <div className="info">
-                    <div className="name">{name}</div>
-                    <Stars
-                      stars={stars}
-                      label={t("starsLabel", { stars: String(stars) })}
-                    />
-                  </div>
-                </div>
-              </div>
+              <article className="box" key={key}>
+                <Stars
+                  stars={stars}
+                  label={t("starsLabel", { stars: String(stars) })}
+                />
+                <blockquote lang={reviewLang}>
+                  <p>{t(`items.${key}.teaser`)}</p>
+                </blockquote>
+                <p className="name">{name}</p>
+                <ReviewButton
+                  label={t("readMore")}
+                  title={t("reviewBy", { name })}
+                  text={t(`items.${key}.text`)}
+                />
+              </article>
             );
           })}
         </div>
@@ -224,9 +245,7 @@ function Stars({ stars, label }: { stars: number; label: string }) {
   return (
     <div className="stars" role="img" aria-label={label}>
       {icons.map((name, index) => (
-        <i key={index}>
-          <Icon name={name} />{" "}
-        </i>
+        <Icon key={index} name={name} />
       ))}
     </div>
   );

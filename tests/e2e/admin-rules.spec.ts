@@ -67,7 +67,7 @@ test.beforeAll(async () => {
     `select value from public.settings where key = 'payment'`,
   );
   savedPayment = payment.rows[0].value;
-  // These tests start from a deposit. The seed itself now says full payment.
+  // The tests read a deposit rule, which the seed no longer has by default.
   await db.query(
     `update public.settings set value = $1::jsonb where key = 'payment'`,
     [

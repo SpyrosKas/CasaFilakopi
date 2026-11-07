@@ -6,6 +6,9 @@ import {
 import { skipCookieBanner } from "./helpers";
 
 test.describe("menu", () => {
+  // From 1024 px the menu is in the header bar, with nothing to open.
+  test.use({ viewport: { width: 375, height: 800 } });
+
   test("opens, traps content behind it, closes with Esc", async ({ page }) => {
     await skipCookieBanner(page);
     await page.goto("/en/host");
@@ -28,11 +31,8 @@ test.describe("menu", () => {
     await page.getByRole("button", { name: "Open menu" }).click();
     const inMenu = () =>
       page.evaluate(() => {
-        const active = document.activeElement;
-        return (
-          active?.closest("#site-navbar") !== null ||
-          active?.classList.contains("site-menu-toggle")
-        );
+        // The header stays usable above the menu: language and close.
+        return document.activeElement?.closest(".site-header") !== null;
       });
 
     for (let i = 0; i < 25; i++) {
@@ -58,46 +58,7 @@ test.describe("menu", () => {
   });
 });
 
-test.describe("photo modal", () => {
-  test("is keyboard usable and gives focus back", async ({ page }) => {
-    await skipCookieBanner(page);
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.goto("/en");
-
-    const button = page.getByRole("button", { name: "View more" }).first();
-    await button.focus();
-    await page.keyboard.press("Enter");
-
-    const dialog = page.getByRole("dialog", { name: "Master Bedroom" });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByText("Photo 1 of 6")).toBeAttached();
-
-    await page.keyboard.press("ArrowRight");
-    await expect(dialog.getByText("Photo 2 of 6")).toBeAttached();
-    await dialog.getByRole("button", { name: "Previous" }).click();
-    await dialog.getByRole("button", { name: "Previous" }).click();
-    await expect(dialog.getByText("Photo 6 of 6")).toBeAttached();
-    await dialog.getByRole("button", { name: "Show photo 3" }).click();
-    await expect(dialog.getByText("Photo 3 of 6")).toBeAttached();
-
-    await page.keyboard.press("Escape");
-    await expect(dialog).toBeHidden();
-    await expect(button).toBeFocused();
-  });
-
-  test("carousel does not auto-advance with reduced motion", async ({
-    page,
-  }) => {
-    await skipCookieBanner(page);
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.goto("/en");
-    await page.getByRole("button", { name: "View more" }).first().click();
-    const dialog = page.getByRole("dialog", { name: "Master Bedroom" });
-    await expect(dialog.getByRole("button", { name: "Play" })).toBeVisible();
-    await page.waitForTimeout(5500);
-    await expect(dialog.getByText("Photo 1 of 6")).toBeAttached();
-  });
-
+test.describe("dialogs", () => {
   test("guest review opens in full", async ({ page }) => {
     await skipCookieBanner(page);
     await page.goto("/en");
@@ -141,7 +102,7 @@ test("language switcher keeps the page", async ({ page }) => {
   await skipCookieBanner(page);
   await page.goto("/en/directions");
   await page
-    .locator("#site-footer")
+    .getByRole("navigation", { name: "Language" })
     .getByRole("link", { name: "Ελληνικά" })
     .click();
   await expect(page).toHaveURL(/\/el\/directions$/);
@@ -210,7 +171,7 @@ test.describe("not found", () => {
   }) => {
     for (const path of [
       "/img/casa-icon-1.png",
-      "/fonts/roboto-latin-100-normal.woff2",
+      "/fonts/commissioner-greek-wght-normal.woff2",
       "/favicon.ico",
       "/api/health",
       "/admin",
@@ -233,6 +194,7 @@ test.describe("cookie consent", () => {
       if (url.origin !== baseURL) elsewhere.push(request.url());
     });
 
+    await page.setViewportSize({ width: 375, height: 800 });
     await page.goto("/en/contact");
     await expect(
       page.getByRole("region", { name: "Cookie choices" }),

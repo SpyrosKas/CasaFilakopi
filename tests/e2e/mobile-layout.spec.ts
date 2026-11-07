@@ -14,7 +14,8 @@ import {
 } from "./layout-checks";
 
 // T3.1c. The real complaint behind this test: a round photo sat on the text in
-// every house section on phones, and pages scrolled sideways.
+// every house section on phones, and pages scrolled sideways. That photo is
+// gone, but nothing may take its place on top of the text.
 
 const portraitWidths = [320, 375, 414, 768];
 const greekWidths = [360, 390, 820, 991];
@@ -115,17 +116,18 @@ for (const locale of locales) {
     }
   }
 
-  // The round photo must clear the text at any width, not only on phones.
+  // Text must clear the photos at any width, not only on phones.
   for (const width of [992, 1100, 1199, 1200, 1280]) {
     test(`/${locale} at ${width}px`, async ({ page }) => {
       await checkPage(page, `/${locale}`, { width, height: 800 });
     });
   }
 
+  // From 1024 px the menu is always on screen, with no button to open it.
   for (const size of [
     { width: 320, height: 800 },
     { width: 768, height: 800 },
-    { width: 1280, height: 800 },
+    { width: 1023, height: 768 },
     { width: 667, height: 375 },
   ]) {
     const name = `${size.width}x${size.height}`;
@@ -144,6 +146,15 @@ for (const locale of locales) {
         [],
       );
     });
+  }
+
+  for (const size of [
+    { width: 320, height: 800 },
+    { width: 768, height: 800 },
+    { width: 1280, height: 800 },
+    { width: 667, height: 375 },
+  ]) {
+    const name = `${size.width}x${size.height}`;
 
     test(`/${locale} cookie banner at ${name}`, async ({ page }) => {
       await page.setViewportSize(size);
@@ -168,9 +179,12 @@ for (const locale of locales) {
       await page.goto(`/${locale}`);
       await page.waitForLoadState("load");
 
-      const openers = page.locator(".house-section .btn, .box .btn");
+      // The full-screen view of each of the 7 galleries, and the 3 reviews.
+      const openers = page.locator(
+        ".gallery__slide:first-child .gallery__open, .box button",
+      );
       const total = await openers.count();
-      expect(total).toBe(8);
+      expect(total).toBe(10);
 
       for (let i = 0; i < total; i++) {
         await openers.nth(i).click();

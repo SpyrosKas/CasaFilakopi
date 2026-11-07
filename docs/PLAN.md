@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** Staging live at https://casa-filakopi.vercel.app. WEB, ENGINE, ADMIN merged. INV fixing review findings. DESIGN building on `feat/design`. YOU: create the first Owner account, accountant sheet (D4). Next: MAIL (A4, A5), then Wave 2.
+**Status:** Working alone until the Google Workspace, Resend and Stripe session (D23). Merged: WEB, ENGINE, ADMIN, INV, DESIGN. Running: INV Excel, ADMIN-OPS, CMS, CHN. Next: MAIL, PAY, then Greek admin, drafts, hardening.
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
@@ -57,11 +57,39 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | D15 | Schema changes from the spec | Decided | `booking_nights` dropped (stay range plus `price_breakdown`). `room_photos` became `media_placements`, per section. `email_queue` merged into `email_logs`. `rate_overrides` is the spec's `rates` |
 | D16 | Paid hold on dates an import has already sold | Decided | Automatic refund plus host alert (`dates_lost`). Nothing-due-now bookings confirm through `confirm_without_payment` |
 | D17 | Build invoicing before the accountant answers | Decided | Yes. Dummy business details, every document marked provisional and not sent to guests until D4 is confirmed. PDFs in the private `invoices` bucket. Admin filters by month, transaction, booking. myDATA mode Off: Yorgos exports to the accountant, who uploads. VAT and document types stay data |
-| D18 | Modernise the design | Decided, on trial | Owner asked for a more modern look and a language selector with flags. Built on `feat/design` for comparison; overrides "keep the look" (MIG-03) if approved. Resolves the button contrast question |
+| D18 | Modernise the design | **Decided** | Owner approved the redesign and language flags. Overrides "keep the look" (MIG-03). Resolves button contrast. Use design tokens, not Bootstrap classes |
 | D19 | Airbnb and Booking.com bookings | Decided | Shown in Admin with their source. iCal gives dates, so Yorgos adds guest contacts and the amount by hand, and they then count in reports. A channel manager such as Beds24 stays an option for later |
+| D20 | Accountant timing | Decided | Accountant answers once everything is finished. Documents stay provisional until then, and that step remains a launch blocker for real invoices |
+| D21 | Export format | Decided | Real Excel file (.xlsx) replaces CSV, after the owner tested Excel on a Mac |
+| D22 | Guest mailbox | Decided | `host@miloscasa.com` becomes a real Google Workspace mailbox, replacing Namecheap forwarding, so Yorgos replies from that address. DNS stays in Namecheap. Resend sends from `mail.miloscasa.com` |
+| D23 | Working alone | Decided 2026-11-07 | LEAD may merge reviewed work, push to `dev-booking` and apply migrations to staging during the 6-hour block. `master`, live site and DNS stay untouched |
+| D24 | Late cancellation on a deposit | Decided | Yorgos keeps the deposit and the shortfall is not chased. `stillOwedCents` is not shown to guests or collected |
+| D25 | Admin language | Decided | Greek by default with an EN/EL switch. Greek text reviewed by HOST |
+| D26 | FAQ, house rules, legal drafts | Decided | LEAD drafts them in Greek and English as unpublished drafts, using only known facts. Legal text needs professional review before publishing |
 | D14 | Launch target | Proposed | Live before the 2027 season bookings start (aim for March 2027) |
 
 ---
+
+### Working defaults (D27, 2026-11-07)
+
+Used for the autonomous block. Each can change later; YOU or HOST confirm them before launch. Anything Yorgos edits in Admin is only a starting value.
+
+| Area | Default |
+|---|---|
+| Public email | `host@miloscasa.com`; Yorgos's personal Yahoo removed from the site. Phone and WhatsApp stay |
+| Default language | English, with Greek chosen from the browser or the flags. Admin is Greek first (D25) |
+| Sender | Name "Casa Filakopi", from `bookings@mail.miloscasa.com`, reply-to `host@miloscasa.com`. Each guest gets their booking's language |
+| Reminders | Balance request at the due date plus one reminder 3 days later. Pre-arrival email 3 days before. Thank-you built but off |
+| Payment | Stripe hosted Checkout, EUR, Apple Pay and Google Pay on; hold 35 min, session 30 min |
+| Late refund | Tiers as seeded: 100% until 30 days out, then 0% |
+| Pricing rules | Extra-guest fee per guest per night, children counted, promos also discount cleaning, taxes never discounted |
+| Booking rules | Horizon 18 months, same-day until 12:00, Friday and Saturday weekend, minimum stay set by Yorgos |
+| Prices, capacity, fees | Remain placeholders until HOST enters real ones (T6.9) |
+| Analytics | None at launch, so no analytics cookies. Setting stays available |
+| Data retention | Guest data anonymised 5 years after check-out, except what tax rules require. Confirm with ACC (question 15) |
+| Accounts | Yorgos Owner, plus Spyros as a second Owner for lost-phone recovery. No Staff at launch; the role is built |
+| Vrbo/HomeAway | Sync available as "Other iCal", off until HOST confirms the listing is active |
+| Launch | March 2027 target. Real invoices wait for ACC (D20) |
 
 ## 3. How we work (multi-agent model)
 
@@ -300,13 +328,13 @@ Security and tooling:
 
 **Track INV** (owns `lib/invoicing`, `app/admin/invoices`). Started early under D17
 - [ ] T5.1 Rescope against ACC answers; list what is removed. Done last, when D4 is answered
-- [ ] T5.2 Document issuing, immutable, triggers (`INV-01` to `INV-04`, `INV-07`)
-- [ ] T5.3 Credit notes (`INV-05`)
-- [ ] T5.4 PDF, private storage, email attachment (`INV-06`)
+- [ ] T5.2 Document issuing, immutable, triggers (`INV-01` to `INV-04`, `INV-07`). Issuing, PDF and immutability done; automatic triggers wait for Stripe
+- [x] T5.3 Credit notes (`INV-05`)
+- [ ] T5.4 PDF, private storage, email attachment (`INV-06`). PDF and storage done; email attachment and guest download wait for D4
 - [ ] T5.5 myDATA adapter, retries (`INV-08`, `INV-09`, `JOB-06`)
 - [ ] T5.6 OTA booking invoices (`INV-10`)
-- [ ] T5.7 List, export, settings (`INV-11`, `INV-12`, `ADM-22`, `ADM-26`)
-- [ ] T5.7a Download one document, or select several or all matching a filter, as a PDF or a ZIP plus CSV. Marking as sent stays a separate step
+- [x] T5.7 List, export, settings (`INV-11`, `INV-12`, `ADM-22`, `ADM-26`)
+- [x] T5.7a Download one document, or select several or all matching a filter, as a PDF or a ZIP plus Excel file. Marking as sent stays a separate step
 
 **Track OPS**
 - [ ] T5.8 Editable email templates, remaining emails (`EML-02`, `EML-03`, `EML-06`, `EML-09`, `ADM-27`)

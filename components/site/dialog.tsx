@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, type ReactNode } from "react";
+import { LineIcon } from "./line-icon";
 
 /**
  * Native <dialog>: the browser handles the focus trap, Esc, the backdrop and
@@ -11,10 +12,12 @@ export function Dialog({
   label,
   onClose,
   children,
+  fullScreen = false,
 }: {
   label: string;
   onClose: () => void;
   children: ReactNode;
+  fullScreen?: boolean;
 }) {
   const t = useTranslations("Common");
   const ref = useRef<HTMLDialogElement>(null);
@@ -35,7 +38,7 @@ export function Dialog({
   return (
     <dialog
       ref={ref}
-      className="site-dialog"
+      className={`site-dialog${fullScreen ? " site-dialog--full" : ""}`}
       aria-label={label}
       onClose={onClose}
       onClick={(event) => {
@@ -51,7 +54,7 @@ export function Dialog({
             aria-label={t("close")}
             onClick={() => ref.current?.close()}
           >
-            <span aria-hidden="true">&times;</span>
+            <LineIcon name="close" />
           </button>
         </div>
         {children}
