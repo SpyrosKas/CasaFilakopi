@@ -839,6 +839,9 @@ isOneToOne: false
 "change_admin_role":
 { Args: { "p_actor": string,"p_role": Database["public"]['Enums']["admin_role"],"p_user_id": string }; Returns: undefined
                            },
+"close_dispute":
+{ Args: { "p_amount_cents": number,"p_dispute_id": string,"p_payment_intent_id": string,"p_won": boolean }; Returns: Json
+                           },
 "complete_finished_bookings":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
@@ -934,6 +937,9 @@ isOneToOne: false
                            },
 "only_digits":
 { Args: { "p_text": string }; Returns: string
+                           },
+"open_dispute":
+{ Args: { "p_payment_intent_id": string }; Returns: Json
                            },
 "public_availability":
 { Args: { "p_from": string,"p_room_id": string,"p_to": string }; Returns: {
