@@ -11,6 +11,7 @@ const OWNER_LINKS = [
   { href: "/admin/house", label: t.nav.house },
   { href: "/admin/booking", label: t.nav.booking },
   { href: "/admin/rules", label: t.nav.rules },
+  { href: "/admin/invoices", label: t.nav.invoices },
 ];
 
 export function AdminNav({ isOwner }: { isOwner: boolean }) {
