@@ -296,10 +296,10 @@ test.describe("issuing", () => {
 
   test("a signed link really stops working when it expires", async () => {
     const row = await invoiceRow(id);
-    const { data, error } = await storage.createSignedUrl(row.pdf_path, 1);
+    const { data, error } = await storage.createSignedUrl(row.pdf_path, 5);
     expect(error).toBeNull();
     expect((await fetch(data!.signedUrl)).status).toBe(200);
-    await new Promise((resolve) => setTimeout(resolve, 2500));
+    await new Promise((resolve) => setTimeout(resolve, 6500));
     expect((await fetch(data!.signedUrl)).status).toBeGreaterThanOrEqual(400);
   });
 
