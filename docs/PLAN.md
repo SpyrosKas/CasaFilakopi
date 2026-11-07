@@ -61,6 +61,7 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | D19 | Airbnb and Booking.com bookings | Decided | Shown in Admin with their source. iCal gives dates, so Yorgos adds guest contacts and the amount by hand, and they then count in reports. A channel manager such as Beds24 stays an option for later |
 | D20 | Accountant timing | Decided | Accountant answers once everything is finished. Documents stay provisional until then, and that step remains a launch blocker for real invoices |
 | D21 | Export format | Decided | Real Excel file (.xlsx) replaces CSV, after the owner tested Excel on a Mac |
+| D22 | Guest mailbox | Decided | `host@miloscasa.com` becomes a real Google Workspace mailbox, replacing Namecheap forwarding, so Yorgos replies from that address. DNS stays in Namecheap. Resend sends from `mail.miloscasa.com` |
 | D14 | Launch target | Proposed | Live before the 2027 season bookings start (aim for March 2027) |
 
 ---
