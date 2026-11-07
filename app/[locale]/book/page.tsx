@@ -23,22 +23,18 @@ export default function BookPage({ params }: Props) {
   return (
     <>
       <PageHero image={heroImages.page} title={t("title")} />
-      <section className="section bg-pattern">
-        <div className="container">
-          <div className="page-content text-center">
-            <p className="mb-3">{t("soon")}</p>
-            <p className="mb-3">{t("body")}</p>
-            <p className="mb-0">
-              <a href={`mailto:${contact.email}`}>
-                {t("emailLabel", { email: contact.email })}
-              </a>
-            </p>
-            <p>
-              <a href={contact.whatsappHref}>
-                {t("whatsappLabel", { number: contact.whatsappDisplay })}
-              </a>
-            </p>
-          </div>
+      <section className="section">
+        <div className="wrap page-content">
+          <p className="lead">{t("soon")}</p>
+          <p>{t("body")}</p>
+          <p className="book-links">
+            <a href={`mailto:${contact.email}`}>
+              {t("emailLabel", { email: contact.email })}
+            </a>
+            <a href={contact.whatsappHref}>
+              {t("whatsappLabel", { number: contact.whatsappDisplay })}
+            </a>
+          </p>
         </div>
       </section>
     </>

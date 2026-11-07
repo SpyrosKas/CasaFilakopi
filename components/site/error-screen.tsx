@@ -15,12 +15,10 @@ export function ErrorScreen({
   return (
     <>
       <PageHero image={heroImages.page} title={title} />
-      <section className="section bg-pattern">
-        <div className="container">
-          <div className="page-content text-center">
-            <p className="mb-4">{body}</p>
-            {children}
-          </div>
+      <section className="section">
+        <div className="wrap page-content">
+          <p>{body}</p>
+          <div className="button-row">{children}</div>
         </div>
       </section>
     </>

@@ -1,12 +1,13 @@
 "use client";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
+import { LineIcon } from "./line-icon";
 
 type Panel = { id: string; title: string; content: ReactNode };
 
 const OpenPanelContext = createContext<(id: string) => void>(() => {});
 
-/** One panel open at a time, like the Bootstrap accordion it replaces. */
+/** One panel open at a time. */
 export function Accordion({ panels }: { panels: Panel[] }) {
   const [openId, setOpenId] = useState<string | null>(panels[0]?.id ?? null);
 
@@ -18,21 +19,22 @@ export function Accordion({ panels }: { panels: Panel[] }) {
           return (
             <div className="card" key={id}>
               <div className="card-header" id={`heading-${id}`}>
-                <h2 className="mb-0">
+                <h2>
                   <button
-                    className={`btn btn-link${open ? "" : " collapsed"}`}
+                    className="accordion__toggle"
                     type="button"
                     aria-expanded={open}
                     aria-controls={`panel-${id}`}
                     onClick={() => setOpenId(open ? null : id)}
                   >
                     {title}
+                    <LineIcon name="chevronDown" />
                   </button>
                 </h2>
               </div>
               <div
                 id={`panel-${id}`}
-                className={`collapse${open ? " show" : ""}`}
+                hidden={!open}
                 role="region"
                 aria-labelledby={`heading-${id}`}
               >

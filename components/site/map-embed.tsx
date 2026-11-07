@@ -28,7 +28,7 @@ export function MapEmbed({ load = true }: { load?: boolean }) {
 
   return (
     <div className="map-placeholder">
-      <p className="mb-0">{t("blocked")}</p>
+      <p>{t("blocked")}</p>
       <button
         type="button"
         className="btn btn-primary"

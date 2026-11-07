@@ -26,38 +26,21 @@ export default function HostPage({ params }: Props) {
       <Hero
         image={heroImages.host}
         title={t("title")}
-        scrollTarget="section-thehost"
         action={<HeroReserveButton />}
       />
-      <section className="section bg-pattern host-section" id="section-thehost">
-        <div className="container">
-          <div className="row">
-            <div className="col-md-7">
-              <div className="container">
-                <div className="row align-items-center">
-                  <div
-                    className="col-md-12 col-lg-12 ml-auto order-lg-2 position-relative mb-5"
-                    data-reveal="fade-left"
-                  >
-                    <Photo
-                      src={hostPhoto}
-                      alt={t("photoAlt")}
-                      className="img-fluid rounded"
-                      sizes="(min-width: 768px) 60vw, 100vw"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-md-5">
-              <div
-                className="col-md-12 col-lg-12 order-lg-1"
-                data-reveal="fade-right"
-              >
-                <p className="mb-4">{t.rich("letter", richTags)}</p>
-              </div>
-            </div>
+      <section className="section" id="section-thehost">
+        <div className="wrap host-layout">
+          <div data-reveal="fade-up">
+            <Photo
+              src={hostPhoto}
+              alt={t("photoAlt")}
+              className="host-photo"
+              sizes="(min-width: 900px) 480px, 100vw"
+            />
           </div>
+          <p className="host-letter" data-reveal="fade-up">
+            {t.rich("letter", richTags)}
+          </p>
         </div>
       </section>
       <ReserveBand />

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { useTranslations } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { use } from "react";
+import { GalleryGrid } from "@/components/site/gallery";
 import { PageHero } from "@/components/site/hero";
-import { GalleryGrid } from "@/components/site/photo-buttons";
 import { ReserveBand } from "@/components/site/reserve-band";
 import { heroImages, houseSections, photoKey } from "@/content/house";
 
@@ -25,8 +25,8 @@ export default function GalleryPage({ params }: Props) {
   return (
     <>
       <PageHero image={heroImages.page} title={t("title")} />
-      <section className="section bg-pattern">
-        <div className="container">
+      <section className="section">
+        <div className="wrap">
           {houseSections.map(({ key, photo, slides }) => {
             const title = tHome(`sections.${key}.title`);
             return (
