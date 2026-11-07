@@ -90,7 +90,6 @@ export async function saveDraft(input: unknown): Promise<ContentResult> {
     if (error) return failed();
   }
 
-  revalidatePath("/admin/content", "layout");
   return { ok: true, dirty: true };
 }
 

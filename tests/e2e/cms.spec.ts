@@ -312,7 +312,10 @@ test.describe("photos", () => {
       .getByLabel("Description in Greek")
       .fill(`Περιγραφή ${mark}`);
     await refreshed.getByRole("button", { name: "Save" }).click();
-    await expectNotice("Description saved");
+    // The first save's notice is still on screen, so watch the data instead.
+    await expect
+      .poll(async () => (await mediaInSection())[0].alt.el)
+      .toBe(`Περιγραφή ${mark}`);
 
     const visitorPage = await visitor.newPage();
     await visitorPage.goto(PUBLIC_EL);

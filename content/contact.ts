@@ -1,4 +1,5 @@
-// From the legacy site. Moves to Admin settings with the CMS work.
+// The first import of the contact details, and the fallback if the database
+// cannot be read. Yorgos edits them in Admin. The map stays here: it is not text.
 export const contact = {
   email: "gkavourakis@yahoo.com",
   phoneDisplay: "(+30) 693-470-7765",
