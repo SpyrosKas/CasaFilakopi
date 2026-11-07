@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
-import { DATABASE_JOBS, HEARTBEAT_JOB } from "@/lib/admin/job-health";
 import { i18nFor } from "@/lib/admin/i18n";
+import {
+  HEARTBEAT_JOB,
+  summariseJobs,
+  WATCHED_JOBS,
+} from "@/lib/admin/job-health";
 import { createAdminClient } from "@/lib/db/admin";
 import { isCronAuthorised } from "@/lib/email/cron-auth";
 import { emailSecrets } from "@/lib/email/env";
-import { alertAboutJob, finishJob, startJob } from "@/lib/email/jobs";
+import {
+  alertAboutJob,
+  alertStaleJob,
+  finishJob,
+  latestRuns,
+  startJob,
+} from "@/lib/email/jobs";
 import { loadEmailSettings } from "@/lib/email/settings";
 import { logError, logInfo } from "@/lib/log";
 
@@ -32,13 +42,15 @@ async function handle(request: Request) {
     const now = new Date();
     // No admin is looking: the label goes into the host's email.
     const { hostLocale } = await loadEmailSettings(db);
-    const { t } = i18nFor(hostLocale);
+    const { labels, lateRun } = i18nFor(hostLocale).t.ops.jobs;
+    const { stale } = summariseJobs(await latestRuns(db), now);
     const alerted = (
-      await Promise.all(
-        DATABASE_JOBS.map((job) =>
-          alertAboutJob(db, job, t.ops.jobs.labels[job], now),
+      await Promise.all([
+        ...WATCHED_JOBS.map((job) => alertAboutJob(db, job, labels[job], now)),
+        ...stale.map((job) =>
+          alertStaleJob(db, job, labels[job], now, lateRun),
         ),
-      )
+      ])
     ).filter(Boolean).length;
     await finishJob(db, run, "success", `alerted ${alerted}`);
     logInfo("job_health.done", { alerted });

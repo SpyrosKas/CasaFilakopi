@@ -28,7 +28,9 @@ export function securityHeaders(
     "Strict-Transport-Security": "max-age=31536000",
     "X-Robots-Tag": "noindex, nofollow",
     "X-Frame-Options": "DENY",
-    "Referrer-Policy": "no-referrer",
+    // same-origin, not no-referrer: no-referrer makes browsers send Origin: null on
+    // a plain form post, which Next.js refuses as an invalid Server Action.
+    "Referrer-Policy": "same-origin",
     "X-Content-Type-Options": "nosniff",
     "Cache-Control": "private, no-store",
   };

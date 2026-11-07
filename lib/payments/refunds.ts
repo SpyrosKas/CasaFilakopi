@@ -1,4 +1,5 @@
 import type Stripe from "stripe";
+import { later } from "@/lib/admin/later";
 import { alertHost } from "./alerts";
 import { dbCode, requireStripe, rpc, type PaymentDeps } from "./deps";
 import type { CardRefundShare } from "./policy";
@@ -267,7 +268,7 @@ const alertFailedRefund = (
     key: `refund_failed:${refundId}`,
     bookingId,
     amountCents,
-    reason: `Stripe reports that this refund failed (${refundId}), so the guest does not have the money back. Please check it in Stripe and refund again from Admin.`,
+    reason: later.payments.refundFailed(refundId),
   });
 
 /** Applies a refund as Stripe has it now. A failed one always alerts. */

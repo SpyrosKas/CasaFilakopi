@@ -14,6 +14,7 @@ import {
   FormMessage,
   SelectField,
 } from "@/components/admin/form";
+import { useHydrated } from "@/components/admin/use-hydrated";
 import { closeDates, reopenDates } from "@/lib/admin/actions/calendar";
 import { clearDailyPrices, setDailyPrices } from "@/lib/admin/actions/rates";
 import {
@@ -127,6 +128,7 @@ export function AvailabilityCalendar({
   const c = t.calendar;
 
   const router = useRouter();
+  const isReady = useHydrated();
   const [first, setFirst] = useState<string | null>(firstNight);
   const [last, setLast] = useState<string | null>(null);
   const [blockId, setBlockId] = useState<string | null>(null);
@@ -208,6 +210,7 @@ export function AvailabilityCalendar({
               className={className}
               aria-label={describe(night, i18n)}
               aria-pressed={isPicked(night.date)}
+              disabled={!isReady}
               onClick={() => {
                 if (night.blockId) {
                   reset();
@@ -257,7 +260,7 @@ export function AvailabilityCalendar({
                 label,
               }))}
             />
-            <Field label={c.note} name="note" />
+            <Field label={c.note} name="note" hint={c.noteHint} />
           </ActionForm>
           <button type="button" className="button button-quiet" onClick={reset}>
             {c.clearPick}
@@ -365,6 +368,7 @@ function ClearPrices({
     idleState,
   );
   const [, startTransition] = useTransition();
+  const isReady = useHydrated();
   return (
     <form
       noValidate
@@ -394,7 +398,11 @@ function ClearPrices({
       {weekdays.map((day) => (
         <input key={day} type="hidden" name="weekdays" value={day} />
       ))}
-      <button type="submit" className="button button-quiet" disabled={pending}>
+      <button
+        type="submit"
+        className="button button-quiet"
+        disabled={pending || !isReady}
+      >
         {pending ? t.common.saving : r.clear}
       </button>
     </form>
@@ -417,6 +425,7 @@ export function RatesCalendar({
   const { formatDate, formatEuro, t } = i18n;
   const r = t.rates;
 
+  const isReady = useHydrated();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [weekdays, setWeekdays] = useState<number[]>(WEEK);
@@ -451,6 +460,7 @@ export function RatesCalendar({
               .join(" ")}
             aria-label={`${formatDate(day.date)}: ${formatEuro(day.cents)}`}
             aria-pressed={isPicked(day.date)}
+            disabled={!isReady}
             onClick={() => tap(day.date)}
           >
             <span className="cal-tag">{dayNumber(day.date)}</span>
@@ -477,6 +487,7 @@ export function RatesCalendar({
               name="from"
               type="date"
               value={from}
+              readOnly={!isReady}
               onChange={(event) => setFrom(event.target.value)}
             />
             <Field
@@ -484,6 +495,7 @@ export function RatesCalendar({
               name="to"
               type="date"
               value={to}
+              readOnly={!isReady}
               onChange={(event) => setTo(event.target.value)}
             />
           </div>

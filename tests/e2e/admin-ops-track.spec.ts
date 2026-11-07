@@ -189,6 +189,67 @@ test.describe("guest privacy", () => {
     expect(rows[0].guest_name).toBeNull();
   });
 
+  test("a name-only match is offered, left out, and not erased", async () => {
+    const guest = await addGuest(
+      addDays(today, -70),
+      addDays(today, -68),
+      "completed",
+    );
+    const { rows: message } = await db.query(
+      `insert into public.contact_messages (name, email, message)
+       values ($1, 'other@example.test', 'Same name') returning id`,
+      [`Maria ${guest.marker}`],
+    );
+    await page.goto(`/admin/guests/${guest.id}`);
+    await expect(page.getByTestId("name-candidates")).toBeVisible();
+
+    const download = page.waitForEvent("download");
+    await page.getByRole("link", { name: /Download all their data/ }).click();
+    const stream = await (await download).createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(chunk as Buffer);
+    const workbook = await readWorkbook(Buffer.concat(chunks));
+    expect(workbook.getWorksheet("Messages")!.rowCount).toBe(1);
+
+    await page.getByLabel("I understand this cannot be undone").check();
+    await page.getByRole("button", { name: "Remove their details" }).click();
+    await expect(page.getByTestId("guest-anonymised")).toBeVisible();
+    const { rows } = await db.query(
+      `select email from public.contact_messages where id = $1`,
+      [message[0].id],
+    );
+    expect(rows[0].email).toBe("other@example.test");
+    await db.query(`delete from public.contact_messages where id = $1`, [
+      message[0].id,
+    ]);
+  });
+
+  test("open money is refused, in plain words", async () => {
+    const guest = await addGuest(
+      addDays(today, -80),
+      addDays(today, -78),
+      "completed",
+    );
+    const { rows: booking } = await db.query(
+      `select id from public.bookings where guest_id = $1`,
+      [guest.id],
+    );
+    await db.query(
+      `insert into public.payments (booking_id, kind, method, status, amount_cents)
+       values ($1, 'full', 'cash', 'succeeded', 10000)`,
+      [booking[0].id],
+    );
+    await page.goto(`/admin/guests/${guest.id}`);
+    await page.getByLabel("I understand this cannot be undone").check();
+    await page.getByRole("button", { name: "Remove their details" }).click();
+    await expect(page.locator("p.notice-bad")).toContainText(
+      "no issued document",
+    );
+    await db.query(`delete from public.payments where booking_id = $1`, [
+      booking[0].id,
+    ]);
+  });
+
   test("Staff see no privacy tools and cannot reach the export", async ({
     browser,
   }) => {
@@ -223,16 +284,12 @@ test.describe("users", () => {
   const row = (name: string) =>
     page.getByTestId("admin-users").locator("li", { hasText: name });
 
-  async function acceptConfirm() {
-    page.once("dialog", (dialog) => dialog.accept());
-  }
-
   test("invite, promote, reset and remove", async () => {
     const email = testEmail();
     const name = `Invited ${randomUUID().slice(0, 6)}`;
     await page.goto("/admin/users");
     await page.getByLabel("Name").fill(name);
-    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Email", { exact: true }).fill(email);
     await page.getByRole("button", { name: "Send invitation" }).click();
     await expect(page.locator("p.notice-ok")).toContainText("Invitation sent");
 
@@ -248,14 +305,25 @@ test.describe("users", () => {
     expect(rows[0]).toEqual({ role: "staff", display_name: name });
 
     await page.reload();
-    await acceptConfirm();
-    await row(name).getByRole("button", { name: "Make Owner" }).click();
+    const person = row(name);
+    await person.locator("summary", { hasText: "Make Owner" }).click();
+    const typeEmail = person.getByLabel(`To confirm, type ${email}`).first();
+    await typeEmail.fill("wrong@example.test");
+    await person.getByRole("button", { name: "Make Owner" }).click();
+    await expect(person.locator("p.notice-bad")).toContainText(
+      "does not match",
+    );
+    await typeEmail.fill(email);
+    await person.getByRole("button", { name: "Make Owner" }).click();
     await expect(
-      row(name).getByRole("button", { name: "Make Staff" }),
+      row(name).locator("summary", { hasText: "Make Staff" }),
     ).toBeVisible();
 
-    await acceptConfirm();
-    await row(name).getByRole("button", { name: "Remove" }).click();
+    // An Owner goes only by typing their email.
+    const removal = row(name).locator("details", { hasText: "Remove" });
+    await removal.locator("summary").click();
+    await removal.getByLabel(`To confirm, type ${email}`).fill(email);
+    await removal.getByRole("button", { name: "Remove" }).click();
     await expect(row(name)).toHaveCount(0);
 
     const { data: banned } = await authAdmin.getUserById(invited.id);
@@ -263,11 +331,32 @@ test.describe("users", () => {
 
     // Back again through the same screen, with the same email.
     await page.getByLabel("Name").fill(name);
-    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Email", { exact: true }).fill(email);
     await page.getByRole("button", { name: "Send invitation" }).click();
     await expect(page.locator("p.notice-ok")).toContainText("Invitation sent");
     const { data: back } = await authAdmin.getUserById(invited.id);
     expect(back.user?.banned_until ?? null).toBeNull();
+
+    const { rows: trail } = await db.query(
+      `select action from public.audit_log
+       where entity = 'admin_user' and entity_id = $1 order by id`,
+      [invited.id],
+    );
+    expect(trail.map((entry) => entry.action)).toEqual([
+      "admin_banned",
+      "admin_unbanned",
+    ]);
+  });
+
+  test("inviting an Owner needs the email typed twice", async () => {
+    await page.goto("/admin/users");
+    await page.getByLabel("Name").fill("Second Owner");
+    await page.getByLabel("Email", { exact: true }).fill(testEmail());
+    await page.getByLabel("Role").selectOption("owner");
+    await page.getByRole("button", { name: "Send invitation" }).click();
+    await expect(page.locator(".field-error").first()).toContainText(
+      "does not match",
+    );
   });
 
   test("an Owner's own row has no buttons", async () => {
@@ -281,7 +370,7 @@ test.describe("users", () => {
   test("a bad email stays on the form", async () => {
     await page.goto("/admin/users");
     await page.getByLabel("Name").fill("Nobody");
-    await page.getByLabel("Email").fill("not-an-email");
+    await page.getByLabel("Email", { exact: true }).fill("not-an-email");
     await page.getByRole("button", { name: "Send invitation" }).click();
     await expect(page.locator(".field-error").first()).toBeVisible();
   });
@@ -340,18 +429,19 @@ test.describe("Home", () => {
        values ('apply_retention', 'failed', now(), 'boom')`,
     );
     await page.goto("/admin");
-    const notice = page.getByTestId("job-health");
-    await expect(notice).toContainText("Removing old guest data");
-    await db.query(`select public.run_database_job('apply_retention')`);
+    await expect(page.getByTestId("job-health")).toContainText(
+      "Removing old guest data",
+    );
 
+    await db.query(`select public.run_database_job('apply_retention')`);
     await db.query(
       `insert into public.job_runs (job, status, finished_at, detail)
-       values ('job_health', 'success', now(), 'test')`,
+       select unnest(array['job_health', 'release_expired_holds', 'complete_finished_bookings',
+                           'purge_admin_attempts', 'scheduled_emails']),
+              'success', now(), 'test'`,
     );
     await page.reload();
     await expect(page.getByTestId("job-health")).toHaveCount(0);
-    await db.query(
-      `delete from public.job_runs where job = 'job_health' and detail = 'test'`,
-    );
+    await db.query(`delete from public.job_runs where detail = 'test'`);
   });
 });

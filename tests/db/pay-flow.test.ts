@@ -740,7 +740,7 @@ describe("webhook", () => {
     expect(emails.map((row) => row.template_key)).toEqual([
       "host_payment_failed",
     ]);
-    expect(String(emails[0].payload.reason)).toMatch(/different amount/);
+    expect(String(emails[0].payload.reason)).toMatch(/διαφορετικό ποσό/);
     expect(await (await status(started.session.id)).json()).toEqual({
       state: "problem",
     });
@@ -1453,14 +1453,16 @@ describe("reconciliation", () => {
     const keys = emails.map((row) => row.template_key);
     expect(keys).toContain("booking_confirmation");
     expect(
-      emails.filter((row) => /never reached/.test(String(row.payload.reason))),
+      emails.filter((row) =>
+        /δεν έφτασε στην ιστοσελίδα/.test(String(row.payload.reason)),
+      ),
     ).toHaveLength(1);
 
     await reconcilePayments(deps);
     expect(await paymentsFor(started.bookingId)).toHaveLength(1);
     expect(
       (await emailsFor(started.bookingId)).filter((row) =>
-        /never reached/.test(String(row.payload.reason)),
+        /δεν έφτασε στην ιστοσελίδα/.test(String(row.payload.reason)),
       ),
     ).toHaveLength(1);
   });
@@ -1517,7 +1519,7 @@ describe("reconciliation", () => {
     await reconcilePayments(testDeps(fake, roomId));
     expect(
       (await emailsFor(started.bookingId)).filter((row) =>
-        /never reached/.test(String(row.payload.reason)),
+        /δεν έφτασε στην ιστοσελίδα/.test(String(row.payload.reason)),
       ),
     ).toHaveLength(0);
   });
@@ -1574,7 +1576,7 @@ describe("failed refunds", () => {
   };
   const alerts = async (bookingId: string) =>
     (await emailsFor(bookingId)).filter((row) =>
-      /refund failed/.test(String(row.payload.reason)),
+      /επιστροφή απέτυχε/.test(String(row.payload.reason)),
     );
 
   it("goes straight from pending to failed on refund.failed, and alerts", async () => {

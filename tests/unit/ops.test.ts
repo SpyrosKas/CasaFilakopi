@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   guestWorkbook,
+  isNameCandidate,
   isSamePerson,
   type GuestDataExport,
 } from "@/lib/admin/guest-export";
@@ -33,6 +34,7 @@ const emptyData: GuestDataExport = {
   messages: [],
   emails: [],
   consents: [],
+  candidates: { imported: [], messages: [] },
 };
 
 describe("guest data file", () => {
@@ -128,19 +130,62 @@ describe("isSamePerson", () => {
     ...fields,
   });
 
-  it("matches on any of the three, ignoring case and spacing", () => {
+  it("matches an exact email or a real phone, ignoring case and spacing", () => {
     expect(isSamePerson(row({ email: " maria@example.TEST " }), identity)).toBe(
       true,
     );
     expect(isSamePerson(row({ phone: "306941112222" }), identity)).toBe(true);
-    expect(isSamePerson(row({ name: "maria p" }), identity)).toBe(true);
   });
 
-  it("does not match blanks or someone else", () => {
+  it("never matches on a name alone", () => {
+    expect(isSamePerson(row({ name: "maria p" }), identity)).toBe(false);
+  });
+
+  it("does not match blanks, someone else, or a short number", () => {
     expect(isSamePerson(row({}), identity)).toBe(false);
     expect(isSamePerson(row({ email: "x@example.test" }), identity)).toBe(
       false,
     );
+    expect(
+      isSamePerson(row({ phone: "2026" }), { ...identity, phones: ["2026"] }),
+    ).toBe(false);
+  });
+
+  it("offers a name-only match as a candidate, and nothing stronger", () => {
+    expect(isNameCandidate(row({ name: "Maria P" }), identity)).toBe(true);
+    expect(isNameCandidate(row({ name: "Someone" }), identity)).toBe(false);
+    expect(
+      isNameCandidate(
+        row({ name: "Maria P", email: "maria@example.test" }),
+        identity,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("candidates in the file", () => {
+  const stay = {
+    id: "e",
+    channel: "airbnb",
+    start_date: "2026-01-01",
+    end_date: "2026-01-02",
+    summary: null,
+    guest_name: "Maria",
+    guest_email: null,
+    guest_phone: null,
+    guest_notes: null,
+    amount_cents: null,
+  };
+  const data = {
+    ...emptyData,
+    candidates: { imported: [stay], messages: [] },
+  };
+
+  it("leaves them out by default, and adds them only when asked", async () => {
+    const without = await readWorkbook(guestWorkbook(data, adminEn));
+    expect(without.getWorksheet("Imported stays")!.rowCount).toBe(1);
+    const included = await readWorkbook(guestWorkbook(data, adminEn, true));
+    expect(included.getWorksheet("Imported stays")!.rowCount).toBe(2);
   });
 });
 
@@ -155,6 +200,7 @@ describe("summariseJobs", () => {
   it("is quiet when everything ran", () => {
     expect(summariseJobs([beat(1)], now)).toEqual({
       failed: [],
+      stale: [],
       siteSilent: false,
     });
   });
@@ -180,6 +226,32 @@ describe("summariseJobs", () => {
   it("notices when the site's jobs stop, or never started", () => {
     expect(summariseJobs([beat(4)], now).siteSilent).toBe(true);
     expect(summariseJobs([], now).siteSilent).toBe(true);
+  });
+
+  it("counts a failed heartbeat as silent", () => {
+    expect(
+      summariseJobs([{ ...beat(1), status: "failed" }], now).siteSilent,
+    ).toBe(true);
+  });
+
+  it("gives each job its own maximum age", () => {
+    const run = (job: string, hoursAgo: number) => ({
+      job,
+      status: "success",
+      started_at: new Date(now.getTime() - hoursAgo * 3_600_000).toISOString(),
+    });
+    expect(
+      summariseJobs(
+        [
+          beat(1),
+          run("release_expired_holds", 4),
+          run("complete_finished_bookings", 4),
+          run("apply_retention", 31),
+          run("scheduled_emails", 2),
+        ],
+        now,
+      ).stale,
+    ).toEqual(["release_expired_holds", "apply_retention"]);
   });
 });
 
@@ -212,6 +284,20 @@ describe("logging", () => {
     const masked = maskText("Bad address maria@example.test, +30 694 111 2222");
     expect(masked).not.toContain("maria");
     expect(masked).not.toContain("111");
+  });
+
+  it("masks links, which hold secrets", () => {
+    const masked = maskText(
+      "fetch https://miloscasa.com/en/booking/s3cret and /el/booking/s3cret and /api/ical/s3cret.ics failed",
+    );
+    expect(masked).not.toContain("s3cret");
+    expect(maskText("postgres://user:pw@db/x")).toBe("[url]");
+  });
+
+  it("keeps a path out of a log field", () => {
+    expect(safeFields({ path: "/en/booking/s3cret" })).toEqual({
+      path: "[removed]",
+    });
   });
 
   it("writes one JSON line with no personal data", () => {
@@ -341,13 +427,29 @@ describe("lodgingBusiness", () => {
 
 describe("indexing", () => {
   it("indexes only the production host, or by an explicit flag", () => {
-    expect(isIndexable("https://miloscasa.com", undefined)).toBe(true);
-    expect(isIndexable("https://www.miloscasa.com/", "")).toBe(true);
-    expect(isIndexable("https://staging.miloscasa.com", undefined)).toBe(false);
-    expect(isIndexable("https://casa-filakopi.vercel.app", "")).toBe(false);
-    expect(isIndexable("https://casa-filakopi.vercel.app", "true")).toBe(true);
-    expect(isIndexable("https://miloscasa.com.evil.test", "false")).toBe(false);
-    expect(isIndexable(undefined, undefined)).toBe(false);
+    const off = undefined;
+    expect(isIndexable("https://miloscasa.com", off, off)).toBe(true);
+    expect(isIndexable("https://www.miloscasa.com/", "", off)).toBe(true);
+    expect(isIndexable("https://staging.miloscasa.com", off, off)).toBe(false);
+    expect(isIndexable("https://casa-filakopi.vercel.app", "", off)).toBe(
+      false,
+    );
+    expect(isIndexable("https://casa-filakopi.vercel.app", "true", off)).toBe(
+      true,
+    );
+    expect(isIndexable("https://miloscasa.com.evil.test", "false", off)).toBe(
+      false,
+    );
+    expect(isIndexable(off, off, off)).toBe(false);
+  });
+
+  it("on Vercel, only a production deployment is indexed", () => {
+    const site = "https://miloscasa.com";
+    expect(isIndexable(site, undefined, "production")).toBe(true);
+    expect(isIndexable(site, undefined, "preview")).toBe(false);
+    expect(isIndexable(site, "true", "preview")).toBe(false);
+    expect(isIndexable(site, undefined, "development")).toBe(false);
+    expect(isIndexable("https://x.vercel.app", "", "production")).toBe(false);
   });
 
   it("sends noindex only where the site is not indexable", () => {

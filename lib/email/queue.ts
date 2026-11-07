@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { findTemplate } from "@/emails/registry";
 import type { Json } from "@/lib/db/types";
+import { logError } from "@/lib/log";
 import type { EmailDb } from "./db";
 import { headerSafe, MAX_BODY_LENGTH } from "./template-text";
 import {
@@ -266,7 +267,7 @@ export async function queueEmailWith<T extends EmailType>(
     return await enqueue(db, type, data, options);
   } catch (error) {
     const detail = error instanceof Error ? error.message : "unknown";
-    console.error(`queueEmail ${type} failed: ${detail}`);
+    await logError("queue_email.failed", error, { type });
     return { ok: false, reason: "database_error", detail };
   }
 }
@@ -279,7 +280,7 @@ async function enqueue<T extends EmailType>(
 ): Promise<QueueResult> {
   const parsed = EMAIL_DATA[type].safeParse(input);
   if (!parsed.success) {
-    console.error(`queueEmail ${type}: ${parsed.error.message}`);
+    await logError("queue_email.invalid_data", parsed.error, { type });
     return { ok: false, reason: "invalid_data", detail: parsed.error.message };
   }
   const data = parsed.data as Record<string, unknown>;
@@ -298,7 +299,7 @@ async function enqueue<T extends EmailType>(
   }
   const refs = attachmentRefs.safeParse(options.attachments ?? []);
   if (!refs.success) {
-    console.error(`queueEmail ${type}: bad attachment reference`);
+    await logError("queue_email.bad_attachment", refs.error, { type });
     return { ok: false, reason: "invalid_data", detail: refs.error.message };
   }
   const attachments = refs.data;
@@ -340,7 +341,7 @@ async function enqueue<T extends EmailType>(
     .upsert(rows, { onConflict: "id", ignoreDuplicates: true })
     .select("id");
   if (error) {
-    console.error(`queueEmail ${type}: ${error.message}`);
+    await logError("queue_email.not_saved", error, { type });
     return { ok: false, reason: "database_error", detail: error.message };
   }
   const ids = inserted.map((row) => row.id);

@@ -4,6 +4,7 @@ import { useAdminI18n } from "@/components/admin/language-provider";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { FormMessage } from "@/components/admin/form";
 import { Panel } from "@/components/admin/panel";
+import { useHydrated } from "@/components/admin/use-hydrated";
 import { queueGuestMessage } from "@/lib/admin/actions/messages";
 import { idleState } from "@/lib/admin/form-state";
 import { mailHref } from "@/lib/admin/contact";
@@ -35,6 +36,7 @@ export function WriteToGuest({
     idleState,
   );
   const [, startTransition] = useTransition();
+  const isReady = useHydrated();
   const [choice, setChoice] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -120,6 +122,7 @@ export function WriteToGuest({
             id="write-body"
             name="body"
             rows={7}
+            readOnly={!isReady}
             value={body}
             onChange={(event) => setBody(event.target.value)}
           />
@@ -128,7 +131,11 @@ export function WriteToGuest({
           )}
         </div>
         <div className="button-row">
-          <button type="submit" className="button" disabled={pending}>
+          <button
+            type="submit"
+            className="button"
+            disabled={pending || !isReady}
+          >
             {pending ? w.submitting : w.submit}
           </button>
           <a href={openInEmail} className="button button-quiet">

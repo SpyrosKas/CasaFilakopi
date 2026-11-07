@@ -1,6 +1,7 @@
 "use server";
 
 import { adminI18n } from "@/lib/admin/i18n-server";
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { callAdminRpc } from "@/lib/admin/audit";
@@ -58,7 +59,7 @@ async function tryStorePdf(admin: AdminContext, invoiceId: string) {
     const row = (await loadIndex(admin)).find((r) => r.id === invoiceId);
     if (row && !row.hasPdf) await storeInvoicePdf(admin, row);
   } catch (error) {
-    console.error("invoice_pdf_failed", invoiceId, error);
+    await logError("invoice.pdf_failed", error, { invoiceId });
   }
 }
 
@@ -228,7 +229,7 @@ export async function regeneratePdf(
   try {
     await storeInvoicePdf(admin, resolved.rows[0]);
   } catch (error) {
-    console.error("invoice_pdf_failed", id, error);
+    await logError("invoice.pdf_failed", error, { id });
     return errorState(s.errors.pdfFailed);
   }
   revalidatePath(LIST);

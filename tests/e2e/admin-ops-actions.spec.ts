@@ -575,6 +575,10 @@ test("the Owner's own replays work, so the refusals above mean something", async
   for (const [name, action] of Object.entries(owned)) {
     const response = await replay(request, action);
     expect(response.status(), name).toBe(200);
+    // A refusal also answers 200, so read what it said.
+    expect(await response.text(), name).not.toContain(
+      "Please fix the items marked below.",
+    );
   }
   const { rows } = await db.query(
     `select

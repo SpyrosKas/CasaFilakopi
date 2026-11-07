@@ -15,21 +15,60 @@ import {
 import { requireOwner } from "@/lib/admin/session";
 import { loadMembers, type AdminMember } from "@/lib/admin/users-data";
 
+/** Anything that makes or unmakes an Owner needs their email typed in full. */
+async function Typed({
+  member,
+  action,
+  label,
+  warning,
+  role,
+  danger,
+}: {
+  member: AdminMember;
+  action: Parameters<typeof ActionForm>[0]["action"];
+  label: string;
+  warning: string;
+  role?: "owner" | "staff";
+  danger?: boolean;
+}) {
+  const { t } = await adminI18n();
+  const u = t.ops.users;
+  return (
+    <details>
+      <summary className="button button-quiet">{label}</summary>
+      <p className="hint">{warning}</p>
+      <ActionForm
+        action={action}
+        submitLabel={label}
+        pendingLabel={u.working}
+        danger={danger}
+      >
+        <input type="hidden" name="id" value={member.id} />
+        {role && <input type="hidden" name="role" value={role} />}
+        <Field
+          label={u.typeEmail(member.email)}
+          name="confirmEmail"
+          type="email"
+          autoComplete="off"
+        />
+      </ActionForm>
+    </details>
+  );
+}
+
 async function Actions({ member }: { member: AdminMember }) {
   const { t } = await adminI18n();
   const u = t.ops.users;
-
   const fields = { id: member.id };
-  const toOwner = member.role === "staff";
+  const isOwner = member.role === "owner";
   return (
-    <div className="button-row">
-      <ActionButton
+    <div className="stack">
+      <Typed
+        member={member}
         action={changeAdminRole}
-        fields={{ ...fields, role: toOwner ? "owner" : "staff" }}
-        label={toOwner ? u.makeOwner : u.makeStaff}
-        pendingLabel={u.working}
-        variant="quiet"
-        confirm={toOwner ? u.makeOwnerConfirm : u.makeStaffConfirm}
+        label={isOwner ? u.makeStaff : u.makeOwner}
+        warning={isOwner ? u.makeStaffConfirm : u.makeOwnerConfirm}
+        role={isOwner ? "staff" : "owner"}
       />
       {member.hasTwoStep && (
         <ActionButton
@@ -41,14 +80,24 @@ async function Actions({ member }: { member: AdminMember }) {
           confirm={u.resetTwoStepConfirm}
         />
       )}
-      <ActionButton
-        action={removeAdmin}
-        fields={fields}
-        label={u.remove}
-        pendingLabel={u.working}
-        variant="danger"
-        confirm={u.removeConfirm}
-      />
+      {isOwner ? (
+        <Typed
+          member={member}
+          action={removeAdmin}
+          label={u.remove}
+          warning={u.removeConfirm}
+          danger
+        />
+      ) : (
+        <ActionButton
+          action={removeAdmin}
+          fields={fields}
+          label={u.remove}
+          pendingLabel={u.working}
+          variant="danger"
+          confirm={u.removeConfirm}
+        />
+      )}
     </div>
   );
 }
@@ -95,6 +144,13 @@ export default async function UsersPage() {
         >
           <Field label={u.name} name="displayName" autoComplete="off" />
           <Field label={u.email} name="email" type="email" autoComplete="off" />
+          <Field
+            label={u.confirmEmail}
+            hint={u.confirmEmailHint}
+            name="confirmEmail"
+            type="email"
+            autoComplete="off"
+          />
           <SelectField
             label={u.role}
             name="role"

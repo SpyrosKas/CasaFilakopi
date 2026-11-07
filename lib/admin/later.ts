@@ -1,6 +1,7 @@
 import { adminEn } from "@/lib/admin/strings";
 import { channelsEn } from "@/lib/channels/strings";
 import { cmsEn } from "@/lib/cms/strings";
+import { paymentAlertsEn } from "@/lib/payments/alert-strings";
 
 // A schema or the CMS registry is built once, when its module loads, for every
 // visitor, so it cannot hold words in one language. It holds a marker instead,
@@ -14,6 +15,7 @@ export interface Catalogs {
   admin: typeof adminEn;
   cms: typeof cmsEn;
   channels: typeof channelsEn;
+  payments: typeof paymentAlertsEn;
 }
 
 function mirror<T>(value: T, name: string): T {
@@ -38,6 +40,7 @@ export const later: Catalogs = {
   admin: mirror(adminEn, "admin"),
   cms: mirror(cmsEn, "cms"),
   channels: mirror(channelsEn, "channels"),
+  payments: mirror(paymentAlertsEn, "payments"),
 };
 
 export const isMarker = (text: string): boolean => text.startsWith(MARK);

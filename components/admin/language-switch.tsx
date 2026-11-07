@@ -1,6 +1,7 @@
 "use client";
 
 import { useAdminI18n } from "@/components/admin/language-provider";
+import { useHydrated } from "@/components/admin/use-hydrated";
 import { setAdminLanguage } from "@/lib/admin/actions/language";
 import type { AdminLanguage } from "@/lib/admin/i18n";
 
@@ -9,9 +10,10 @@ const CHOICES: { lang: AdminLanguage; short: string; name: string }[] = [
   { lang: "el", short: "ΕΛ", name: "Ελληνικά" },
 ];
 
-/** A plain form, so a phone on a poor connection can still switch. */
+/** Waits for hydration like every other admin form: see use-hydrated.ts. */
 export function LanguageSwitch() {
   const { lang, t } = useAdminI18n();
+  const isReady = useHydrated();
   return (
     <form
       action={setAdminLanguage}
@@ -27,6 +29,7 @@ export function LanguageSwitch() {
           lang={choice.lang}
           aria-label={choice.name}
           aria-pressed={choice.lang === lang}
+          disabled={!isReady}
         >
           {choice.short}
         </button>

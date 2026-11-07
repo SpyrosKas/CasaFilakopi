@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useAdminI18n } from "@/components/admin/language-provider";
 import { LanguageSwitch } from "@/components/admin/language-switch";
+import { useHydrated } from "@/components/admin/use-hydrated";
 import { logout } from "@/lib/admin/actions/auth";
 import type { AdminStrings } from "@/lib/admin/strings";
 
@@ -44,6 +45,7 @@ export function AdminNav({ isOwner }: { isOwner: boolean }) {
   const { t } = useAdminI18n();
 
   const [open, setOpen] = useState(false);
+  const isReady = useHydrated();
   const pathname = usePathname();
 
   const links = [
@@ -77,7 +79,11 @@ export function AdminNav({ isOwner }: { isOwner: boolean }) {
           ))}
           <li className="menu-language">
             <form action={logout}>
-              <button type="submit" className="menu-signout">
+              <button
+                type="submit"
+                className="menu-signout"
+                disabled={!isReady}
+              >
                 {t.nav.signOut}
               </button>
             </form>

@@ -20,6 +20,8 @@ import { channelsEl } from "@/lib/channels/strings.el";
 import { allPages, collectionName, findPage } from "@/lib/cms/registry";
 import { cmsEn } from "@/lib/cms/strings";
 import { cmsEl } from "@/lib/cms/strings.el";
+import { paymentAlertsEn } from "@/lib/payments/alert-strings";
+import { paymentAlertsEl } from "@/lib/payments/alert-strings.el";
 import { emailEl } from "@/lib/admin/email-strings.el";
 import { invoiceEl } from "@/lib/admin/invoice-strings.el";
 import { opsEn } from "@/lib/admin/ops-strings";
@@ -32,6 +34,7 @@ const CATALOGS: [string, unknown, unknown][] = [
   ["ops", opsEn, opsEl],
   ["channels", channelsEn, channelsEl],
   ["cms", cmsEn, cmsEl],
+  ["payment alerts", paymentAlertsEn, paymentAlertsEl],
 ];
 
 /** Every leaf, by path, with what kind of thing sits there. */

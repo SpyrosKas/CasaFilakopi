@@ -1,3 +1,8 @@
+import {
+  HEARTBEAT_JOB,
+  WATCHED_JOBS,
+  type JobRun,
+} from "@/lib/admin/job-health";
 import { athensDate } from "@/lib/domain/dates";
 import type { EmailDb } from "./db";
 import { queueEmailWith } from "./queue";
@@ -31,6 +36,41 @@ export async function finishJob(
     })
     .eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+/** The last run of each watched job, one query each. */
+export async function latestRuns(db: EmailDb): Promise<JobRun[]> {
+  const rows = await Promise.all(
+    [...WATCHED_JOBS, HEARTBEAT_JOB].map(async (job) => {
+      const { data, error } = await db
+        .from("job_runs")
+        .select("job, status, started_at")
+        .eq("job", job)
+        .order("id", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return data;
+    }),
+  );
+  return rows.filter((run) => run !== null);
+}
+
+/** A job past its age has nothing to count as failures, so it says so itself. */
+export async function alertStaleJob(
+  db: EmailDb,
+  job: string,
+  label: string,
+  now: Date,
+  note: string,
+): Promise<boolean> {
+  const result = await queueEmailWith(
+    db,
+    "host_job_failure",
+    { job: label, failures: 1, error: note },
+    { dedupeKey: `job-stale:${job}:${athensDate(now)}` },
+  );
+  return result.ok;
 }
 
 /**

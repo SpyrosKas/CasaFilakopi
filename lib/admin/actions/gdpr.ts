@@ -46,6 +46,7 @@ export async function anonymiseGuest(
   } catch (error) {
     const message = (error as { message?: string }).message;
     if (message === "guest_has_stay") return errorState(p.hasStay);
+    if (message === "guest_has_open_money") return errorState(p.openMoney);
     if (message === "guest_not_found") return errorState(p.notFound);
     throw error;
   }

@@ -641,6 +641,7 @@ export const adminEl: AdminStrings = {
       other: "Άλλο",
     },
     note: "Σημείωση (προαιρετικά)",
+    noteHint: "Χωρίς ονόματα επισκεπτών εδώ",
     closed: "Οι ημερομηνίες έκλεισαν.",
     blockHeading: "Κλειστές ημερομηνίες",
     reopen: "Άνοιγμα ημερομηνιών",

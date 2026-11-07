@@ -44,7 +44,7 @@ const NOT_OURS = [
   "code",
   ".eml-recipient",
   ".cms-section > summary",
-  '[data-testid="admin-users"] li > :first-child',
+  '[data-testid="admin-users"] strong',
   // The names of buttons on Airbnb and Booking.com.
   ".steps",
 ].join(",");
@@ -60,7 +60,10 @@ async function englishLeft(page: Page): Promise<string[]> {
     .replace(/Booking\.com|Airbnb και Booking/g, "")
     .replace(/\S+@\S+|https?:\/\/\S+/g, "")
     // Names left by the invoice specs in the shared database.
-    .replace(/Test Guest|On the invoice|A guest with quite a long name indeed/g, "");
+    .replace(
+      /Test Guest|On the invoice|A guest with quite a long name indeed/g,
+      "",
+    );
   return [...ours.matchAll(ENGLISH)].map((match) =>
     ours.slice(Math.max(match.index - 25, 0), match.index + 25),
   );
@@ -190,7 +193,8 @@ test.describe("language of the admin", () => {
       page.getByRole("link", { name: "Κρατήσεις", exact: true }),
     ).toBeVisible();
 
-    // From the menu, on a phone.
+    // From the menu, on a phone, once the page has come alive.
+    await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: "Μενού" }).click();
     await page.getByRole("button", { name: "English" }).click();
     await expect(

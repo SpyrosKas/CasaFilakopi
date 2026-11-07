@@ -3,6 +3,7 @@
 import { useAdminI18n } from "@/components/admin/language-provider";
 import { useActionState, useState, useTransition, type FormEvent } from "react";
 import { FormMessage } from "@/components/admin/form";
+import { useHydrated } from "@/components/admin/use-hydrated";
 import { saveRules } from "@/lib/admin/actions/settings";
 import { idleState } from "@/lib/admin/form-state";
 import { describeRules, rulesSchema, type Rules } from "@/lib/admin/rules";
@@ -47,6 +48,7 @@ export function RulesForm({ initial }: { initial: Rules }) {
 
   const [state, formAction, pending] = useActionState(saveRules, idleState);
   const [, startTransition] = useTransition();
+  const isReady = useHydrated();
 
   const deposit = initial.payment.deposit;
   const [mode, setMode] = useState<PaymentMode>(initial.payment.mode);
@@ -265,7 +267,7 @@ export function RulesForm({ initial }: { initial: Rules }) {
         )}
       </section>
 
-      <button type="submit" className="button" disabled={pending}>
+      <button type="submit" className="button" disabled={pending || !isReady}>
         {pending ? t.common.saving : t.common.save}
       </button>
     </form>

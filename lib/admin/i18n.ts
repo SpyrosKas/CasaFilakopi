@@ -6,6 +6,8 @@ import { channelsEn, type ChannelStrings } from "@/lib/channels/strings";
 import { channelsEl } from "@/lib/channels/strings.el";
 import { cmsEn, type CmsStrings } from "@/lib/cms/strings";
 import { cmsEl } from "@/lib/cms/strings.el";
+import { paymentAlertsEn } from "@/lib/payments/alert-strings";
+import { paymentAlertsEl } from "@/lib/payments/alert-strings.el";
 
 // The one way to reach the admin's words. Each request has a language, and
 // each piece of code asks for its words while it runs, never at module scope,
@@ -73,8 +75,18 @@ function build(lang: AdminLanguage, catalogs: Catalogs): AdminI18n {
 }
 
 const BUNDLES: Record<AdminLanguage, AdminI18n> = {
-  en: build("en", { admin: adminEn, cms: cmsEn, channels: channelsEn }),
-  el: build("el", { admin: adminEl, cms: cmsEl, channels: channelsEl }),
+  en: build("en", {
+    admin: adminEn,
+    cms: cmsEn,
+    channels: channelsEn,
+    payments: paymentAlertsEn,
+  }),
+  el: build("el", {
+    admin: adminEl,
+    cms: cmsEl,
+    channels: channelsEl,
+    payments: paymentAlertsEl,
+  }),
 };
 
 export const i18nFor = (language: AdminLanguage): AdminI18n =>

@@ -2,6 +2,7 @@
 
 import { useAdminI18n } from "@/components/admin/language-provider";
 import { useActionState } from "react";
+import { useHydrated } from "@/components/admin/use-hydrated";
 import { ActionForm, Field, FormMessage } from "@/components/admin/form";
 import {
   finishEnrolment,
@@ -19,6 +20,7 @@ export function EnrolForm({ intro }: { intro: string }) {
     status: "idle",
   });
   const enrolment = state.enrolment;
+  const isReady = useHydrated();
 
   if (!enrolment) {
     return (
@@ -31,7 +33,11 @@ export function EnrolForm({ intro }: { intro: string }) {
           <li>{t.mfa.stepStart}</li>
         </ol>
         <form action={startAction}>
-          <button type="submit" className="button" disabled={starting}>
+          <button
+            type="submit"
+            className="button"
+            disabled={starting || !isReady}
+          >
             {starting ? t.mfa.starting : t.mfa.start}
           </button>
         </form>

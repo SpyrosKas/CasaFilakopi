@@ -1,4 +1,5 @@
 import { adminI18n } from "@/lib/admin/i18n-server";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import {
@@ -11,15 +12,24 @@ import {
 import { ActionForm, CheckField } from "@/components/admin/form";
 import { WriteToGuest } from "@/components/admin/write-to-guest";
 import { anonymiseGuest } from "@/lib/admin/actions/gdpr";
+import { loadGuestData } from "@/lib/admin/guest-data";
+import type { GuestDataExport } from "@/lib/admin/guest-export";
 import { messageTemplates } from "@/lib/admin/message-templates";
 import { requireAdmin } from "@/lib/admin/session";
 import { loadStayBook } from "@/lib/admin/stay-data";
 import { buildGuests } from "@/lib/admin/stays";
 
 /** Owner only: a copy of everything held, and the right to be removed. */
-async function PrivacyPanel({ id }: { id: string }) {
-  const { t } = await adminI18n();
+async function PrivacyPanel({
+  id,
+  candidates,
+}: {
+  id: string;
+  candidates: GuestDataExport["candidates"];
+}) {
+  const { t, formatDate, formatStay } = await adminI18n();
   const p = t.ops.privacy;
+  const count = candidates.imported.length + candidates.messages.length;
   return (
     <Panel title={p.title}>
       <div className="stack" data-testid="guest-privacy">
@@ -33,6 +43,48 @@ async function PrivacyPanel({ id }: { id: string }) {
           </a>
         </p>
         <p className="hint">{p.exportHint}</p>
+        {count > 0 && (
+          <div className="stack" data-testid="name-candidates">
+            <h3>{p.candidatesTitle}</h3>
+            <p className="hint">{p.candidatesHint}</p>
+            <ul>
+              {candidates.imported.map((stay) => (
+                <li key={stay.id}>
+                  <Link
+                    href={`/admin/guests/${stay.id}`}
+                    prefetch={false}
+                    className="text-link"
+                  >
+                    {p.candidateStay(
+                      formatStay(stay.start_date, stay.end_date),
+                    )}
+                  </Link>
+                </li>
+              ))}
+              {candidates.messages.map((message) => (
+                <li key={message.id}>
+                  <Link
+                    href={`/admin/messages/${message.id}`}
+                    prefetch={false}
+                    className="text-link"
+                  >
+                    {p.candidateMessage(
+                      formatDate(message.created_at.slice(0, 10)),
+                    )}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <p>
+              <a
+                href={`/admin/guests/${id}/export?candidates=1`}
+                className="button button-quiet"
+              >
+                {p.exportWithCandidates}
+              </a>
+            </p>
+          </div>
+        )}
         <h3>{p.anonymiseTitle}</h3>
         <p className="hint">{p.anonymiseHint}</p>
         <ActionForm
@@ -73,6 +125,10 @@ export default async function GuestPage({
     .eq("id", id)
     .maybeSingle();
   const removedAt = record?.anonymized_at;
+  const privacy =
+    !removedAt && admin.role === "owner"
+      ? await loadGuestData(admin, id)
+      : null;
 
   return (
     <div className="stack">
@@ -139,7 +195,7 @@ export default async function GuestPage({
         />
       )}
 
-      {!removedAt && admin.role === "owner" && <PrivacyPanel id={id} />}
+      {privacy && <PrivacyPanel id={id} candidates={privacy.candidates} />}
     </div>
   );
 }

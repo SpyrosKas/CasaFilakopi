@@ -1,11 +1,6 @@
 import "server-only";
 import { assertAdminRole } from "@/lib/admin/audit";
-import {
-  DATABASE_JOBS,
-  HEARTBEAT_JOB,
-  summariseJobs,
-  type JobHealth,
-} from "@/lib/admin/job-health";
+import { summariseJobs, type JobHealth } from "@/lib/admin/job-health";
 import type { MoneyMove, ReportInput } from "@/lib/admin/reports";
 import type { AdminContext } from "@/lib/admin/session";
 import {
@@ -19,6 +14,7 @@ import {
 import type { CalendarBlock } from "@/lib/admin/calendar";
 import { createAdminClient } from "@/lib/db/admin";
 import { athensDate } from "@/lib/domain/dates";
+import { latestRuns } from "@/lib/email/jobs";
 
 // Reads for the operations screens, through the admin's own client, so the
 // database's own rules apply on top of the page's role check.
@@ -463,23 +459,7 @@ export async function loadCalendarAlerts(admin: AdminContext) {
   return data.filter((row) => row.is_enabled && row.consecutive_failures > 0);
 }
 
-/** Owner only, as job_runs is. The last run of each job, one query each. */
+/** Owner only, as job_runs is. */
 export async function loadJobHealth(admin: AdminContext): Promise<JobHealth> {
-  const latest = await Promise.all(
-    [...DATABASE_JOBS, HEARTBEAT_JOB].map(async (job) => {
-      const { data, error } = await admin.supabase
-        .from("job_runs")
-        .select("job, status, started_at")
-        .eq("job", job)
-        .order("id", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    }),
-  );
-  return summariseJobs(
-    latest.filter((run) => run !== null),
-    new Date(),
-  );
+  return summariseJobs(await latestRuns(admin.supabase), new Date());
 }

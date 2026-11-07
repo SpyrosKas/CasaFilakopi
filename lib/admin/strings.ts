@@ -624,6 +624,7 @@ const en = {
       other: "Other",
     } satisfies Record<string, string>,
     note: "Note (optional)",
+    noteHint: "No guest names here",
     closed: "Dates closed.",
     blockHeading: "Closed dates",
     reopen: "Open these dates again",

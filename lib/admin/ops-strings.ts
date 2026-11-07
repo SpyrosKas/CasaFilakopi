@@ -20,7 +20,15 @@ export const opsEn = {
     anonymised: (date: string) => `Personal details removed on ${date}.`,
     hasStay:
       "This guest has a stay now or still to come, so their details cannot be removed yet.",
+    openMoney:
+      "This guest's details cannot be removed yet: a payment or refund is still open, or a payment has no issued document. Settle it or issue the document, then try again.",
     notFound: "This guest could not be found.",
+    candidatesTitle: "Possibly the same person, by name only",
+    candidatesHint:
+      "These match on the name alone, so they may be someone else. They are not in the file and are never removed by themselves. Open one to check it.",
+    candidateStay: (dates: string) => `Imported stay, ${dates}`,
+    candidateMessage: (date: string) => `Message, ${date}`,
+    exportWithCandidates: "Download including these",
     sheets: {
       guest: "Guest",
       bookings: "Bookings",
@@ -110,6 +118,11 @@ export const opsEn = {
     alreadyAdmin: "This email already has an account here.",
     inviteFailed:
       "The invitation could not be sent. Please check the email and try again.",
+    typeEmail: (email: string) => `To confirm, type ${email}`,
+    typeMismatch: "The email you typed does not match.",
+    confirmEmail: "Type the email again",
+    confirmEmailHint: "Needed only when inviting an Owner.",
+    lastOwner: "There must always be at least one Owner.",
     done: "Saved.",
     notYourself: "You cannot change your own account here.",
     notFound: "This person no longer has an account here.",
@@ -121,9 +134,13 @@ export const opsEn = {
       complete_finished_bookings: "Closing finished stays",
       purge_admin_attempts: "Clearing old sign-in attempts",
       apply_retention: "Removing old guest data",
+      scheduled_emails: "Sending scheduled emails",
     },
+    stale: (label: string) =>
+      `"${label}" has not run for longer than it should. Tell whoever looks after the site.`,
     failed: (label: string, when: string) =>
       `"${label}" failed on its last run (${when}). Tell whoever looks after the site.`,
+    lateRun: "It has not run on time.",
     siteSilent:
       "The site's scheduled jobs have not run recently, so emails and calendar syncs may be waiting. Tell whoever looks after the site.",
   },
