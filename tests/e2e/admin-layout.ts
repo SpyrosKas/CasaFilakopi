@@ -62,6 +62,13 @@ export function findLayoutProblems(minTap: number): LayoutProblem[] {
     }
   }
 
+  // Buttons do not break inside a word, so a word too long shows up here.
+  for (const el of document.querySelectorAll(".button, .tab, .menu-button")) {
+    if (el.scrollWidth > el.clientWidth + 1) {
+      problems.push({ kind: "word too wide", detail: name(el) });
+    }
+  }
+
   const isPinned = (el: Element) => el.closest("[data-pinned]") !== null;
 
   for (let i = 0; i < targets.length; i += 1) {

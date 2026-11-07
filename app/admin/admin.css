@@ -482,6 +482,7 @@
   color: #fff;
   font: inherit;
   font-weight: 600;
+  overflow-wrap: normal;
   text-align: center;
   text-decoration: none;
   cursor: pointer;

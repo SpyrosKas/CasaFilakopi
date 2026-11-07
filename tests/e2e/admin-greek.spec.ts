@@ -57,7 +57,9 @@ async function englishLeft(page: Page): Promise<string[]> {
   }, NOT_OURS);
   const ours = text
     .replace(/Booking\.com|Airbnb και Booking/g, "")
-    .replace(/\S+@\S+|https?:\/\/\S+/g, "");
+    .replace(/\S+@\S+|https?:\/\/\S+/g, "")
+    // Payments left by the invoice specs in the shared database.
+    .replace(/Test Guest/g, "");
   return [...ours.matchAll(ENGLISH)].map((match) =>
     ours.slice(Math.max(match.index - 25, 0), match.index + 25),
   );
@@ -441,6 +443,12 @@ test.describe("Greek screens", () => {
     expect(
       await selection.evaluate((el) => el.scrollWidth <= el.clientWidth),
     ).toBe(true);
+    const tooWide = await selection.evaluate((el) =>
+      [...el.querySelectorAll(".button")]
+        .filter((button) => button.scrollWidth > button.clientWidth + 1)
+        .map((button) => button.textContent),
+    );
+    expect(tooWide).toEqual([]);
     await page.screenshot({
       path: test.info().outputPath("320-invoice-bar.png"),
     });

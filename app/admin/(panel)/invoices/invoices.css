@@ -249,6 +249,10 @@
   gap: 8px;
 }
 
+.inv-bar-buttons .button {
+  padding-inline: 8px;
+}
+
 .inv-bar-buttons .button:first-child {
   grid-column: 1 / -1;
 }
