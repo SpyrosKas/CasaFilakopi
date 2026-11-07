@@ -62,6 +62,7 @@
   --aegean-deep: #023a6d;
   --night: #0f2a40;
   --olive: #55642a;
+  --danger: #a4262c;
   --on-dark: #fff;
   --on-dark-soft: #cfd8df;
   --focus: var(--aegean);
@@ -1694,6 +1695,110 @@ html[data-reveal-active] [data-reveal] {
 .contact-map-heading {
   margin-bottom: 16px;
   font-size: var(--heading-sm);
+}
+
+.contact-form {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.contact-form h2,
+.contact-sent h2 {
+  font-size: var(--heading-sm);
+}
+
+.contact-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.contact-field label {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.contact-field input,
+.contact-field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--ink-soft);
+  border-radius: 2px;
+  background: var(--lime);
+  color: var(--ink);
+  font: inherit;
+}
+
+.contact-field textarea {
+  resize: vertical;
+}
+
+.contact-field [aria-invalid="true"],
+.contact-consent [aria-invalid="true"] {
+  border-color: var(--danger);
+  outline: 1px solid var(--danger);
+}
+
+.contact-consent {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  font-size: var(--text-sm);
+}
+
+.contact-consent input {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--aegean);
+}
+
+.contact-consent a {
+  color: var(--aegean);
+}
+
+.contact-error,
+.contact-problem {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.contact-check {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  padding-left: 20px;
+  border-left: 2px solid var(--olive);
+  font-size: var(--text-sm);
+}
+
+.contact-check p {
+  margin: 0;
+}
+
+/* Off screen, not display:none, which many bots look for. */
+.contact-trap {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.contact-form .btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (min-width: 900px) {
+  .contact-form .btn-primary {
+    justify-self: start;
+  }
 }
 
 @media (min-width: 900px) {

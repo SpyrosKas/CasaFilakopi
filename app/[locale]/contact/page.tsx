@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
-import { useTranslations } from "next-intl";
+import {
+  NextIntlClientProvider,
+  useMessages,
+  useTranslations,
+} from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { use } from "react";
+import { ContactForm } from "@/components/site/contact-form";
 import { PageHero } from "@/components/site/hero";
 import { MapEmbed } from "@/components/site/map-embed";
 import { ReserveBand } from "@/components/site/reserve-band";
@@ -21,6 +26,8 @@ export default function ContactPage({ params }: Props) {
   setRequestLocale(locale);
   const t = useTranslations("Contact");
   const tNav = useTranslations("Nav");
+  // Only this page's browser code needs these words.
+  const { ContactForm: formMessages } = useMessages();
 
   return (
     <>
@@ -49,15 +56,9 @@ export default function ContactPage({ params }: Props) {
               </dd>
             </dl>
 
-            {/* Track MAIL replaces this block with the contact form (T3.24). */}
-            <div
-              id="contact-form-slot"
-              className="placeholder-notice"
-              data-placeholder
-            >
-              <h2>{t("formSlotTitle")}</h2>
-              <p>{t("formSlotBody")}</p>
-            </div>
+            <NextIntlClientProvider messages={{ ContactForm: formMessages }}>
+              <ContactForm />
+            </NextIntlClientProvider>
           </div>
           <div>
             <h2 className="contact-map-heading">{t("mapHeading")}</h2>

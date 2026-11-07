@@ -2,6 +2,7 @@
 // with the same keys. Greek comes later (D25): add `el` to `languages` below
 // and choose the language per user instead of the constant.
 
+import { emailStrings } from "@/lib/admin/email-strings";
 import { invoiceStrings } from "@/lib/admin/invoice-strings";
 
 const dayWord = (days: number) => (days === 1 ? "1 day" : `${days} days`);
@@ -48,6 +49,7 @@ const en = {
     rules: "Payment and cancellation",
     invoices: "Invoices and receipts",
     integrations: "Channel sync",
+    email: "Emails",
     account: "My account",
     signOut: "Sign out",
   },
@@ -990,6 +992,7 @@ const en = {
     },
   },
   invoices: invoiceStrings,
+  email: emailStrings,
   validation: {
     required: "Please fill this in.",
     tooLong: "This is too long.",
