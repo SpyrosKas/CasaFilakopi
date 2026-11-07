@@ -395,7 +395,7 @@ Security and tooling:
 - [ ] T6.6 Backup and tested restore on staging (`SUP-10`)
 - [x] T6.7 README, runbook, ER diagram, host guide in Greek and English (`DOC-01` to `DOC-04`)
 - [x] T6.8 Late-payment and double-webhook drills
-- [ ] T6.11 Calendar feedback (2026-11-07): past dates faded, price per night on each free date, general minimum stay in Admin → Booking settings next to the maximum, and a clear message on a too-short or too-long stay, in the calendar and from the server
+- [x] T6.11 Calendar feedback (2026-11-07): past dates faded, price per night on each free date, general minimum stay in Admin → Booking settings next to the maximum, and a clear message on a too-short or too-long stay, in the calendar and from the server
 
 - [ ] T6.9 HOST sets real starting values for payment and cancellation rules in Admin
 - [ ] T6.10 HOST test, unaided: change a cancellation rule, upload, delete and reorder photos, from a phone
