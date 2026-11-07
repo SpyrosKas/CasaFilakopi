@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChannelAlertsPanel } from "@/components/admin/integrations/channel-alerts";
 import { requireAdmin } from "@/lib/admin/session";
 import { t } from "@/lib/admin/strings";
 
@@ -13,6 +14,7 @@ export default async function AdminHomePage() {
         { href: "/admin/booking", label: t.nav.booking },
         { href: "/admin/rules", label: t.nav.rules },
         { href: "/admin/invoices", label: t.nav.invoices },
+        { href: "/admin/integrations", label: t.nav.integrations },
         { href: "/admin/account", label: t.nav.account },
       ]
     : [{ href: "/admin/account", label: t.nav.account }];
@@ -21,6 +23,7 @@ export default async function AdminHomePage() {
     <div className="stack">
       <h1>{t.home.title(admin.displayName)}</h1>
       <p>{isOwner ? t.home.intro : t.home.staffIntro}</p>
+      <ChannelAlertsPanel withLink={isOwner} />
       <ul className="link-list">
         {links.map((link) => (
           <li key={link.href}>
