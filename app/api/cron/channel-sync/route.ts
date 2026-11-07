@@ -3,6 +3,7 @@ import { defaultProvider } from "@/lib/channels/providers";
 import { createChannelStore } from "@/lib/channels/store";
 import { runDueSyncs } from "@/lib/channels/sync";
 import { createAdminClient } from "@/lib/db/admin";
+import { logError } from "@/lib/log";
 
 // Runs the feeds that are due (JOB-02). Call it every few minutes: the interval
 // Yorgos chose decides which feeds actually go.
@@ -33,8 +34,8 @@ async function run(request: Request) {
     return Response.json(report, {
       headers: { "cache-control": "no-store" },
     });
-  } catch {
-    console.error("channel sync: the run could not start");
+  } catch (error) {
+    await logError("channel_sync.failed", error);
     return new Response(null, { status: 500 });
   }
 }

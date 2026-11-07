@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { draftMode } from "next/headers";
 import { cache } from "react";
 import { resolveAdminSession } from "@/lib/admin/session";
@@ -24,6 +25,12 @@ import type {
 } from "@/lib/cms/types";
 import type { Database } from "@/lib/db/types";
 import { getPublicEnv } from "@/lib/env";
+import {
+  alternatesFor,
+  pathOfSlug,
+  siteOrigin,
+  type LodgingData,
+} from "@/lib/seo";
 
 // How public pages read content (WEB-07). Visitors get an anon client with
 // named columns, so RLS and the column grant keep drafts out of reach.
@@ -262,17 +269,91 @@ export async function pageMetadata(
   fallbackTitle: string,
 ): Promise<Metadata> {
   const page = await loadPage(slug, locale);
+  const common = await getTranslations({ locale, namespace: "Common" });
   const title = page.text("seo", "metaTitle") || fallbackTitle;
-  const description = page.text("seo", "metaDescription") || undefined;
-  const image = page.photo(`og.${slug}`);
+  const description =
+    page.text("seo", "metaDescription") || common("metaDescription");
+  const image =
+    page.photo(`og.${slug}`) ??
+    (await loadPage("home", locale)).photo("home.hero");
+  const alternates = alternatesFor(pathOfSlug(slug), locale);
   return {
     title,
     description,
-    openGraph: image
-      ? { title, description, images: [{ url: image.src }] }
-      : undefined,
+    alternates,
+    openGraph: {
+      title,
+      description,
+      url: alternates.canonical ?? undefined,
+      siteName: common("siteName"),
+      locale: locale === "el" ? "el_GR" : "en_GB",
+      type: "website",
+      images: image ? [{ url: image.src }] : undefined,
+    },
   };
 }
+
+const FACTS_COLUMNS =
+  "name, registration_number, check_in_time, check_out_time";
+
+/** Legal facts from the property row. Never its internal email (D28). */
+const loadPropertyFacts = cache(async () => {
+  const { data, error } = await anonClient()
+    .from("property")
+    .select(FACTS_COLUMNS)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+});
+
+/** For the footer, which must render even when the database cannot. */
+export async function loadRegistrationNumber(): Promise<string | null> {
+  try {
+    return (await loadPropertyFacts())?.registration_number?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Public details come from the CMS (D28), the rest from property and room. */
+export const loadLodging = cache(
+  async (locale: string): Promise<LodgingData> => {
+    const common = await getTranslations({ locale, namespace: "Common" });
+    const home = await loadPage("home", locale);
+    const contact = await loadContact(locale);
+
+    let facts: Awaited<ReturnType<typeof loadPropertyFacts>> = null;
+    let occupancy: number | undefined;
+    try {
+      facts = await loadPropertyFacts();
+      const { data, error } = await anonClient()
+        .from("rooms")
+        .select("max_adults, max_children")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      occupancy = data ? data.max_adults + data.max_children : undefined;
+    } catch (error) {
+      recover("property facts", error, () => undefined);
+    }
+
+    return {
+      name: facts?.name || common("siteName"),
+      url: `${siteOrigin()}/${locale}`,
+      description:
+        home.text("seo", "metaDescription") || common("metaDescription"),
+      image: home.photo("home.hero")?.src,
+      telephone: contact.phoneHref.replace(/^tel:/, "") || undefined,
+      email: contact.email || undefined,
+      addressLines: [contact.addressLine1, contact.addressLine2],
+      checkInTime: facts?.check_in_time,
+      checkOutTime: facts?.check_out_time,
+      maxOccupancy: occupancy,
+      registrationNumber: facts?.registration_number?.trim() || undefined,
+    };
+  },
+);
 
 export interface SiteContact {
   email: string;

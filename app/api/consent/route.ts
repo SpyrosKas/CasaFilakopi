@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { COOKIE_POLICY_VERSION } from "@/content/consent";
+import { logError } from "@/lib/log";
 import { createAdminClient } from "@/lib/db/admin";
 import { clientAddress, isClientLimited } from "./rate-limit";
 
@@ -120,8 +121,7 @@ export async function POST(request: Request) {
     });
     if (error) throw new Error(error.message);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "unknown error";
-    console.error(`consent_log insert failed: ${message}`);
+    await logError("consent.save_failed", error);
     return fail("unavailable", 503);
   }
 

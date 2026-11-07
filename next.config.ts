@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+import { isIndexable, publicSecurityHeaders } from "./lib/security-headers";
 
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
@@ -62,6 +63,21 @@ const nextConfig: NextConfig = {
       ],
       fallback: [],
     };
+  },
+  // Admin responses get their own, stricter set in lib/admin/proxy.ts.
+  async headers() {
+    return [
+      {
+        source: "/((?!admin(?:/|$)).*)",
+        headers: publicSecurityHeaders(
+          process.env.NODE_ENV === "development",
+          isIndexable(
+            process.env.NEXT_PUBLIC_SITE_URL,
+            process.env.NEXT_PUBLIC_INDEXABLE,
+          ),
+        ),
+      },
+    ];
   },
   // Old static URLs (MIG-06). statusCode, because `permanent` would send 308.
   async redirects() {

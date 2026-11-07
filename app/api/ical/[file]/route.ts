@@ -1,5 +1,6 @@
 import { loadExportFeed } from "@/lib/channels/export";
 import { createAdminClient } from "@/lib/db/admin";
+import { logError } from "@/lib/log";
 
 // The feed Airbnb and Booking.com fetch (CHN-10). No login: the file name holds
 // a long secret, and proxy.ts leaves /api alone. Read fresh on every request so
@@ -21,10 +22,10 @@ export async function GET(
   let body: string | null;
   try {
     body = await loadExportFeed(createAdminClient(), file, new Date());
-  } catch {
+  } catch (error) {
     // Never logs the file name: it holds the token. A 503 tells the channel to
     // keep what it has, where an empty calendar would open every date.
-    console.error("ical export: could not read the database");
+    await logError("ical_export.failed", error);
     return new Response("Try again later", {
       status: 503,
       headers: { "cache-control": "no-store", "retry-after": "300" },

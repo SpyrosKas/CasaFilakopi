@@ -11,6 +11,7 @@ import {
   verifyTurnstile,
 } from "@/lib/email/contact";
 import { readCapped } from "@/lib/email/read-body";
+import { logError } from "@/lib/log";
 import { getServerEnv } from "@/lib/env.server";
 
 const MAX_BODY_BYTES = 16 * 1024;
@@ -159,8 +160,7 @@ export async function POST(request: Request) {
     if (error) throw new Error(error.message);
     id = data.id;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "unknown error";
-    console.error(`contact form failed: ${message}`);
+    await logError("contact.save_failed", error);
     return fail("unavailable", 503);
   }
 
@@ -175,16 +175,14 @@ export async function POST(request: Request) {
     if (error) throw new Error(error.message);
   } catch (error) {
     // The tick is proven by the form refusing without it, so email still goes.
-    const message = error instanceof Error ? error.message : "unknown error";
-    console.error(`contact message ${id}: consent not logged: ${message}`);
+    await logError("contact.consent_not_logged", error, { id });
   }
 
   try {
     const ids = await notify(id);
     after(() => kickEmails(ids));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "unknown error";
-    console.error(`contact message ${id} saved, email failed: ${message}`);
+    await logError("contact.email_failed", error, { id });
   }
   return NextResponse.json({ ok: true });
 }

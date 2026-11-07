@@ -8,7 +8,7 @@ const phone = { width: 375, height: 800 };
 const desktop = { width: 1440, height: 900 };
 
 const languageLink = (page: Page, name: string) =>
-  page.locator(".lang").getByRole("link", { name, exact: true });
+  page.locator(".lang").getByRole("link", { name: new RegExp(`${name}$`) });
 
 test.describe("language selector", () => {
   for (const [name, size] of [
