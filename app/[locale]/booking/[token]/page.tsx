@@ -13,7 +13,11 @@ import "@/components/site/booking/booking.css";
 import { PageHero } from "@/components/site/hero";
 import { heroImages } from "@/content/house";
 import type { EmailLocale } from "@/emails/types";
-import { describeCancellation, formatDate, formatMoney } from "@/lib/email/format";
+import {
+  describeCancellation,
+  formatDate,
+  formatMoney,
+} from "@/lib/email/format";
 import { snapshotRules } from "@/lib/admin/stays";
 import { loadGuestView } from "@/lib/payments/guest";
 import { priceLines } from "@/lib/payments/quote";
@@ -79,100 +83,100 @@ export default async function GuestBookingPage({ params }: Props) {
               )}
 
               <div className="guest-panel">
-              <dl className="guest-facts">
-                <div>
-                  <dt>{t("state")}</dt>
-                  <dd data-testid="guest-status">{statusKey}</dd>
-                </div>
-                <div>
-                  <dt>{t("reference")}</dt>
-                  <dd>{booking.reference ?? t("noReference")}</dd>
-                </div>
-                <div>
-                  <dt>{t("arrive")}</dt>
-                  <dd>{date(booking.check_in)}</dd>
-                </div>
-                <div>
-                  <dt>{t("leave")}</dt>
-                  <dd>{date(booking.check_out)}</dd>
-                </div>
-                <div>
-                  <dt>{t("guests")}</dt>
-                  <dd>
-                    {t("guestCount", {
-                      adults: booking.adults,
-                      children: booking.children,
-                    })}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-
-            <div className="guest-panel">
-              <h2>{t("priceTitle")}</h2>
-              <dl className="price-lines">
-                <PriceLines lines={lines} />
-                <div className="price-line price-line--total">
-                  <dt>{tSummary("total")}</dt>
-                  <dd>{money(booking.total_cents)}</dd>
-                </div>
-                <div className="price-line">
-                  <dt>{t("paid")}</dt>
-                  <dd data-testid="guest-paid">{money(view.paidCents)}</dd>
-                </div>
-                {view.refundedCents > 0 && (
-                  <div className="price-line">
-                    <dt>{t("refunded")}</dt>
-                    <dd>{money(view.refundedCents)}</dd>
+                <dl className="guest-facts">
+                  <div>
+                    <dt>{t("state")}</dt>
+                    <dd data-testid="guest-status">{statusKey}</dd>
                   </div>
-                )}
-                {view.balanceCents > 0 && (
-                  <div className="price-line price-line--now">
-                    <dt>{t("balance")}</dt>
-                    <dd data-testid="guest-balance">
-                      {money(view.balanceCents)}
+                  <div>
+                    <dt>{t("reference")}</dt>
+                    <dd>{booking.reference ?? t("noReference")}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("arrive")}</dt>
+                    <dd>{date(booking.check_in)}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("leave")}</dt>
+                    <dd>{date(booking.check_out)}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("guests")}</dt>
+                    <dd>
+                      {t("guestCount", {
+                        adults: booking.adults,
+                        children: booking.children,
+                      })}
                     </dd>
                   </div>
-                )}
-              </dl>
-              {view.balanceCents > 0 && dueOn && (
-                <p>
+                </dl>
+              </div>
+
+              <div className="guest-panel">
+                <h2>{t("priceTitle")}</h2>
+                <dl className="price-lines">
+                  <PriceLines lines={lines} />
+                  <div className="price-line price-line--total">
+                    <dt>{tSummary("total")}</dt>
+                    <dd>{money(booking.total_cents)}</dd>
+                  </div>
+                  <div className="price-line">
+                    <dt>{t("paid")}</dt>
+                    <dd data-testid="guest-paid">{money(view.paidCents)}</dd>
+                  </div>
+                  {view.refundedCents > 0 && (
+                    <div className="price-line">
+                      <dt>{t("refunded")}</dt>
+                      <dd>{money(view.refundedCents)}</dd>
+                    </div>
+                  )}
+                  {view.balanceCents > 0 && (
+                    <div className="price-line price-line--now">
+                      <dt>{t("balance")}</dt>
+                      <dd data-testid="guest-balance">
+                        {money(view.balanceCents)}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+                {view.balanceCents > 0 && dueOn && (
+                  <p>
                     {dueOn === booking.check_in
                       ? tSummary("onArrival")
                       : t("dueOn", { date: date(dueOn) })}
                   </p>
-              )}
-              {view.balanceCents > 0 && CAN_PAY.includes(booking.status) && (
-                <PayBalance token={token} />
-              )}
-            </div>
-
-            {rulesText && cancel.route !== "closed" && (
-              <div className="guest-panel">
-                <h2>{t("rulesTitle")}</h2>
-                {rulesText.split("\n").map((line) => (
-                  <p key={line}>{line}</p>
-                ))}
-              </div>
-            )}
-
-            {cancel.route !== "closed" && (
-              <div className="guest-panel">
-                <h2>{t("cancelTitle")}</h2>
-                {cancel.route === "direct" ? (
-                  <CancelBooking
-                    token={token}
-                    refundCents={cancel.outcome?.refundCents ?? 0}
-                  />
-                ) : (
-                  <RequestCancellation token={token} />
+                )}
+                {view.balanceCents > 0 && CAN_PAY.includes(booking.status) && (
+                  <PayBalance token={token} />
                 )}
               </div>
-            )}
 
-            <div className="guest-panel">
-              <h2>{t("messageTitle")}</h2>
-              <MessageHost token={token} />
+              {rulesText && cancel.route !== "closed" && (
+                <div className="guest-panel">
+                  <h2>{t("rulesTitle")}</h2>
+                  {rulesText.split("\n").map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                </div>
+              )}
+
+              {cancel.route !== "closed" && (
+                <div className="guest-panel">
+                  <h2>{t("cancelTitle")}</h2>
+                  {cancel.route === "direct" ? (
+                    <CancelBooking
+                      token={token}
+                      refundCents={cancel.outcome?.refundCents ?? 0}
+                    />
+                  ) : (
+                    <RequestCancellation token={token} />
+                  )}
+                </div>
+              )}
+
+              <div className="guest-panel">
+                <h2>{t("messageTitle")}</h2>
+                <MessageHost token={token} />
               </div>
             </div>
           </BookingMessages>

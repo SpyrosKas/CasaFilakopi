@@ -610,7 +610,8 @@ describe("webhook", () => {
     // finds the refund already made.
     const refundCount = fake.refunds.size;
     await deliver("checkout.session.completed", session, eventId);
-    await deliver("checkout.session.completed", session);
+    const resent = await deliver("checkout.session.completed", session);
+    expect(resent.response.status).toBe(200);
     expect(fake.refunds.size).toBe(refundCount);
     expect(await refundsFor(started.bookingId)).toHaveLength(1);
     expect(
@@ -624,11 +625,12 @@ describe("webhook", () => {
     const { started } = await loseDates();
     const session = fake.pay(started.session.id);
     const before = fake.refunds.size;
-    await Promise.all(
+    const results = await Promise.all(
       Array.from({ length: 4 }, () =>
         deliver("checkout.session.completed", session),
       ),
     );
+    for (const { response } of results) expect(response.status).toBe(200);
     expect(fake.refunds.size).toBe(before + 1);
     const rows = await refundsFor(started.bookingId);
     expect(rows.filter((row) => row.status !== "failed")).toHaveLength(1);
