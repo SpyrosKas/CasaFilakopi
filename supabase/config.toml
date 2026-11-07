@@ -146,7 +146,7 @@ max_catalogs = 2
 
 # Store vector embeddings in S3 for large and durable datasets
 [storage.vector]
-enabled = true
+enabled = false
 max_buckets = 10
 max_indexes = 5
 
@@ -440,3 +440,7 @@ additional_redirect_urls = ["https://casa-filakopi.vercel.app/admin/auth/confirm
 
 [remotes.staging.auth.rate_limit]
 sign_in_sign_ups = 15
+
+[remotes.staging.auth.email]
+max_frequency = "1m0s"
+otp_length = 8
