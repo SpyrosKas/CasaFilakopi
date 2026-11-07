@@ -24,7 +24,8 @@ import {
   tokenSchema,
 } from "./schemas";
 import { SETTINGS_KEY } from "./settings";
-import { createChannelStore } from "./store";
+import { isOwnSite } from "./safe-url";
+import { createChannelStore, saveFeedLink } from "./store";
 import { channelStrings as s } from "./strings";
 import { syncNow } from "./sync";
 import { CHANNELS, type Channel } from "./types";
@@ -38,6 +39,18 @@ async function assertOwnerRole(admin: AdminContext): Promise<void> {
   if (error || role !== "owner") throw new Error("not_authorised");
 }
 
+/** The change has already happened, so a failed log entry must not undo that. */
+async function auditQuietly(
+  admin: AdminContext,
+  entry: Parameters<typeof writeAudit>[1],
+): Promise<void> {
+  try {
+    await writeAudit(admin, entry);
+  } catch {
+    console.error("channels: could not write an audit entry");
+  }
+}
+
 export async function saveGeneral(
   _previous: ActionState,
   formData: FormData,
@@ -45,7 +58,16 @@ export async function saveGeneral(
   const admin = await requireOwner();
   const parsed = generalSchema.safeParse(formFields(formData));
   if (!parsed.success) return fromZodError(parsed.error);
-  const { enabled, airbnb, booking_com, other_ical, exportHolds } = parsed.data;
+  const { enabled, airbnb, booking_com, other_ical } = parsed.data;
+
+  if (enabled) {
+    const { data, error } = await admin.supabase
+      .from("property")
+      .select("email")
+      .maybeSingle();
+    if (error) return errorState(t.common.somethingWrong);
+    if (!data?.email) return errorState(s.errors.needsEmail);
+  }
 
   const { error } = await admin.supabase.from("settings").upsert({
     key: SETTINGS_KEY,
@@ -54,7 +76,8 @@ export async function saveGeneral(
       enabled,
       channels: { airbnb, booking_com, other_ical },
       intervalMinutes: parsed.data.intervalMinutes,
-      exportHolds,
+      // Stays off until real feeds are checked (D28).
+      exportHolds: false,
     },
   });
   if (error) return errorState(t.common.somethingWrong);
@@ -73,6 +96,14 @@ export async function saveFeed(
   if (!parsed.success) return fromZodError(parsed.error);
   const { roomId, channel, url } = parsed.data;
 
+  if (isOwnSite(url, getPublicEnv().NEXT_PUBLIC_SITE_URL)) {
+    return {
+      status: "error",
+      message: t.common.fixErrors,
+      fieldErrors: { url: s.errors.ownSite },
+    };
+  }
+
   const pulled = await defaultProvider().pull(url, athensDate(new Date()));
   if (!pulled.ok) {
     return {
@@ -82,21 +113,16 @@ export async function saveFeed(
     };
   }
 
-  // Through the Owner's client: RLS allows this table for Owners only.
-  const { error } = await admin.supabase.from("external_calendars").upsert(
-    {
-      room_id: roomId,
-      channel,
-      import_url: url,
-      is_enabled: true,
-      consecutive_failures: 0,
-    },
-    { onConflict: "room_id,channel" },
-  );
-  if (error) return errorState(s.errors.saveFailed);
+  // With the secret key: signed-in sessions cannot touch this column at all.
+  try {
+    await assertOwnerRole(admin);
+    await saveFeedLink(createAdminClient(), { roomId, channel, url });
+  } catch {
+    return errorState(s.errors.saveFailed);
+  }
 
   // Says which link changed, never what it is.
-  await writeAudit(admin, {
+  await auditQuietly(admin, {
     action: "ical_import_link_saved",
     entity: "external_calendars",
     entityId: roomId,
@@ -115,14 +141,19 @@ export async function removeFeed(
   const parsed = removeFeedSchema.safeParse(formFields(formData));
   if (!parsed.success) return fromZodError(parsed.error);
 
-  const { error } = await admin.supabase
+  try {
+    await assertOwnerRole(admin);
+  } catch {
+    return errorState(t.common.somethingWrong);
+  }
+  const { error } = await createAdminClient()
     .from("external_calendars")
     .update({ import_url: null, is_enabled: false, consecutive_failures: 0 })
     .eq("room_id", parsed.data.roomId)
     .eq("channel", parsed.data.channel);
   if (error) return errorState(t.common.somethingWrong);
 
-  await writeAudit(admin, {
+  await auditQuietly(admin, {
     action: "ical_import_link_removed",
     entity: "external_calendars",
     entityId: parsed.data.roomId,
@@ -131,6 +162,50 @@ export async function removeFeed(
 
   revalidatePath(PATH);
   return okState(s.feed.removed);
+}
+
+/**
+ * Frees the future stays of a site whose link has been removed. Nothing else
+ * will: with no link there are no more syncs. Started stays are kept.
+ */
+export async function freeFeedDates(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const admin = await requireOwner();
+  const parsed = removeFeedSchema.safeParse(formFields(formData));
+  if (!parsed.success) return fromZodError(parsed.error);
+
+  let freed: number;
+  try {
+    await assertOwnerRole(admin);
+    const db = createAdminClient();
+    const { data, error } = await db
+      .from("external_calendars")
+      .select("id, import_url")
+      .eq("room_id", parsed.data.roomId)
+      .eq("channel", parsed.data.channel)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data || data.import_url) return errorState(s.errors.linkStillSaved);
+
+    const store = createChannelStore(db);
+    const started = await store.startedUids(data.id, athensDate(new Date()));
+    freed = await store.releaseMissing(data.id, started, true);
+  } catch {
+    return errorState(t.common.somethingWrong);
+  }
+
+  await auditQuietly(admin, {
+    action: "channel_dates_freed",
+    entity: "external_calendars",
+    entityId: parsed.data.roomId,
+    after: { channel: parsed.data.channel, count: freed },
+  });
+
+  revalidatePath(PATH);
+  revalidatePath("/admin");
+  return okState(s.feed.freed(freed));
 }
 
 export async function runSyncNow(
@@ -161,6 +236,7 @@ export async function runSyncNow(
   if (report.failed > 0) {
     return errorState(s.sync.partFailed(report.failed, report.ran));
   }
+  if (report.partial > 0) return errorState(s.sync.partial);
   return okState(s.sync.done(report.ran, report.newConflicts));
 }
 
@@ -197,14 +273,16 @@ export async function regenerateExport(
   try {
     await assertOwnerRole(admin);
     await writeToken(parsed.data.roomId, token);
-    await writeAudit(admin, {
-      action: "ical_export_token_rotated",
-      entity: "ical_export_tokens",
-      entityId: parsed.data.roomId,
-    });
   } catch {
     return errorState(t.common.somethingWrong);
   }
+
+  // The old links are already dead, so these must reach Yorgos whatever happens.
+  await auditQuietly(admin, {
+    action: "ical_export_token_rotated",
+    entity: "ical_export_tokens",
+    entityId: parsed.data.roomId,
+  });
 
   const site = getPublicEnv().NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
   revalidatePath(PATH);

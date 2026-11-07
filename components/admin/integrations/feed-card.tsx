@@ -4,7 +4,12 @@ import { useActionState, useRef, useTransition, type FormEvent } from "react";
 import { ActionForm, FormMessage } from "@/components/admin/form";
 import { formatMoment } from "@/components/admin/integrations/format";
 import { idleState, type ActionState } from "@/lib/admin/form-state";
-import { removeFeed, runSyncNow, saveFeed } from "@/lib/channels/actions";
+import {
+  freeFeedDates,
+  removeFeed,
+  runSyncNow,
+  saveFeed,
+} from "@/lib/channels/actions";
 import type { FeedView } from "@/lib/channels/data";
 import { channelStrings as s } from "@/lib/channels/strings";
 
@@ -91,6 +96,31 @@ function RemoveLink({ roomId, feed }: { roomId: string; feed: FeedView }) {
   );
 }
 
+/**
+ * The only way to open dates once a site's link has gone. Stays mounted after
+ * the last stay goes, so its message can still be read.
+ */
+function FreeDates({ roomId, feed }: { roomId: string; feed: FeedView }) {
+  const [state, formAction, pending] = useActionState(freeFeedDates, idleState);
+  const canFree = !feed.maskedUrl && feed.futureStays > 0;
+  if (!canFree) return <FormMessage state={state} />;
+
+  return (
+    <details className="channel-help">
+      <summary>{s.feed.freeHeading(feed.futureStays)}</summary>
+      <form action={formAction} className="stack">
+        <FormMessage state={state} />
+        <p>{s.feed.freeWarning}</p>
+        <input type="hidden" name="roomId" value={roomId} />
+        <input type="hidden" name="channel" value={feed.channel} />
+        <button type="submit" className="button" disabled={pending}>
+          {pending ? s.feed.freeing : s.feed.free}
+        </button>
+      </form>
+    </details>
+  );
+}
+
 export function SyncButton({
   label,
   channel,
@@ -142,6 +172,7 @@ export function FeedCard({ roomId, feed }: { roomId: string; feed: FeedView }) {
         <SyncButton label={s.sync.one(name)} channel={feed.channel} />
       )}
       <RemoveLink roomId={roomId} feed={feed} />
+      <FreeDates roomId={roomId} feed={feed} />
     </section>
   );
 }

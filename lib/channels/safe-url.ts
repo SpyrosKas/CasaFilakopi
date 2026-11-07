@@ -90,6 +90,19 @@ export function checkFeedUrl(raw: string): UrlCheck {
   return { ok: true, url };
 }
 
+const bareHost = (host: string) => host.toLowerCase().replace(/^www\./, "");
+
+/** Our own calendar read back as a channel would be a loop by hand. */
+export function isOwnSite(raw: string, siteUrl: string): boolean {
+  try {
+    return (
+      bareHost(new URL(raw).hostname) === bareHost(new URL(siteUrl).hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** All Yorgos ever sees again of a saved address: the secret is in the rest. */
 export function maskFeedUrl(raw: string): string {
   try {

@@ -4,12 +4,16 @@ import type { AdminContext } from "@/lib/admin/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { athensDate } from "@/lib/domain/dates";
 import { classifyEvent } from "./classify";
+import { parseRunNotes, type RunNotes } from "./run-notes";
 import { maskFeedUrl } from "./safe-url";
 import {
   feedHealth,
+  isAutomaticSyncMissing,
   isFeedActive,
+  isSettingsDamaged,
   parseChannelSettings,
   SETTINGS_KEY,
+  staleAfterHours,
   type ChannelSettings,
   type FeedHealth,
 } from "./settings";
@@ -26,6 +30,8 @@ export interface FeedView {
   consecutiveFailures: number;
   health: FeedHealth;
   isActive: boolean;
+  /** Stored stays that have not begun, which only Yorgos can now free. */
+  futureStays: number;
 }
 
 export interface SyncLogView {
@@ -35,6 +41,7 @@ export interface SyncLogView {
   status: "running" | "success" | "failed";
   eventsSeen: number | null;
   error: SyncErrorCode | null;
+  notes: RunNotes;
 }
 
 export interface ConflictView {
@@ -46,32 +53,49 @@ export interface ConflictView {
 
 export interface FeedAlert {
   channel: Channel;
-  health: Exclude<FeedHealth, "ok">;
+  health: Exclude<FeedHealth, "ok"> | "unreadable";
   failures: number;
+  unreadable: number;
+}
+
+export interface ReleaseNotice {
+  channel: Channel;
+  count: number;
+  at: string;
 }
 
 export interface ChannelAlerts {
   conflicts: ConflictView[];
   feeds: FeedAlert[];
+  releases: ReleaseNotice[];
+  syncOff: boolean;
+  settingsDamaged: boolean;
+  noNotificationEmail: boolean;
+  automaticSyncMissing: boolean;
+  staleHours: number;
 }
 
 const MAX_CONFLICTS = 50;
 const LOG_ROWS = 20;
+const RECENT_RUNS = 500;
+const RELEASE_NOTICE_MS = 24 * 3_600_000;
 
-async function loadSettings(admin: AdminContext): Promise<ChannelSettings> {
-  const { data, error } = await admin.supabase
+type Db = ReturnType<typeof createAdminClient>;
+
+async function readSettingsValue(db: Db): Promise<unknown> {
+  const { data, error } = await db
     .from("settings")
     .select("value")
     .eq("key", SETTINGS_KEY)
     .maybeSingle();
   if (error) throw error;
-  return parseChannelSettings(data?.value);
+  return data?.value ?? null;
 }
 
 /** Double bookings still standing. Closed dates with no guest do not count. */
-async function loadConflicts(admin: AdminContext): Promise<ConflictView[]> {
+async function loadConflicts(db: Db): Promise<ConflictView[]> {
   const today = athensDate(new Date());
-  const { data, error } = await admin.supabase
+  const { data, error } = await db
     .from("external_events")
     .select(
       "id, start_date, end_date, summary, inventory_claims!inner (is_conflicted), external_calendars!inner (channel)",
@@ -94,50 +118,137 @@ async function loadConflicts(admin: AdminContext): Promise<ConflictView[]> {
   });
 }
 
-/** For the home page and the Channel sync screen. Safe for staff. */
-export async function loadChannelAlerts(
-  admin: AdminContext,
-): Promise<ChannelAlerts> {
-  const settings = await loadSettings(admin);
-  const conflicts = await loadConflicts(admin);
+interface RecentRun {
+  calendarId: string;
+  startedAt: string;
+  status: string;
+  unreadable: number;
+  released: number;
+}
 
-  // The link column is not selected: this runs for staff too.
-  const { data, error } = await admin.supabase
+async function loadRecentRuns(db: Db, ids: string[]): Promise<RecentRun[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await db
+    .from("sync_logs")
+    .select("calendar_id, started_at, status, error")
+    .in("calendar_id", ids)
+    .neq("status", "running")
+    .order("id", { ascending: false })
+    .limit(RECENT_RUNS);
+  if (error) throw error;
+  return data.map((row) => {
+    const { notes } = parseRunNotes(row.error);
+    return {
+      calendarId: row.calendar_id,
+      startedAt: row.started_at,
+      status: row.status,
+      unreadable: notes.unreadable ?? 0,
+      released: notes.released ?? 0,
+    };
+  });
+}
+
+async function hasNotificationEmail(db: Db): Promise<boolean> {
+  const { data, error } = await db
+    .from("property")
+    .select("email")
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data?.email);
+}
+
+/**
+ * For the home page and the Channel sync screen. Staff see this too, but RLS
+ * keeps the settings row from them, so it reads with the secret key after the
+ * page's own role check. Only yes-or-no facts and counts leave this function.
+ */
+export async function loadChannelAlerts(): Promise<ChannelAlerts> {
+  const db = createAdminClient();
+  const value = await readSettingsValue(db);
+  const settings = parseChannelSettings(value);
+  const now = new Date();
+
+  const { data, error } = await db
     .from("external_calendars")
     .select(
-      "channel, is_enabled, last_synced_at, created_at, consecutive_failures",
+      "id, channel, is_enabled, last_synced_at, created_at, updated_at, consecutive_failures",
     )
     .eq("is_enabled", true);
   if (error) throw error;
 
-  const now = new Date();
-  const feeds = data.flatMap((row): FeedAlert[] => {
-    if (!isChannel(row.channel) || !settings.enabled) return [];
-    if (!settings.channels[row.channel]) return [];
+  const active = data.flatMap((row) =>
+    isChannel(row.channel) &&
+    isFeedActive(
+      { channel: row.channel, isEnabled: true, hasUrl: true },
+      settings,
+    )
+      ? [{ ...row, channel: row.channel }]
+      : [],
+  );
+  const runs = await loadRecentRuns(
+    db,
+    active.map((row) => row.id),
+  );
+
+  const feeds = active.flatMap((row): FeedAlert[] => {
+    const latest = runs.find((run) => run.calendarId === row.id);
+    const failures = row.consecutive_failures;
+    if (latest && latest.unreadable > 0) {
+      return [
+        {
+          channel: row.channel,
+          health: "unreadable",
+          failures,
+          unreadable: latest.unreadable,
+        },
+      ];
+    }
     const health = feedHealth(
       {
         channel: row.channel,
-        isEnabled: row.is_enabled,
+        isEnabled: true,
         hasUrl: true,
         lastSyncedAt: row.last_synced_at,
         createdAt: row.created_at,
-        consecutiveFailures: row.consecutive_failures,
+        consecutiveFailures: failures,
       },
-      settings,
       now,
     );
     return health === "ok"
       ? []
-      : [
-          {
-            channel: row.channel,
-            health,
-            failures: row.consecutive_failures,
-          },
-        ];
+      : [{ channel: row.channel, health, failures, unreadable: 0 }];
   });
 
-  return { conflicts, feeds };
+  const releases = runs.flatMap((run): ReleaseNotice[] => {
+    const channel = active.find((row) => row.id === run.calendarId)?.channel;
+    const age = now.getTime() - Date.parse(run.startedAt);
+    return channel && run.released > 0 && age < RELEASE_NOTICE_MS
+      ? [{ channel, count: run.released, at: run.startedAt }]
+      : [];
+  });
+
+  // Saving a link counts as a start, so a new feed gets time for its first run.
+  const lastRunAt = [
+    ...runs.map((run) => run.startedAt),
+    ...active.map((row) => row.updated_at),
+  ].reduce<string | null>(
+    (latest, at) =>
+      latest === null || Date.parse(at) > Date.parse(latest) ? at : latest,
+    null,
+  );
+
+  return {
+    conflicts: await loadConflicts(db),
+    feeds,
+    releases,
+    syncOff: !settings.enabled,
+    settingsDamaged: isSettingsDamaged(value),
+    noNotificationEmail: !(await hasNotificationEmail(db)),
+    automaticSyncMissing:
+      lastRunAt !== null &&
+      isAutomaticSyncMissing(lastRunAt, settings.intervalMinutes, now),
+    staleHours: staleAfterHours(now),
+  };
 }
 
 const logStatus = z.enum(["running", "success", "failed"]);
@@ -166,7 +277,7 @@ async function loadLog(
         startedAt: row.started_at,
         status: status.data,
         eventsSeen: row.events_seen,
-        error: row.error as SyncErrorCode | null,
+        ...parseRunNotes(row.error),
       },
     ];
   });
@@ -185,7 +296,8 @@ export async function loadIntegrations(
   admin: AdminContext,
   roomId: string,
 ): Promise<IntegrationsData> {
-  const settings = await loadSettings(admin);
+  const value = await readSettingsValue(createAdminClient());
+  const settings = parseChannelSettings(value);
 
   // The page has passed requireOwner. Read with the secret key so the link
   // column can be closed to signed-in roles, staff included.
@@ -196,6 +308,20 @@ export async function loadIntegrations(
     )
     .eq("room_id", roomId);
   if (error) throw error;
+
+  const { data: future, error: futureError } = await createAdminClient()
+    .from("external_events")
+    .select("calendar_id")
+    .in(
+      "calendar_id",
+      data.map((row) => row.id),
+    )
+    .gt("start_date", athensDate(new Date()));
+  if (futureError) throw futureError;
+  const futureStays = new Map<string, number>();
+  for (const { calendar_id: id } of future) {
+    futureStays.set(id, (futureStays.get(id) ?? 0) + 1);
+  }
 
   const now = new Date();
   const feeds = CHANNELS.map((channel): FeedView => {
@@ -214,8 +340,9 @@ export async function loadIntegrations(
       maskedUrl: row?.import_url ? maskFeedUrl(row.import_url) : null,
       lastSyncedAt: input.lastSyncedAt,
       consecutiveFailures: input.consecutiveFailures,
-      health: feedHealth(input, settings, now),
+      health: feedHealth(input, now),
       isActive: isFeedActive(input, settings),
+      futureStays: row?.id ? (futureStays.get(row.id) ?? 0) : 0,
     };
   });
 

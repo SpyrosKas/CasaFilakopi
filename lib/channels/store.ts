@@ -1,9 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import type { Database } from "../db/types";
+import type { Database, Json } from "../db/types";
 import { parseChannelSettings, SETTINGS_KEY } from "./settings";
-import type { ChannelStore, ClaimOnRoom, Feed } from "./sync";
-import { isChannel } from "./types";
+import { channelStrings } from "./strings";
+import type { ChannelStore, ClaimOnRoom, Feed, HostAlert } from "./sync";
+import { isChannel, type Channel } from "./types";
 
 // The job's window on the database. Takes the secret-key client, because cron
 // has no signed-in user. Pass it in: this file stays free of server-only so the
@@ -29,6 +30,64 @@ export function parseStay(stay: unknown): { start: string; end: string } {
   return { start: match[1], end: match[2] };
 }
 
+/**
+ * MAIL offers one template for a conflict and one for anything else wrong with
+ * a sync, which reads "has failed N times in a row". The plain sentence in
+ * `error` says what really happened. calendar_id and alert_kind are not used by
+ * the templates: they are how a repeat is found.
+ */
+function alertEmail(alert: HostAlert): {
+  template_key: "host_sync_conflict" | "host_sync_failure";
+  payload: NonNullable<Json>;
+} {
+  const channel = channelStrings.names[alert.channel];
+  const keys = { calendar_id: alert.calendarId, alert_kind: alert.kind };
+  const failure = (failures: number, error: string) => ({
+    template_key: "host_sync_failure" as const,
+    payload: { ...keys, channel, failures: Math.max(failures, 1), error },
+  });
+
+  switch (alert.kind) {
+    case "conflict":
+      return {
+        template_key: "host_sync_conflict",
+        payload: {
+          ...keys,
+          channel,
+          checkIn: alert.start,
+          checkOut: alert.end,
+          ...(alert.summary ? { summary: alert.summary } : {}),
+        },
+      };
+    case "failing":
+      return failure(alert.failures, channelStrings.failure[alert.error]);
+    case "stale":
+      return failure(alert.failures, channelStrings.mail.stale(alert.hours));
+    case "unread_events":
+      return failure(1, channelStrings.mail.unreadable(alert.count));
+    case "stays_released":
+      return failure(1, channelStrings.mail.released(alert.count));
+  }
+}
+
+/** Saves an import link. Signed-in sessions cannot touch this column. */
+export async function saveFeedLink(
+  db: Db,
+  feed: { roomId: string; channel: Channel; url: string },
+): Promise<void> {
+  const { error } = await db.from("external_calendars").upsert(
+    {
+      room_id: feed.roomId,
+      channel: feed.channel,
+      import_url: feed.url,
+      is_enabled: true,
+      consecutive_failures: 0,
+    },
+    { onConflict: "room_id,channel" },
+  );
+  if (error) throw error;
+}
+
 export function createChannelStore(db: Db): ChannelStore {
   return {
     async settings() {
@@ -46,7 +105,9 @@ export function createChannelStore(db: Db): ChannelStore {
         .from("external_calendars")
         .select(
           "id, room_id, channel, import_url, is_enabled, last_synced_at, created_at, consecutive_failures",
-        );
+        )
+        .eq("is_enabled", true)
+        .not("import_url", "is", null);
       if (error) throw error;
       if (data.length === 0) return [];
 
@@ -139,8 +200,8 @@ export function createChannelStore(db: Db): ChannelStore {
         .update({
           status: result.status,
           finished_at: now.toISOString(),
-          events_seen: result.status === "success" ? result.eventsSeen : null,
-          error: result.status === "failed" ? result.error : null,
+          events_seen: result.eventsSeen,
+          error: result.detail,
         })
         .eq("id", runId);
       if (error) throw error;
@@ -152,26 +213,52 @@ export function createChannelStore(db: Db): ChannelStore {
         .lt("started_at", cutoff.toISOString());
     },
 
-    async previousRun(calendarId, runId) {
-      const { data, error } = await db
+    async emptySince(calendarId, runId) {
+      const { data: breaker, error } = await db
         .from("sync_logs")
-        .select("status, events_seen")
+        .select("id")
         .eq("calendar_id", calendarId)
-        .neq("status", "running")
         .lt("id", runId)
+        .or("status.eq.failed,events_seen.is.null,events_seen.neq.0")
         .order("id", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (error) throw error;
-      return data && { status: data.status, eventsSeen: data.events_seen };
+
+      const { data, error: readError } = await db
+        .from("sync_logs")
+        .select("started_at")
+        .eq("calendar_id", calendarId)
+        .eq("status", "success")
+        .eq("events_seen", 0)
+        .gt("id", breaker?.id ?? 0)
+        .lt("id", runId)
+        .order("id")
+        .limit(1)
+        .maybeSingle();
+      if (readError) throw readError;
+      return data?.started_at ?? null;
     },
 
-    async finishedUids(calendarId, today) {
+    async lastCleanRunAt(calendarId) {
+      const { data, error } = await db
+        .from("sync_logs")
+        .select("started_at")
+        .eq("calendar_id", calendarId)
+        .eq("status", "success")
+        .order("id", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.started_at ?? null;
+    },
+
+    async startedUids(calendarId, today) {
       const { data, error } = await db
         .from("external_events")
         .select("uid")
         .eq("calendar_id", calendarId)
-        .lt("end_date", today);
+        .lte("start_date", today);
       if (error) throw error;
       return data.map((row) => row.uid);
     },
@@ -179,12 +266,13 @@ export function createChannelStore(db: Db): ChannelStore {
     async roomClaims(roomId) {
       const { data, error } = await db
         .from("inventory_claims")
-        .select("stay, is_conflicted, external_events (uid, calendar_id)")
+        .select("kind, stay, is_conflicted, external_events (uid, calendar_id)")
         .eq("room_id", roomId);
       if (error) throw error;
       return data.map((row): ClaimOnRoom => {
         const event = row.external_events;
         return {
+          kind: row.kind,
           ...parseStay(row.stay),
           isConflicted: row.is_conflicted,
           calendarId: event?.calendar_id ?? null,
@@ -247,7 +335,7 @@ export function createChannelStore(db: Db): ChannelStore {
       return failures;
     },
 
-    async queueAlert({ template, calendarId, channel, ...dates }) {
+    async queueAlert(alert) {
       const { data, error } = await db
         .from("property")
         .select("email")
@@ -256,20 +344,19 @@ export function createChannelStore(db: Db): ChannelStore {
       if (!data?.email) return false;
 
       const { error: insertError } = await db.from("email_logs").insert({
-        template_key: template,
+        ...alertEmail(alert),
         recipient: data.email,
         status: "queued",
-        payload: { calendar_id: calendarId, channel, ...dates },
       });
       if (insertError) throw insertError;
       return true;
     },
 
-    async alertQueuedSince(template, calendarId, since) {
+    async alertQueuedSince(kind, calendarId, since) {
       const { count, error } = await db
         .from("email_logs")
         .select("id", { count: "exact", head: true })
-        .eq("template_key", template)
+        .eq("payload->>alert_kind", kind)
         .eq("payload->>calendar_id", calendarId)
         .gte("created_at", since);
       if (error) throw error;

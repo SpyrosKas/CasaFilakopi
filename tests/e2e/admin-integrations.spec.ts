@@ -145,9 +145,17 @@ test("saves the general settings", async () => {
   expect(rows[0].value).toMatchObject({
     enabled: true,
     intervalMinutes: 30,
-    exportHolds: true,
+    exportHolds: false,
     channels: { airbnb: true, booking_com: false },
   });
+});
+
+test("keeps exporting checkout holds off on the screen", async () => {
+  await page.goto("/admin/integrations");
+  const holds = page.getByLabel("Also show dates a guest is paying for");
+  await expect(holds).toBeDisabled();
+  await expect(holds).not.toBeChecked();
+  await expect(page.getByText("Stays off for now")).toBeVisible();
 });
 
 test.describe("checking a link before saving it", () => {
@@ -155,8 +163,9 @@ test.describe("checking a link before saving it", () => {
     ["http://www.airbnb.com/a.ics", "must start with https://"],
     ["https://127.0.0.1/a.ics", "private address"],
     ["https://169.254.169.254/latest/meta-data", "private address"],
-    ["https://localhost/a.ics", "private address"],
+    ["https://localhost/a.ics", "own link"],
     ["not a link", "does not look like a web link"],
+    ["https://www.miloscasa.com.localhost/a.ics", "private address"],
   ];
 
   for (const [url, message] of cases) {
@@ -200,11 +209,19 @@ test("never sends a saved link to the browser", async () => {
   expect(html).not.toContain(new URL(SECRET_LINK).search.slice(3));
 });
 
-test("warns about a feed that keeps failing", async () => {
+test("warns about a feed that keeps failing, for staff too", async ({
+  browser,
+}) => {
+  const message = "Airbnb has failed 3 times in a row";
   await page.goto("/admin");
-  await expect(page.getByTestId("channel-alerts")).toContainText(
-    "Airbnb has failed 3 times in a row",
-  );
+  await expect(page.getByTestId("channel-alerts")).toContainText(message);
+
+  const context = await browser.newContext();
+  const staffPage = await context.newPage();
+  await signInWithPassword(staffPage, staff);
+  await expect(staffPage).toHaveURL(/\/admin$/);
+  await expect(staffPage.getByTestId("channel-alerts")).toContainText(message);
+  await context.close();
 });
 
 test("shows the sync log in plain words", async () => {
@@ -220,6 +237,62 @@ test("shows the sync log in plain words", async () => {
   await page.goto("/admin/integrations");
   await expect(page.getByTestId("sync-log")).toContainText(
     "The site took too long to answer",
+  );
+});
+
+test("explains entries it could not read, and freed stays", async () => {
+  const { rows } = await db.query(
+    `select id from public.external_calendars where room_id = $1 and channel = 'airbnb'`,
+    [HOUSE],
+  );
+  await db.query(
+    `insert into public.sync_logs (calendar_id, status, finished_at, events_seen, error)
+     values ($1, 'success', now(), 2, 'released:1;echoed:1')`,
+    [rows[0].id],
+  );
+  await page.goto("/admin");
+  await expect(page.getByTestId("channel-alerts")).toContainText(
+    "no longer shows 1 future stay",
+  );
+
+  await db.query(
+    `insert into public.sync_logs (calendar_id, status, finished_at, events_seen, error)
+     values ($1, 'failed', now(), 1, 'unreadable:2')`,
+    [rows[0].id],
+  );
+  await page.goto("/admin");
+  await expect(page.getByTestId("channel-alerts")).toContainText(
+    "2 entries in the Airbnb calendar could not be read",
+  );
+  await expect(page.getByTestId("channel-alerts")).toContainText(
+    "we free nothing from Airbnb",
+  );
+
+  await page.goto("/admin/integrations");
+  const log = page.getByTestId("sync-log");
+  await expect(log).toContainText("2 entries could not be read");
+  await expect(log).toContainText("1 future stay was freed");
+  await expect(log).toContainText("our own calendar coming back");
+});
+
+test("shows when the automatic sync has not run", async () => {
+  const client = await db.connect();
+  try {
+    await client.query(`set session_replication_role = replica`);
+    await client.query(
+      `update public.external_calendars set updated_at = now() - interval '5 hours' where is_enabled`,
+    );
+    await client.query(
+      `update public.sync_logs set started_at = now() - interval '5 hours'
+       where calendar_id in (select id from public.external_calendars where is_enabled)`,
+    );
+  } finally {
+    await client.query(`set session_replication_role = default`);
+    client.release();
+  }
+  await page.goto("/admin");
+  await expect(page.getByTestId("channel-alerts")).toContainText(
+    "The automatic sync has not run",
   );
 });
 
@@ -251,6 +324,27 @@ test("removes a link and keeps the taken dates", async () => {
   expect(rows[0]).toEqual({ import_url: null, is_enabled: false });
 });
 
+test("frees a removed site's dates only when asked", async () => {
+  const { rows } = await db.query(
+    `select id from public.external_calendars where room_id = $1 and channel = 'airbnb'`,
+    [HOUSE],
+  );
+  await db.query(
+    `select public.upsert_external_event($1, 'e2e-gone', '2035-03-01', '2035-03-05')`,
+    [rows[0].id],
+  );
+  await page.goto("/admin/integrations");
+  await airbnb().getByText("Free 1 stay from this site").click();
+  await airbnb().getByRole("button", { name: "Free these dates" }).click();
+  await expect(airbnb().getByText("1 stay was freed")).toBeVisible();
+
+  const after = await db.query(
+    `select count(*)::int as n from public.external_events where calendar_id = $1 and uid = 'e2e-gone'`,
+    [rows[0].id],
+  );
+  expect(after.rows[0].n).toBe(0);
+});
+
 test.describe("our calendar for the other sites", () => {
   let firstPath: string;
 
@@ -271,6 +365,10 @@ test.describe("our calendar for the other sites", () => {
     await page.goto("/admin/integrations");
     await page.getByRole("button", { name: "Create links" }).click();
     await expect(page.getByText("Copy these now")).toBeVisible();
+
+    await page.context().grantPermissions(["clipboard-write"]);
+    await page.getByRole("button", { name: "Copy link" }).first().click();
+    await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
 
     const links = await shownLinks();
     firstPath = pathOf(links[0]);
@@ -382,6 +480,49 @@ test("shows a double booking on the home page and Channel sync", async ({
   await expect(staffPage).toHaveURL(/\/admin$/);
   await expect(staffPage.getByTestId("channel-alerts")).toContainText(line);
   await context.close();
+});
+
+test.describe("warnings that must not be silent", () => {
+  const setSettings = (value: unknown) =>
+    db.query(
+      `update public.settings set value = $1::jsonb where key = 'channel_sync'`,
+      [JSON.stringify(value)],
+    );
+
+  test("says when sync is off", async () => {
+    await setSettings({ enabled: false, intervalMinutes: 15 });
+    await page.goto("/admin");
+    await expect(page.getByTestId("channel-alerts")).toContainText(
+      "Channel sync is off",
+    );
+  });
+
+  test("warns about a damaged settings row", async () => {
+    await setSettings({ enabled: "yes" });
+    await page.goto("/admin");
+    await expect(page.getByTestId("channel-alerts")).toContainText(
+      "could not be read, so sync is off",
+    );
+    await setSettings({ enabled: true, intervalMinutes: 15 });
+  });
+
+  test("warns about, and refuses sync without, a notification email", async () => {
+    const { rows } = await db.query(`select email from public.property`);
+    await db.query(`update public.property set email = null`);
+    try {
+      await page.goto("/admin");
+      await expect(page.getByTestId("channel-alerts")).toContainText(
+        "No notification email is set",
+      );
+      await page.goto("/admin/integrations");
+      await page.getByRole("button", { name: "Save settings" }).click();
+      await expect(
+        page.getByText("needs a notification email first"),
+      ).toBeVisible();
+    } finally {
+      await db.query(`update public.property set email = $1`, [rows[0].email]);
+    }
+  });
 });
 
 test("works at 320 px with 44 px targets", async () => {

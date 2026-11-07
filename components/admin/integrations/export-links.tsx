@@ -1,11 +1,35 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { FormMessage } from "@/components/admin/form";
 import { formatMoment } from "@/components/admin/integrations/format";
 import { idleState } from "@/lib/admin/form-state";
 import { regenerateExport, type ExportState } from "@/lib/channels/actions";
 import { channelStrings as s } from "@/lib/channels/strings";
+
+function CopyButton({ text }: { text: string }) {
+  const [label, setLabel] = useState(s.export.copy);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setLabel(s.export.copied);
+    } catch {
+      setLabel(s.export.copyFailed);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      className="button button-quiet"
+      onClick={copy}
+      aria-live="polite"
+    >
+      {label}
+    </button>
+  );
+}
 
 export function ExportLinks({
   roomId,
@@ -42,6 +66,7 @@ export function ExportLinks({
                 <strong>{s.export.linkFor(s.names[link.channel])}</strong>
               </p>
               <code className="channel-link">{link.url}</code>
+              <CopyButton text={link.url} />
             </div>
           ))}
         </div>

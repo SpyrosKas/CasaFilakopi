@@ -23,7 +23,7 @@ export default async function AdminHomePage() {
     <div className="stack">
       <h1>{t.home.title(admin.displayName)}</h1>
       <p>{isOwner ? t.home.intro : t.home.staffIntro}</p>
-      <ChannelAlertsPanel admin={admin} withLink={isOwner} />
+      <ChannelAlertsPanel withLink={isOwner} />
       <ul className="link-list">
         {links.map((link) => (
           <li key={link.href}>

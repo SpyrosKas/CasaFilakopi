@@ -27,7 +27,7 @@ export type ParseResult =
   | {
       ok: true;
       events: FeedEvent[];
-      /** Events whose dates cannot be understood, or that repeat. */
+      /** Events in a form we do not support, or that repeat. */
       unreadable: number;
       cancelled: number;
       ignored: number;
@@ -49,7 +49,6 @@ interface RawEvent {
   duration?: string;
   status?: string;
   summary?: string;
-  sequence?: string;
   recurs: boolean;
 }
 
@@ -162,11 +161,12 @@ function wallToInstant(wall: number, zone: string): number {
 
 /**
  * All-day values and floating times keep the date they state. A time with a
- * zone is an instant, read as a date on Milos.
+ * zone has that date too, and the date it falls on Milos. Where they differ the
+ * stay gets the wider of the two, so a night is never lost.
  */
 type Moment =
   | { type: "date" | "floating"; wall: number }
-  | { type: "instant"; instant: number };
+  | { type: "instant"; instant: number; wall: number };
 
 const DATE_VALUE = /^(\d{4})(\d{2})(\d{2})$/;
 const TIME_VALUE = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/;
@@ -190,10 +190,11 @@ function parseMoment({ params, value }: Property): Moment | null {
   if (!isValidIsoDate(date) || +hh > 23 || +mm > 59 || +ss > 60) return null;
   const wall = Date.parse(`${date}T${hh}:${mm}:${ss === "60" ? "59" : ss}Z`);
 
-  if (zulu) return { type: "instant", instant: wall };
+  if (zulu) return { type: "instant", instant: wall, wall };
   if (params.TZID) {
     try {
-      return { type: "instant", instant: wallToInstant(wall, params.TZID) };
+      const instant = wallToInstant(wall, params.TZID);
+      return { type: "instant", instant, wall };
     } catch {
       // A zone name only this feed knows. Its wall clock is the best we have.
     }
@@ -203,19 +204,26 @@ function parseMoment({ params, value }: Property): Moment | null {
 
 function plus(moment: Moment, ms: number): Moment {
   return moment.type === "instant"
-    ? { ...moment, instant: moment.instant + ms }
+    ? { ...moment, instant: moment.instant + ms, wall: moment.wall + ms }
     : { ...moment, wall: moment.wall + ms };
 }
 
-function dateOf(moment: Moment): IsoDate | null {
-  const ms = moment.type === "instant" ? moment.instant : moment.wall;
-  const date = new Date(ms);
+function isoFrom(date: Date): IsoDate | null {
   if (Number.isNaN(date.getTime())) return null;
-  const iso =
-    moment.type === "instant"
-      ? athensDate(date)
-      : date.toISOString().slice(0, 10);
+  const iso = date.toISOString().slice(0, 10);
   return isValidIsoDate(iso) ? iso : null;
+}
+
+/** The two dates a moment can fall on, earliest first. */
+function datesOf(moment: Moment): [IsoDate, IsoDate] | null {
+  const stated = isoFrom(new Date(moment.wall));
+  if (!stated) return null;
+  if (moment.type !== "instant") return [stated, stated];
+
+  const instant = new Date(moment.instant);
+  if (!isoFrom(instant)) return null;
+  const onMilos = athensDate(instant);
+  return stated < onMilos ? [stated, onMilos] : [onMilos, stated];
 }
 
 const DURATION =
@@ -237,28 +245,23 @@ function stayDates(raw: RawEvent): { start: IsoDate; end: IsoDate } | null {
   if (!raw.dtstart) return null;
   const startMoment = parseMoment(raw.dtstart);
   if (!startMoment) return null;
-  const start = dateOf(startMoment);
+  const start = datesOf(startMoment)?.[0];
   if (!start) return null;
 
   let end: IsoDate | null = null;
   if (raw.dtend) {
     const endMoment = parseMoment(raw.dtend);
     if (!endMoment) return null;
-    end = dateOf(endMoment);
+    end = datesOf(endMoment)?.[1] ?? null;
     if (!end) return null;
   } else if (raw.duration !== undefined) {
     const ms = durationMs(raw.duration);
     if (ms === null) return null;
-    end = dateOf(plus(startMoment, ms));
+    end = datesOf(plus(startMoment, ms))?.[1] ?? null;
   }
 
   // No end at all, or an end on or before the start: at least that day is gone.
   return { start, end: end && end > start ? end : addDays(start, 1) };
-}
-
-function sequenceOf(raw: RawEvent): number {
-  const value = Number.parseInt(raw.sequence ?? "0", 10);
-  return Number.isSafeInteger(value) ? value : 0;
 }
 
 interface Dated {
@@ -271,9 +274,9 @@ interface Dated {
 
 /**
  * A UID may appear twice, and the table keeps one row per UID, so the last
- * copy would silently free the other's dates. The highest SEQUENCE is the
- * current version. Copies of the same version all count: overlapping ones
- * become one stay, and a separate one keeps its dates under a derived UID.
+ * copy would silently free the other's dates. Every copy that is not cancelled
+ * counts, whatever its SEQUENCE: overlapping ones become one stay, and a
+ * separate one keeps its dates under a derived UID.
  */
 function resolveDuplicates(all: Dated[]): {
   events: FeedEvent[];
@@ -290,14 +293,8 @@ function resolveDuplicates(all: Dated[]): {
   let cancelled = 0;
 
   for (const [uid, copies] of byUid) {
-    const latest = copies.reduce(
-      (highest, { raw }) => Math.max(highest, sequenceOf(raw)),
-      Number.MIN_SAFE_INTEGER,
-    );
     const active = copies
-      .filter(
-        ({ raw }) => sequenceOf(raw) === latest && raw.status !== "CANCELLED",
-      )
+      .filter(({ raw }) => raw.status !== "CANCELLED")
       .sort((a, b) => a.start.localeCompare(b.start));
 
     if (active.length === 0) {
@@ -345,9 +342,6 @@ function applyProperty(event: RawEvent, property: Property & { name: string }) {
       break;
     case "SUMMARY":
       event.summary ??= value;
-      break;
-    case "SEQUENCE":
-      event.sequence ??= value;
       break;
     case "RRULE":
     case "RDATE":

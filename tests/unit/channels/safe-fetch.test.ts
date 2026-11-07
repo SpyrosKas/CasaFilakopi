@@ -11,6 +11,7 @@ import {
 import {
   checkFeedUrl,
   isBlockedAddress,
+  isOwnSite,
   maskFeedUrl,
 } from "@/lib/channels/safe-url";
 
@@ -106,6 +107,26 @@ describe("checkFeedUrl", () => {
       ok: false,
       code: "bad_url",
     });
+  });
+});
+
+describe("isOwnSite", () => {
+  const site = "https://www.miloscasa.com";
+
+  it.each([
+    "https://www.miloscasa.com/api/ical/airbnb-x.ics",
+    "https://miloscasa.com/a.ics",
+    "https://WWW.MILOSCASA.COM/a.ics",
+  ])("catches %s", (url) => {
+    expect(isOwnSite(url, site)).toBe(true);
+  });
+
+  it.each([
+    "https://www.airbnb.com/a.ics",
+    "https://miloscasa.com.evil.example/a.ics",
+    "not a link",
+  ])("lets %s through to the other checks", (url) => {
+    expect(isOwnSite(url, site)).toBe(false);
   });
 });
 

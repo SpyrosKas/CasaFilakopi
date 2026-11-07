@@ -11,6 +11,9 @@ import { loadHouse } from "@/lib/admin/settings-data";
 import { loadIntegrations } from "@/lib/channels/data";
 import { channelStrings as s } from "@/lib/channels/strings";
 
+// Sync now runs inside this page's server action.
+export const maxDuration = 60;
+
 export default async function IntegrationsPage() {
   const admin = await requireOwner();
   const house = await loadHouse(admin);
@@ -34,7 +37,7 @@ export default async function IntegrationsPage() {
         <strong>{s.limitation.heading}</strong>
         <p>{s.limitation.body}</p>
       </div>
-      <ChannelAlertsPanel admin={admin} />
+      <ChannelAlertsPanel />
       <h2>{s.general.heading}</h2>
       <GeneralForm settings={data.settings} />
       {data.feeds.map((feed) => (

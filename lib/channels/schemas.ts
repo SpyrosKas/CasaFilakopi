@@ -13,7 +13,6 @@ export const generalSchema = z.object({
   airbnb: checkbox,
   booking_com: checkbox,
   other_ical: checkbox,
-  exportHolds: checkbox,
   intervalMinutes: z.coerce
     .number()
     .pipe(z.literal(SYNC_INTERVALS, { error: s.errors.interval })),

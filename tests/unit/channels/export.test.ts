@@ -188,6 +188,11 @@ describe("tokens", () => {
     `vrbo-${"a".repeat(43)}.ics`,
     `${"a".repeat(43)}.ics`,
     `airbnb-${"a".repeat(42)}/.ics`,
+    `x-airbnb-${"a".repeat(43)}.ics`,
+    `airbnb-${"a".repeat(43)}.ics.ics`,
+    `airbnb-${"a".repeat(43)}.ics\n`,
+    `\nairbnb-${"a".repeat(43)}.ics`,
+    `/etc/airbnb-${"a".repeat(43)}.ics`,
   ])("refuse %s", (name) => {
     expect(parseExportFileName(name)).toBeNull();
   });

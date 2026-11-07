@@ -1,7 +1,6 @@
-import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "../../lib/db/types";
 import {
   createExportToken,
@@ -12,35 +11,22 @@ import {
 import { parseIcal } from "../../lib/channels/ical-parser";
 import { createIcalProvider } from "../../lib/channels/providers";
 import { createChannelStore } from "../../lib/channels/store";
-import { syncFeed, type Feed } from "../../lib/channels/sync";
+import {
+  EMPTY_RELEASE_AFTER_MS,
+  syncFeed,
+  type ChannelStore,
+  type Feed,
+} from "../../lib/channels/sync";
 import type { Channel } from "../../lib/channels/types";
+import { athensDate, addDays } from "../../lib/domain/dates";
+import { localEnv } from "./channel-env";
 import { confirm, createHold, createRoom, db } from "./helpers";
 
 // The sync job against the real database functions, on rooms of its own. The
 // shared local database has other tracks writing to it, so nothing here touches
 // a row it did not create.
 
-function localEnv(): { url: string; key: string } {
-  try {
-    process.loadEnvFile(".env.local");
-  } catch {
-    // CI runs these before it writes that file.
-  }
-  const { NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SECRET_KEY: key } =
-    process.env;
-  if (url && key) return { url, key };
-
-  const status = execSync("supabase status -o env", { encoding: "utf8" });
-  const read = (name: string) =>
-    new RegExp(`^${name}="?([^"\\n]+)"?$`, "m").exec(status)?.[1] ?? "";
-  return { url: read("API_URL"), key: read("SECRET_KEY") };
-}
-
 const { url, key } = localEnv();
-if (!/^http:\/\/(127\.0\.0\.1|localhost):/.test(url)) {
-  throw new Error("Channel tests run against local Supabase only");
-}
-
 const client = createClient<Database>(url, key, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
@@ -110,7 +96,7 @@ async function newFeed(
     url: "https://example.test/feed.ics",
     isEnabled: true,
     lastSyncedAt: null,
-    createdAt: rows[0].created_at,
+    createdAt: rows[0].created_at.toISOString(),
     consecutiveFailures: 0,
     lastStartedAt: null,
   };
@@ -143,20 +129,46 @@ const ics = (...stays: Stay[]) =>
     "",
   ].join("\r\n");
 
-const sync = (feed: Feed, text: string) =>
+/** How far ahead of the real clock the job thinks it is. */
+let ahead = 0;
+const HOUR = 3_600_000;
+const clock = () => new Date(Date.now() + ahead);
+
+beforeEach(() => {
+  ahead = 0;
+});
+
+const sync = (feed: Feed, text: string, withStore: ChannelStore = store) =>
   syncFeed(feed, {
-    store,
+    store: withStore,
+    now: clock,
     provider: createIcalProvider(async () => ({ ok: true, text })),
   });
 
-const syncFailing = (feed: Feed) =>
+const syncFailing = (feed: Feed, withStore: ChannelStore = store) =>
   syncFeed(feed, {
-    store,
+    store: withStore,
+    now: clock,
     provider: createIcalProvider(async () => ({
       ok: false,
       code: "network_error",
     })),
   });
+
+/** Runs a sync as if it happened this many hours from the start of the test. */
+const syncAfter = (hours: number, feed: Feed, text: string) => {
+  ahead = hours * HOUR;
+  return sync(feed, text);
+};
+
+const lastRun = async (feed: Feed) =>
+  (
+    await db.query(
+      `select status, events_seen, error from public.sync_logs
+       where calendar_id = $1 order by id desc limit 1`,
+      [feed.id],
+    )
+  ).rows[0];
 
 const storedUids = async (feed: Feed) =>
   (
@@ -185,17 +197,18 @@ const isConflicted = async (feed: Feed, uid: string) =>
     )
   ).rows[0]?.is_conflicted as boolean | undefined;
 
-const alertsFor = async (feed: Feed, template: string) =>
+const alertsFor = async (feed: Feed, kind: string) =>
   (
     await db.query(
-      `select status, payload from public.email_logs
-       where template_key = $1 and payload ->> 'calendar_id' = $2`,
-      [template, feed.id],
+      `select status, template_key, payload from public.email_logs
+       where payload ->> 'alert_kind' = $1 and payload ->> 'calendar_id' = $2`,
+      [kind, feed.id],
     )
   ).rows;
 
 const JUNE = { start: "2029-06-01", end: "2029-06-08" };
 const JULY = { start: "2029-07-01", end: "2029-07-08" };
+const OVERLAP = { start: "2029-06-03", end: "2029-06-10" };
 
 async function directBooking(roomId: string, stay = JUNE, name = "Test Guest") {
   const bookingId = await createHold({
@@ -303,60 +316,264 @@ describe("importing", () => {
     );
 
     await sync(feed, ics({ uid: "a", ...JUNE }));
-    await sync(feed, ics());
-    await sync(feed, ics());
+    await syncAfter(1, feed, ics());
+    await syncAfter(8, feed, ics());
 
     expect(await storedUids(feed)).toEqual(["old"]);
   });
 });
 
+describe("safety: stays that have begun", () => {
+  const today = athensDate(new Date());
+
+  async function withStays(feed: Feed) {
+    const stays = {
+      inProgress: [addDays(today, -2), addDays(today, 3)],
+      endingToday: [addDays(today, -3), today],
+      startingToday: [today, addDays(today, 2)],
+      tomorrow: [addDays(today, 1), addDays(today, 2)],
+    };
+    for (const [uid, [start, end]] of Object.entries(stays)) {
+      await db.query(
+        `select public.upsert_external_event($1, $2, $3::date, $4::date)`,
+        [feed.id, uid, start, end],
+      );
+    }
+  }
+
+  it("keeps in-progress and ending-today stays when a feed shrinks", async () => {
+    const roomId = await newRoom();
+    const feed = await newFeed(roomId);
+    await withStays(feed);
+
+    const result = await sync(feed, ics({ uid: "other", ...JULY }));
+
+    expect(result).toMatchObject({ released: 1 });
+    expect(await storedUids(feed)).toEqual([
+      "endingToday",
+      "inProgress",
+      "other",
+      "startingToday",
+    ]);
+  });
+
+  it("keeps them through a long-empty feed too", async () => {
+    const roomId = await newRoom();
+    const feed = await newFeed(roomId);
+    await withStays(feed);
+
+    await sync(feed, ics());
+    const result = await syncAfter(7, feed, ics());
+
+    expect(result).toMatchObject({ released: 1 });
+    expect(await storedUids(feed)).toEqual([
+      "endingToday",
+      "inProgress",
+      "startingToday",
+    ]);
+  });
+
+  it("goes by the date on Milos, not in UTC", async () => {
+    const roomId = await newRoom();
+    const feed = await newFeed(roomId);
+    // 22:30 UTC on 31 May 2029 is already 1 June in Greece.
+    const lateEvening = new Date("2029-05-31T22:30:00Z");
+    await db.query(
+      `select public.upsert_external_event($1, 'first-of-june', '2029-06-01', '2029-06-05')`,
+      [feed.id],
+    );
+    const result = await syncFeed(feed, {
+      store,
+      now: () => lateEvening,
+      provider: createIcalProvider(async () => ({
+        ok: true,
+        text: ics({ uid: "other", ...JULY }),
+      })),
+    });
+    expect(result).toMatchObject({ released: 0 });
+    expect(await storedUids(feed)).toContain("first-of-june");
+  });
+});
+
 describe("safety: an empty feed", () => {
-  it("releases nothing the first time", async () => {
+  const PERIOD = EMPTY_RELEASE_AFTER_MS / HOUR;
+
+  async function feedWithStay() {
     const roomId = await newRoom();
     const feed = await newFeed(roomId);
     await sync(feed, ics({ uid: "a", ...JUNE }));
+    return feed;
+  }
 
-    const result = await sync(feed, ics());
-    expect(result).toMatchObject({ status: "success", released: 0 });
+  it("needs 6 hours, as decided", () => {
+    expect(PERIOD).toBe(6);
+  });
+
+  it("releases nothing the first time", async () => {
+    const feed = await feedWithStay();
+    expect(await sync(feed, ics())).toMatchObject({
+      status: "success",
+      released: 0,
+    });
     expect(await storedUids(feed)).toEqual(["a"]);
   });
 
-  it("releases only on the second empty fetch in a row", async () => {
-    const roomId = await newRoom();
-    const feed = await newFeed(roomId);
-    await sync(feed, ics({ uid: "a", ...JUNE }));
+  it("releases nothing on quick double empties, or ten of them", async () => {
+    const feed = await feedWithStay();
+    for (let run = 0; run < 10; run += 1) {
+      expect(await sync(feed, ics())).toMatchObject({ released: 0 });
+    }
+    expect(await storedUids(feed)).toEqual(["a"]);
+  });
+
+  it("releases nothing just short of 6 hours", async () => {
+    const feed = await feedWithStay();
     await sync(feed, ics());
-    const result = await sync(feed, ics());
+    await syncAfter(5.9, feed, ics());
+    expect(await storedUids(feed)).toEqual(["a"]);
+  });
+
+  it("releases once empty reads span 6 hours and two runs", async () => {
+    const feed = await feedWithStay();
+    await sync(feed, ics());
+    const result = await syncAfter(6.01, feed, ics());
     expect(result).toMatchObject({ released: 1 });
     expect(await storedUids(feed)).toEqual([]);
   });
 
-  it("starts counting again after a fetch with events", async () => {
-    const roomId = await newRoom();
-    const feed = await newFeed(roomId);
-    await sync(feed, ics({ uid: "a", ...JUNE }));
-    await sync(feed, ics());
-    await sync(feed, ics({ uid: "a", ...JUNE }));
-    await sync(feed, ics());
+  it("does not count one empty read after a long quiet gap", async () => {
+    const feed = await feedWithStay();
+    expect(await syncAfter(24, feed, ics())).toMatchObject({ released: 0 });
     expect(await storedUids(feed)).toEqual(["a"]);
   });
 
-  it("starts counting again after a failed fetch between them", async () => {
+  it("starts again after a fetch with events", async () => {
+    const feed = await feedWithStay();
+    await sync(feed, ics());
+    await syncAfter(3, feed, ics({ uid: "a", ...JUNE }));
+    await syncAfter(7, feed, ics());
+    expect(await storedUids(feed)).toEqual(["a"]);
+  });
+
+  it("starts again after a failed fetch", async () => {
+    const feed = await feedWithStay();
+    await sync(feed, ics());
+    ahead = 3 * HOUR;
+    await syncFailing(feed);
+    await syncAfter(7, feed, ics());
+    expect(await storedUids(feed)).toEqual(["a"]);
+  });
+
+  it("treats a feed of nothing but echoed closures as empty", async () => {
     const roomId = await newRoom();
+    await directBooking(roomId, JULY);
     const feed = await newFeed(roomId);
     await sync(feed, ics({ uid: "a", ...JUNE }));
-    await sync(feed, ics());
-    await syncFailing(feed);
-    await sync(feed, ics());
+
+    const echo = { uid: "e", ...JULY, summary: "Airbnb (Not available)" };
+    await sync(feed, ics(echo));
+    expect(await syncAfter(1, feed, ics(echo))).toMatchObject({ released: 0 });
+    expect(await storedUids(feed)).toEqual(["a"]);
+
+    expect(await syncAfter(7, feed, ics(echo))).toMatchObject({ released: 1 });
+    expect(await storedUids(feed)).toEqual([]);
+  });
+
+  it("treats a feed of only cancelled events as empty", async () => {
+    const feed = await feedWithStay();
+    const gone = { uid: "a", ...JUNE, status: "CANCELLED" };
+    await sync(feed, ics(gone));
     expect(await storedUids(feed)).toEqual(["a"]);
   });
 
   it("the database function refuses it too", async () => {
+    const feed = await feedWithStay();
+    await expect(store.releaseMissing(feed.id, [], false)).rejects.toThrow();
+    expect(await storedUids(feed)).toEqual(["a"]);
+  });
+});
+
+describe("telling Yorgos about a release", () => {
+  it("logs and alerts when a non-empty feed shrinks", async () => {
+    const roomId = await newRoom();
+    const feed = await newFeed(roomId);
+    await sync(
+      feed,
+      ics(
+        { uid: "a", ...JUNE },
+        { uid: "b", ...JULY },
+        { uid: "c", start: "2029-08-01", end: "2029-08-05" },
+      ),
+    );
+
+    await sync(feed, ics({ uid: "b", ...JULY }));
+
+    expect(await lastRun(feed)).toMatchObject({
+      status: "success",
+      error: "released:2",
+    });
+    const alerts = await alertsFor(feed, "stays_released");
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].template_key).toBe("host_sync_failure");
+    expect(alerts[0].payload).toMatchObject({ failures: 1, channel: "Airbnb" });
+    expect(alerts[0].payload.error).toContain("2 future stays");
+  });
+
+  it("logs and alerts when a long-empty feed releases", async () => {
     const roomId = await newRoom();
     const feed = await newFeed(roomId);
     await sync(feed, ics({ uid: "a", ...JUNE }));
-    await expect(store.releaseMissing(feed.id, [], false)).rejects.toThrow();
-    expect(await storedUids(feed)).toEqual(["a"]);
+    await sync(feed, ics());
+    await syncAfter(7, feed, ics());
+    expect((await lastRun(feed)).error).toBe("released:1");
+    expect(await alertsFor(feed, "stays_released")).toHaveLength(1);
+  });
+
+  it("stays quiet when nothing was released", async () => {
+    const roomId = await newRoom();
+    const feed = await newFeed(roomId);
+    await sync(feed, ics({ uid: "a", ...JUNE }));
+    await sync(feed, ics({ uid: "a", ...JUNE }));
+    expect((await lastRun(feed)).error).toBeNull();
+    expect(await alertsFor(feed, "stays_released")).toEqual([]);
+  });
+});
+
+describe("when an alert cannot be queued", () => {
+  const noEmail: ChannelStore = { ...store, queueAlert: async () => false };
+
+  it("still releases, and says in the log that the warning is lost", async () => {
+    const roomId = await newRoom();
+    const feed = await newFeed(roomId);
+    await sync(feed, ics({ uid: "a", ...JUNE }, { uid: "b", ...JULY }));
+    await sync(feed, ics({ uid: "b", ...JULY }), noEmail);
+    expect((await lastRun(feed)).error).toBe("released:1;alert_unsent:1");
+  });
+
+  it("notes a lost warning on a failing feed, and tries again next run", async () => {
+    const roomId = await newRoom();
+    const feed = await newFeed(roomId);
+    for (let run = 0; run < 4; run += 1) await syncFailing(feed, noEmail);
+    expect((await lastRun(feed)).error).toBe("network_error;alert_unsent:1");
+
+    await syncFailing(feed);
+    expect(await alertsFor(feed, "failing")).toHaveLength(1);
+  });
+
+  it("does not fail the sync when queueing throws", async () => {
+    const roomId = await newRoom();
+    const feed = await newFeed(roomId);
+    await sync(feed, ics({ uid: "a", ...JUNE }, { uid: "b", ...JULY }));
+    const broken: ChannelStore = {
+      ...store,
+      queueAlert: async () => {
+        throw new Error("down");
+      },
+    };
+    vi.spyOn(console, "error").mockImplementationOnce(() => {});
+    expect(await sync(feed, ics({ uid: "b", ...JULY }), broken)).toMatchObject({
+      status: "success",
+    });
   });
 });
 
@@ -392,28 +609,85 @@ describe("safety: a failed or unreadable fetch", () => {
     expect(await storedUids(feed)).toEqual(["a", "b"]);
   });
 
+  const withBadEvent = (text: string, body = "DTSTART:2027-07-01") =>
+    text.replace(
+      "END:VCALENDAR",
+      `BEGIN:VEVENT\r\nUID:bad\r\n${body}\r\nEND:VEVENT\r\nEND:VCALENDAR`,
+    );
+
   it("releases nothing while some events cannot be read", async () => {
     const roomId = await newRoom();
     const feed = await newFeed(roomId);
     await sync(feed, ics({ uid: "a", ...JUNE }, { uid: "b", ...JULY }));
-    const damaged = ics({ uid: "b", ...JULY }).replace(
-      "BEGIN:VEVENT",
-      "BEGIN:VEVENT\r\nUID:bad\r\nDTSTART:never\r\nEND:VEVENT\r\nBEGIN:VEVENT",
-    );
-    await sync(feed, damaged);
+    await sync(feed, withBadEvent(ics({ uid: "b", ...JULY })));
     expect(await storedUids(feed)).toEqual(["a", "b"]);
   });
 
-  it("does not take a run with unreadable events for an empty one", async () => {
+  it.each([
+    ["a dashed date", "DTSTART:2027-07-01"],
+    ["a date with a time", "DTSTART;VALUE=DATE:20270701T120000"],
+    ["a repeating event", "DTSTART;VALUE=DATE:20290701\r\nRRULE:FREQ=WEEKLY"],
+  ])("makes %s a visible problem, not a success", async (_name, body) => {
+    const roomId = await newRoom();
+    const feed = await newFeed(roomId);
+    const result = await sync(
+      feed,
+      withBadEvent(ics({ uid: "a", ...JUNE }), body),
+    );
+
+    expect(result).toMatchObject({ status: "success", unreadable: 1 });
+    expect(await lastRun(feed)).toMatchObject({
+      status: "failed",
+      error: "unreadable:1",
+    });
+    expect(await alertsFor(feed, "unread_events")).toHaveLength(1);
+    // The readable stay still blocks.
+    expect(await storedUids(feed)).toContain("a");
+  });
+
+  it("alerts once per feed, until it reads in full again", async () => {
+    const roomId = await newRoom();
+    const feed = await newFeed(roomId);
+    const bad = withBadEvent(ics({ uid: "a", ...JUNE }));
+    await sync(feed, bad);
+    await sync(feed, bad);
+    await sync(feed, bad);
+    expect(await alertsFor(feed, "unread_events")).toHaveLength(1);
+
+    await sync(feed, ics({ uid: "a", ...JUNE }));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await sync(feed, bad);
+    expect(await alertsFor(feed, "unread_events")).toHaveLength(2);
+  });
+
+  it("is not silenced by a different alert about the same feed", async () => {
+    const roomId = await newRoom();
+    const feed = await newFeed(roomId);
+    for (let run = 0; run < 3; run += 1) await syncFailing(feed);
+    expect(await alertsFor(feed, "failing")).toHaveLength(1);
+
+    await sync(feed, withBadEvent(ics({ uid: "a", ...JUNE })));
+    expect(await alertsFor(feed, "unread_events")).toHaveLength(1);
+  });
+
+  it("never takes an unreadable-only feed for an empty one", async () => {
     const roomId = await newRoom();
     const feed = await newFeed(roomId);
     await sync(feed, ics({ uid: "a", ...JUNE }));
-    const onlyBad = ics().replace(
-      "END:VCALENDAR",
-      "BEGIN:VEVENT\r\nUID:bad\r\nDTSTART:never\r\nEND:VEVENT\r\nEND:VCALENDAR",
-    );
+    const onlyBad = withBadEvent(ics());
     await sync(feed, onlyBad);
-    await sync(feed, ics());
+    await syncAfter(7, feed, onlyBad);
+    await syncAfter(14, feed, onlyBad);
+    expect(await storedUids(feed)).toEqual(["a"]);
+    expect((await lastRun(feed)).status).toBe("failed");
+  });
+
+  it("does not let unreadable runs count toward the empty period", async () => {
+    const roomId = await newRoom();
+    const feed = await newFeed(roomId);
+    await sync(feed, ics({ uid: "a", ...JUNE }));
+    await sync(feed, withBadEvent(ics()));
+    await syncAfter(7, feed, ics());
     expect(await storedUids(feed)).toEqual(["a"]);
   });
 
@@ -424,7 +698,16 @@ describe("safety: a failed or unreadable fetch", () => {
 
     for (let run = 0; run < 12; run += 1) await syncFailing(feed);
     expect(await storedUids(feed)).toEqual(["a", "b"]);
-    expect(await alertsFor(feed, "host_channel_sync_failing")).toHaveLength(1);
+    const [first] = await alertsFor(feed, "failing");
+    expect(first.template_key).toBe("host_sync_failure");
+    expect(first.payload).toMatchObject({ channel: "Airbnb", failures: 3 });
+    expect(await alertsFor(feed, "failing")).toHaveLength(1);
+
+    // A day later it is raised again. email_logs keeps the real clock, so one
+    // run is all this can show.
+    ahead = 25 * HOUR;
+    await syncFailing(feed);
+    expect(await alertsFor(feed, "failing")).toHaveLength(2);
 
     const back = await sync(feed, ics({ uid: "b", ...JULY }));
     expect(back).toMatchObject({ status: "success", released: 1 });
@@ -453,7 +736,7 @@ describe("conflicts", () => {
     await directBooking(roomId);
     const feed = await newFeed(roomId);
 
-    const stay = { uid: "a", ...JUNE, summary: "Reserved" };
+    const stay = { uid: "a", ...OVERLAP, summary: "Reserved" };
     const first = await sync(feed, ics(stay));
     expect(first).toMatchObject({ status: "success", newConflicts: 1 });
     expect(await isConflicted(feed, "a")).toBe(true);
@@ -461,13 +744,15 @@ describe("conflicts", () => {
     await sync(feed, ics(stay));
     await sync(feed, ics(stay));
 
-    const alerts = await alertsFor(feed, "host_channel_conflict");
+    const alerts = await alertsFor(feed, "conflict");
     expect(alerts).toHaveLength(1);
     expect(alerts[0].status).toBe("queued");
+    expect(alerts[0].template_key).toBe("host_sync_conflict");
     expect(alerts[0].payload).toMatchObject({
-      channel: "airbnb",
-      start: JUNE.start,
-      end: JUNE.end,
+      channel: "Airbnb",
+      checkIn: OVERLAP.start,
+      checkOut: OVERLAP.end,
+      summary: "Reserved",
     });
     expect(JSON.stringify(alerts[0].payload)).not.toContain("example.test");
   });
@@ -492,7 +777,7 @@ describe("conflicts", () => {
 
     expect(result).toMatchObject({ newConflicts: 0 });
     expect(await isConflicted(feed, "new")).toBe(false);
-    expect(await alertsFor(feed, "host_channel_conflict")).toHaveLength(0);
+    expect(await alertsFor(feed, "conflict")).toHaveLength(0);
     expect(await storedUids(feed)).toEqual(["new"]);
   });
 
@@ -517,7 +802,10 @@ describe("conflicts", () => {
       checkOut: JUNE.end,
     });
     const feed = await newFeed(roomId);
-    await sync(feed, ics({ uid: "e", ...JUNE, summary: "Not available" }));
+    await sync(
+      feed,
+      ics({ uid: "e", ...JUNE, summary: "Airbnb (Not available)" }),
+    );
     expect((await confirm(bookingId)).outcome).toBe("confirmed");
   });
 
@@ -532,16 +820,73 @@ describe("conflicts", () => {
     expect(await storedUids(feed)).toEqual(["e"]);
   });
 
-  it("never treats a possible sale as an echo", async () => {
+  it("stores an exact match with our booking, flags it, and holds back the alarm", async () => {
     const roomId = await newRoom();
     await directBooking(roomId);
     const feed = await newFeed(roomId, "booking_com");
 
     const closed = { uid: "b", ...JUNE, summary: "CLOSED - Not available" };
-    const result = await sync(feed, ics(closed));
+    expect(await sync(feed, ics(closed))).toMatchObject({ newConflicts: 0 });
 
-    expect(result).toMatchObject({ newConflicts: 1 });
     expect(await isConflicted(feed, "b")).toBe(true);
+    expect(await alertsFor(feed, "conflict")).toEqual([]);
+    expect((await lastRun(feed)).error).toBe("echoed:1");
+  });
+
+  it("treats a blocked date range of ours the same way", async () => {
+    const roomId = await newRoom();
+    await db.query(
+      `select public.create_block($1, $2::date, $3::date, 'owner_use')`,
+      [roomId, JUNE.start, JUNE.end],
+    );
+    const feed = await newFeed(roomId, "booking_com");
+    await sync(feed, ics({ uid: "b", ...JUNE, summary: "CLOSED" }));
+    expect(await alertsFor(feed, "conflict")).toEqual([]);
+  });
+
+  it("raises the alarm when dates differ by even one day", async () => {
+    const roomId = await newRoom();
+    await directBooking(roomId);
+    const feed = await newFeed(roomId, "booking_com");
+
+    const closed = {
+      uid: "b",
+      start: JUNE.start,
+      end: "2029-06-09",
+      summary: "CLOSED - Not available",
+    };
+    expect(await sync(feed, ics(closed))).toMatchObject({ newConflicts: 1 });
+    expect(await alertsFor(feed, "conflict")).toHaveLength(1);
+  });
+
+  it("raises the alarm for a stay inside ours that is not an exact match", async () => {
+    const roomId = await newRoom();
+    await directBooking(roomId);
+    const feed = await newFeed(roomId, "booking_com");
+
+    const closed = {
+      uid: "b",
+      start: "2029-06-02",
+      end: "2029-06-05",
+      summary: "CLOSED - Not available",
+    };
+    expect(await sync(feed, ics(closed))).toMatchObject({ newConflicts: 1 });
+  });
+
+  it("raises the alarm for an exact match with a hold we did not export", async () => {
+    const roomId = await newRoom();
+    await createHold({ roomId, checkIn: JUNE.start, checkOut: JUNE.end });
+    const feed = await newFeed(roomId, "booking_com");
+    const closed = { uid: "b", ...JUNE, summary: "CLOSED - Not available" };
+    expect(await sync(feed, ics(closed))).toMatchObject({ newConflicts: 1 });
+  });
+
+  it("raises the alarm for an exact match with an imported stay", async () => {
+    const roomId = await newRoom();
+    await sync(await newFeed(roomId), ics({ uid: "a", ...JUNE }));
+    const feed = await newFeed(roomId, "booking_com");
+    const closed = { uid: "b", ...JUNE, summary: "CLOSED - Not available" };
+    expect(await sync(feed, ics(closed))).toMatchObject({ newConflicts: 1 });
   });
 
   it("does not raise the alarm for a closure that only partly overlaps", async () => {
@@ -829,8 +1174,12 @@ describe("loops", () => {
       await sync(booking, ics(...own.booking, ...closedOnBooking));
     };
 
+    // Each round is 4 hours apart, so a feed that empties can release.
     const rounds = async (count: number) => {
-      for (let run = 0; run < count; run += 1) await round();
+      for (let run = 0; run < count; run += 1) {
+        await round();
+        ahead += 4 * HOUR;
+      }
     };
 
     return { roomId, airbnb, booking, read, own, rounds };
@@ -869,7 +1218,7 @@ describe("loops", () => {
     await rounds(3);
 
     own.airbnb.length = 0;
-    await rounds(6);
+    await rounds(12);
 
     expect(await storedUids(airbnb)).toEqual([]);
     expect(await storedUids(booking)).toEqual([]);
@@ -888,7 +1237,7 @@ describe("loops", () => {
     await rounds(3);
 
     own.booking.length = 0;
-    await rounds(6);
+    await rounds(12);
 
     expect(await claimsOn(roomId)).toEqual([]);
   });
@@ -899,7 +1248,7 @@ describe("loops", () => {
     await rounds(3);
 
     await db.query(`select public.cancel_booking($1, 'test')`, [bookingId]);
-    await rounds(6);
+    await rounds(12);
 
     expect(await claimsOn(roomId)).toEqual([]);
   });

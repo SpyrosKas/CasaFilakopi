@@ -19,7 +19,9 @@ export function SyncLog({ rows }: { rows: SyncLogView[] }) {
               {row.status === "failed" ? (
                 <span className="channel-log-bad">
                   {s.log.failed}
-                  {row.error && `: ${s.failure[row.error]}`}
+                  {row.error &&
+                    s.failure[row.error] &&
+                    `: ${s.failure[row.error]}`}
                 </span>
               ) : (
                 <span>
@@ -28,6 +30,20 @@ export function SyncLog({ rows }: { rows: SyncLogView[] }) {
                     `, ${s.log.events(row.eventsSeen)}`}
                 </span>
               )}
+              {row.notes.unreadable ? (
+                <span className="channel-log-bad">
+                  {s.log.unreadable(row.notes.unreadable)}
+                </span>
+              ) : null}
+              {row.notes.released ? (
+                <span>{s.log.released(row.notes.released)}</span>
+              ) : null}
+              {row.notes.echoed ? (
+                <span>{s.log.echoed(row.notes.echoed)}</span>
+              ) : null}
+              {row.notes.alertUnsent ? (
+                <span className="channel-log-bad">{s.log.alertUnsent}</span>
+              ) : null}
             </li>
           ))}
         </ul>

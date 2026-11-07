@@ -19,11 +19,10 @@ export interface FeedEvent {
 }
 
 /**
- * reservation: a guest is staying.
- * block: closed dates with no guest, so never a double booking.
- * ambiguous: could be either. Booking.com labels both the same way.
+ * block: certainly closed dates with no guest, so never a double booking.
+ * ambiguous: anything else. Treated as a possible sale.
  */
-export type EventKind = "reservation" | "block" | "ambiguous";
+export type EventKind = "block" | "ambiguous";
 
 /** Why a feed could not be used. Codes, so no address ever reaches a log. */
 export type FeedErrorCode =

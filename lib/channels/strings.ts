@@ -11,7 +11,7 @@ export const channelStrings = {
     "Keeps Airbnb, Booking.com and this website showing the same taken dates, so the house is not sold twice.",
   limitation: {
     heading: "This is close to live, not instant",
-    body: "Calendars update every few minutes on our side, and Airbnb and Booking.com can take a few hours on theirs. If two guests book in that gap, the house can still be sold twice. We warn you here and by email when that happens.",
+    body: "Calendars update every few minutes on our side, and Airbnb and Booking.com can take a few hours on theirs. If two guests book in that gap, the house can still be sold twice. Warnings appear on this screen and on the home page. Email warnings start once sending email has been connected, so check here for now.",
   },
   names: {
     airbnb: "Airbnb",
@@ -28,7 +28,7 @@ export const channelStrings = {
     interval: (minutes: number) => `Every ${minutes} minutes`,
     holds: "Also show dates a guest is paying for right now",
     holdsHint:
-      "Closes the dates on the other sites while a guest is at the payment page.",
+      "Stays off for now. We will turn it on only after checking it against the real Airbnb and Booking.com calendars.",
     saved: "Saved.",
     save: "Save settings",
   },
@@ -47,9 +47,19 @@ export const channelStrings = {
     remove: "Remove link",
     removing: "Removing...",
     removed:
-      "Link removed. Dates already taken stay taken until you free them.",
+      "Link removed. Dates from this site stay closed. If they are no longer real, you can free them below.",
+    freeHeading: (count: number) =>
+      count === 1
+        ? "Free 1 stay from this site"
+        : `Free ${count} stays from this site`,
+    freeWarning:
+      "Do this only if these stays are really gone. The dates open for booking straight away. A stay that has already started is kept.",
+    free: "Free these dates",
+    freeing: "Freeing...",
+    freed: (count: number) =>
+      count === 1 ? "1 stay was freed." : `${count} stays were freed.`,
     whereHeading: (name: string) => `Where do I find the link on ${name}?`,
-    lastSync: "Last good sync:",
+    lastSync: "Last read:",
     never: "Never",
     failures: (count: number) => `${count} failed in a row`,
   },
@@ -83,6 +93,8 @@ export const channelStrings = {
         : `Synced ${ran}.`,
     partFailed: (failed: number, ran: number) =>
       `${failed} of ${ran} could not be read. See the sync log below.`,
+    partial:
+      "Some entries could not be read, so nothing was freed. See the sync log below.",
     nothing:
       "Nothing to sync. Check sync is on and a link is saved, or try again in a moment if a sync is already running.",
   },
@@ -98,6 +110,9 @@ export const channelStrings = {
     replaceWarning:
       "Use this only if a link was shared by mistake. The old links stop working at once, so you must paste the new ones into every site, or they stop seeing our dates.",
     replace: "Replace all links",
+    copy: "Copy link",
+    copied: "Copied",
+    copyFailed: "Could not copy. Press and hold the link to copy it.",
     showOnce:
       "Copy these now. For your safety we keep only a scrambled copy, so they cannot be shown again.",
     linkFor: (name: string) => `Link for ${name}`,
@@ -114,12 +129,39 @@ export const channelStrings = {
     failed: "Failed",
     running: "Running",
     events: (count: number) => (count === 1 ? "1 event" : `${count} events`),
+    released: (count: number) =>
+      count === 1
+        ? "1 future stay was freed."
+        : `${count} future stays were freed.`,
+    unreadable: (count: number) =>
+      count === 1
+        ? "1 entry could not be read, so nothing was freed."
+        : `${count} entries could not be read, so nothing was freed.`,
+    echoed: (count: number) =>
+      count === 1
+        ? "1 stay has the exact dates of one of ours, so it looks like our own calendar coming back. No alarm raised."
+        : `${count} stays have the exact dates of ours, so they look like our own calendar coming back. No alarm raised.`,
+    alertUnsent: "A warning could not be queued.",
   },
   alerts: {
+    loadFailed:
+      "Channel sync warnings could not be loaded. Open Channel sync to check it.",
     conflictHeading: (count: number) =>
       count === 1
         ? "Possible double booking"
         : `${count} possible double bookings`,
+    syncOff:
+      "Channel sync is off. Bookings on Airbnb and Booking.com are not reaching this calendar, so the house can be sold twice.",
+    settingsDamaged:
+      "The channel sync settings could not be read, so sync is off. Open Channel sync and save the settings again.",
+    noEmail:
+      "No notification email is set, so warnings cannot be queued for you. Add one in Property details. Until then, check this page.",
+    automaticSyncMissing:
+      "The automatic sync has not run. Calendars are only updating when someone presses Sync now.",
+    unreadable: (name: string, count: number) =>
+      `${count === 1 ? "1 entry" : `${count} entries`} in the ${name} calendar could not be read. Those dates may not be closed here, so check that calendar by hand. Until every entry can be read, we free nothing from ${name}, even if a guest cancels there.`,
+    released: (name: string, count: number, at: string) =>
+      `${name} no longer shows ${count === 1 ? "1 future stay" : `${count} future stays`}, so those dates were opened on ${at}. If that looks wrong, check ${name} at once.`,
     conflictIntro:
       "Another site shows the house as taken on dates that are already taken. Check both bookings. Call the guest or cancel one as soon as you can. This message goes away by itself at the next sync once the dates no longer overlap.",
     conflictEcho:
@@ -128,14 +170,26 @@ export const channelStrings = {
       `${name}: ${start} to ${end}`,
     failing: (name: string, count: number) =>
       `${name} has failed ${count} times in a row. New bookings there are not reaching this calendar. Open Channel sync to check the link.`,
-    stale: (name: string) =>
-      `${name} has not synced for over 6 hours. Open Channel sync to check it.`,
+    stale: (name: string, hours: number) =>
+      `${name} has not synced for over ${hours} hours. Open Channel sync to check it.`,
     open: "Open Channel sync",
+  },
+  mail: {
+    stale: (hours: number) => `No good sync for over ${hours} hours.`,
+    unreadable: (count: number) =>
+      `${count === 1 ? "1 entry" : `${count} entries`} could not be read, so those dates may not be closed here and nothing is being freed.`,
+    released: (count: number) =>
+      `The site no longer shows ${count === 1 ? "1 future stay" : `${count} future stays`}, so those dates were opened. Check this is right.`,
   },
   errors: {
     url: "That does not look like a web link. Paste the whole link, starting with https://",
     saveFailed: "The link works, but it could not be saved. Please try again.",
     missingRoom: "The house is missing, so nothing can be saved.",
+    needsEmail:
+      "Channel sync needs a notification email first, so warnings have somewhere to go. Add one in Property details, then come back.",
+    ownSite:
+      "That is this website's own link. Paste the link from the other site instead.",
+    linkStillSaved: "Remove the link first.",
     interval: "Please choose one of the times.",
   },
   failure: {

@@ -54,11 +54,7 @@ export function GeneralForm({ settings }: { settings: ChannelSettings }) {
       </fieldset>
       <div>
         <label className="choice">
-          <input
-            type="checkbox"
-            name="exportHolds"
-            defaultChecked={settings.exportHolds}
-          />
+          <input type="checkbox" checked={false} disabled readOnly />
           <span>{s.general.holds}</span>
         </label>
         <p className="hint">{s.general.holdsHint}</p>

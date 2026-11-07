@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { createIcalProvider } from "@/lib/channels/providers";
-import { parseChannelSettings } from "@/lib/channels/settings";
+import {
+  isAutomaticSyncMissing,
+  isSettingsDamaged,
+  parseChannelSettings,
+  staleAfterHours,
+} from "@/lib/channels/settings";
 import {
   runDueSyncs,
   syncNow,
@@ -37,8 +42,9 @@ function setup(feeds: Feed[], settings: unknown = ON) {
     feeds: async () => feeds,
     beginRun: async () => 1,
     finishRun: async () => {},
-    previousRun: async () => null,
-    finishedUids: async () => [],
+    emptySince: async () => null,
+    lastCleanRunAt: async () => null,
+    startedUids: async () => [],
     roomClaims: async () => [],
     upsertEvent: async () => ({ isConflicted: false, isNewConflict: false }),
     releaseMissing: async () => 0,
@@ -93,6 +99,38 @@ describe("which feeds run", () => {
     expect(pull).not.toHaveBeenCalled();
   });
 
+  it("keeps exporting checkout holds off by default (D28)", () => {
+    expect(parseChannelSettings({}).exportHolds).toBe(false);
+    expect(parseChannelSettings(null).exportHolds).toBe(false);
+  });
+
+  it("says when the settings row is damaged, but not when it is missing", () => {
+    expect(isSettingsDamaged({ enabled: "yes" })).toBe(true);
+    expect(isSettingsDamaged("nonsense")).toBe(true);
+    expect(isSettingsDamaged(null)).toBe(false);
+    expect(isSettingsDamaged({ enabled: true, intervalMinutes: 15 })).toBe(
+      false,
+    );
+  });
+
+  it("carries on with the next feed when one cannot write its log", async () => {
+    const { deps, store, pull } = setup([
+      feed({ id: "a", lastStartedAt: null }),
+      feed({ id: "b", lastStartedAt: null }),
+    ]);
+    const finishRun = vi
+      .fn<typeof store.finishRun>()
+      .mockRejectedValueOnce(new Error("down"))
+      .mockRejectedValueOnce(new Error("down"))
+      .mockResolvedValue(undefined);
+    const report = await runDueSyncs(
+      { ...deps, store: { ...store, finishRun } },
+      1_000,
+    );
+    expect(pull).toHaveBeenCalledTimes(2);
+    expect(report).toMatchObject({ ran: 2, failed: 1 });
+  });
+
   it("treats a damaged settings row as off", () => {
     expect(parseChannelSettings({ enabled: "yes" }).enabled).toBe(false);
     expect(parseChannelSettings({ intervalMinutes: 3 }).enabled).toBe(false);
@@ -105,7 +143,7 @@ describe("which feeds run", () => {
     ).toMatchObject({
       enabled: true,
       intervalMinutes: 15,
-      exportHolds: true,
+      exportHolds: false,
       channels: { airbnb: true, booking_com: true },
     });
   });
@@ -143,13 +181,35 @@ describe("no good sync for too long (CHN-15)", () => {
   const stale = () =>
     feed({ lastSyncedAt: minutesAgo(7 * 60), lastStartedAt: minutesAgo(1) });
 
+  const athens = (iso: string) => new Date(iso);
+
+  it("allows 3 hours from June to September and 6 otherwise, on Milos", () => {
+    expect(staleAfterHours(athens("2027-05-31T12:00:00Z"))).toBe(6);
+    expect(staleAfterHours(athens("2027-06-15T12:00:00Z"))).toBe(3);
+    expect(staleAfterHours(athens("2027-09-30T12:00:00Z"))).toBe(3);
+    expect(staleAfterHours(athens("2027-10-01T12:00:00Z"))).toBe(6);
+    // Already 1 June in Greece, still 31 May in UTC.
+    expect(staleAfterHours(athens("2027-05-31T22:30:00Z"))).toBe(3);
+    // Already 1 October in Greece.
+    expect(staleAfterHours(athens("2027-09-30T22:30:00Z"))).toBe(6);
+  });
+
+  it("notices when nothing has run for too long", () => {
+    expect(isAutomaticSyncMissing(minutesAgo(29), 10, NOW)).toBe(false);
+    expect(isAutomaticSyncMissing(minutesAgo(31), 10, NOW)).toBe(true);
+    expect(isAutomaticSyncMissing(minutesAgo(100), 60, NOW)).toBe(false);
+    expect(isAutomaticSyncMissing(minutesAgo(130), 60, NOW)).toBe(true);
+  });
+
   it("queues one alert", async () => {
     const { deps, store } = setup([stale()]);
     await runDueSyncs(deps, 1_000);
     expect(store.queueAlert).toHaveBeenCalledWith({
-      template: "host_channel_sync_stale",
+      kind: "stale",
       calendarId: "calendar",
       channel: "airbnb",
+      failures: 0,
+      hours: 6,
     });
   });
 

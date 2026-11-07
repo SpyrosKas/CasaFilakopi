@@ -38,9 +38,11 @@ const singleStay = (body: string) => {
   return [stay.start, stay.end];
 };
 
-describe("real feed shapes", () => {
-  it("reads an Airbnb feed, its folded lines and both labels", () => {
-    const { events, unreadable } = read(fixture("airbnb.ics"));
+// Written by hand from memory of each format. They are not samples of real
+// feeds, which have still to be checked (A9).
+describe("feeds shaped like each channel's", () => {
+  it("reads an Airbnb-shaped feed, its folded lines and both labels", () => {
+    const { events, unreadable } = read(fixture("airbnb-shaped.ics"));
     expect(unreadable).toBe(0);
     expect(events).toEqual([
       {
@@ -58,8 +60,8 @@ describe("real feed shapes", () => {
     ]);
   });
 
-  it("reads a Booking.com feed", () => {
-    const { events } = read(fixture("booking.ics"));
+  it("reads a Booking.com-shaped feed", () => {
+    const { events } = read(fixture("booking-shaped.ics"));
     expect(events.map((e) => [e.start, e.end, e.summary])).toEqual([
       ["2027-08-01", "2027-08-08", "CLOSED - Not available"],
       ["2027-09-10", "2027-09-12", "CLOSED - Not available"],
@@ -67,19 +69,34 @@ describe("real feed shapes", () => {
   });
 
   it("keeps nothing from the description, which holds phone digits", () => {
-    expect(JSON.stringify(read(fixture("airbnb.ics")))).not.toContain("1234");
+    expect(JSON.stringify(read(fixture("airbnb-shaped.ics")))).not.toContain(
+      "1234",
+    );
   });
 
   it("tells a sale from a closure only where the channel does", () => {
-    expect(classifyEvent("airbnb", "Reserved")).toBe("reservation");
     expect(classifyEvent("airbnb", "Airbnb (Not available)")).toBe("block");
-    expect(classifyEvent("airbnb", "Not available")).toBe("block");
+    for (const label of [
+      "Reserved",
+      "Not available",
+      "airbnb (not available)",
+      "Airbnb (Not available) - John",
+      "x Airbnb (Not available)",
+      "Airbnb (Not available)\nsecond line",
+      null,
+    ]) {
+      expect(classifyEvent("airbnb", label)).toBe("ambiguous");
+    }
+    expect(classifyEvent("booking_com", "Airbnb (Not available)")).toBe(
+      "ambiguous",
+    );
     expect(classifyEvent("booking_com", "CLOSED - Not available")).toBe(
       "ambiguous",
     );
-    expect(classifyEvent("other_ical", "Blocked")).toBe("block");
-    expect(classifyEvent("other_ical", "J. Smith")).toBe("ambiguous");
-    expect(classifyEvent("airbnb", null)).toBe("ambiguous");
+    expect(classifyEvent("other_ical", "Blocked")).toBe("ambiguous");
+    expect(classifyEvent("other_ical", "Airbnb (Not available)")).toBe(
+      "ambiguous",
+    );
   });
 });
 
@@ -91,10 +108,22 @@ describe("dates", () => {
     ]);
   });
 
-  it("reads a date-time in UTC as the date on Milos", () => {
+  it("takes the earlier date for a start, so no night is lost", () => {
     // 22:30 UTC on 31 May is already 1 June in Greece.
     const body = "UID:a\r\nDTSTART:20270531T223000Z\r\nDTEND:20270605T080000Z";
-    expect(singleStay(body)).toEqual(["2027-06-01", "2027-06-05"]);
+    expect(singleStay(body)).toEqual(["2027-05-31", "2027-06-05"]);
+  });
+
+  it("takes the later date for an end, so no night is lost", () => {
+    // 22:30 UTC on 5 June is already 6 June in Greece.
+    const body = "UID:a\r\nDTSTART:20270601T120000Z\r\nDTEND:20270605T223000Z";
+    expect(singleStay(body)).toEqual(["2027-06-01", "2027-06-06"]);
+  });
+
+  it("widens a zone that sits behind Greece the same way", () => {
+    const body =
+      "UID:a\r\nDTSTART;TZID=America/New_York:20270601T200000\r\nDTEND;TZID=America/New_York:20270605T200000";
+    expect(singleStay(body)).toEqual(["2027-06-01", "2027-06-06"]);
   });
 
   it("keeps a floating date-time on the date it states", () => {
@@ -105,7 +134,7 @@ describe("dates", () => {
   it("reads a named zone", () => {
     const body =
       "UID:a\r\nDTSTART;TZID=America/New_York:20270601T200000\r\nDTEND;TZID=America/New_York:20270605T060000";
-    expect(singleStay(body)).toEqual(["2027-06-02", "2027-06-05"]);
+    expect(singleStay(body)).toEqual(["2027-06-01", "2027-06-05"]);
   });
 
   it("does not trust a zone name only the feed knows", () => {
@@ -118,7 +147,7 @@ describe("dates", () => {
     // Greece moves to summer time at 01:00 UTC on 28 March 2027.
     const spring =
       "UID:a\r\nDTSTART:20270327T220000Z\r\nDTEND:20270328T210000Z";
-    expect(singleStay(spring)).toEqual(["2027-03-28", "2027-03-29"]);
+    expect(singleStay(spring)).toEqual(["2027-03-27", "2027-03-29"]);
     // And back at 01:00 UTC on 31 October 2027.
     const autumn =
       "UID:a\r\nDTSTART;TZID=Europe/Athens:20271031T003000\r\nDTEND;TZID=Europe/Athens:20271101T000000";
@@ -276,32 +305,35 @@ describe("cancelled and repeated events", () => {
     ]);
   });
 
-  it("takes the highest SEQUENCE as the current version", () => {
+  it("keeps every copy that is not cancelled, whatever its SEQUENCE", () => {
     const { events } = read(
       calendar(
         event("a", "20270601", "20270605", "SEQUENCE:1"),
         event("a", "20270610", "20270615", "SEQUENCE:2"),
       ),
     );
-    expect(events.map((e) => e.start)).toEqual(["2027-06-10"]);
+    expect(events.map((e) => e.start)).toEqual(["2027-06-01", "2027-06-10"]);
   });
 
-  it("lets a later cancellation win, and not an earlier one", () => {
-    const later = read(
+  it("keeps a copy that is not cancelled beside one that is", () => {
+    const { events } = read(
       calendar(
         event("a", "20270601", "20270605", "SEQUENCE:1"),
         event("a", "20270601", "20270605", "SEQUENCE:2\r\nSTATUS:CANCELLED"),
       ),
     );
-    expect(later.events).toEqual([]);
+    expect(events).toHaveLength(1);
+  });
 
-    const earlier = read(
+  it("drops a UID only when every copy is cancelled", () => {
+    const { events, cancelled } = read(
       calendar(
-        event("a", "20270601", "20270605", "SEQUENCE:1\r\nSTATUS:CANCELLED"),
-        event("a", "20270601", "20270605", "SEQUENCE:2"),
+        event("a", "20270601", "20270605", "STATUS:CANCELLED"),
+        event("a", "20270610", "20270615", "STATUS:CANCELLED"),
       ),
     );
-    expect(earlier.events).toHaveLength(1);
+    expect(events).toEqual([]);
+    expect(cancelled).toBe(1);
   });
 
   it("blocks the first date of a repeating event and flags the rest", () => {
@@ -309,6 +341,30 @@ describe("cancelled and repeated events", () => {
       calendar(event("a", "20270601", "20270605", "RRULE:FREQ=WEEKLY")),
     );
     expect(events).toHaveLength(1);
+    expect(unreadable).toBe(1);
+  });
+});
+
+describe("forms we do not support are counted, never dropped", () => {
+  it.each([
+    ["a dashed date", "UID:a\r\nDTSTART:2027-07-01"],
+    ["a dashed all-day date", "UID:a\r\nDTSTART;VALUE=DATE:2027-07-01"],
+    [
+      "a date-only value with a time",
+      "UID:a\r\nDTSTART;VALUE=DATE:20270701T120000",
+    ],
+    ["a missing start", "UID:a\r\nSUMMARY:x"],
+    [
+      "an end we cannot read",
+      "UID:a\r\nDTSTART;VALUE=DATE:20270701\r\nDTEND:soon",
+    ],
+    [
+      "a duration we cannot read",
+      "UID:a\r\nDTSTART;VALUE=DATE:20270701\r\nDURATION:a week",
+    ],
+  ])("%s", (_name, body) => {
+    const { events, unreadable } = read(calendar(body));
+    expect(events).toEqual([]);
     expect(unreadable).toBe(1);
   });
 });
@@ -330,7 +386,7 @@ describe("refusing untrusted input", () => {
   });
 
   it("refuses a file cut off part-way", () => {
-    const whole = fixture("airbnb.ics");
+    const whole = fixture("airbnb-shaped.ics");
     expect(refused(whole.slice(0, whole.lastIndexOf("END:VEVENT")))).toBe(
       "malformed",
     );
@@ -344,7 +400,9 @@ describe("refusing untrusted input", () => {
   });
 
   it("refuses text after the calendar has ended", () => {
-    expect(refused(`${fixture("booking.ics")}garbage line`)).toBe("malformed");
+    expect(refused(`${fixture("booking-shaped.ics")}garbage line`)).toBe(
+      "malformed",
+    );
   });
 
   it("refuses endless nesting", () => {
