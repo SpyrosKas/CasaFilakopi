@@ -50,6 +50,7 @@ export const checkoutSchema = z.strictObject({
   specialRequests: optionalText(2000),
   marketing: z.boolean(),
   acceptTerms: z.literal(true),
+  turnstileToken: z.string().max(2048).optional(),
 });
 
 export type CheckoutRequest = z.output<typeof checkoutSchema>;

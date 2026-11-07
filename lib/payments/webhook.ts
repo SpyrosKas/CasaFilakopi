@@ -292,7 +292,8 @@ function sessionBooking(session: Stripe.Checkout.Session): string | null {
   return id && UUID.test(id) ? id : null;
 }
 
-async function onSessionPaid(
+/** Also what reconciliation runs, so there is one way to confirm. */
+export async function applyPaidSession(
   deps: PaymentDeps,
   session: Stripe.Checkout.Session,
 ): Promise<void> {
@@ -351,19 +352,25 @@ async function onAsyncFailed(
 }
 
 const DISPUTE_NOTE =
-  "The payment's status here does not change yet. Reply in the Stripe dashboard before its deadline.";
+  "The payment shows as disputed in Admin. Reply in the Stripe dashboard before its deadline.";
+
+type DisputeResult = { outcome: string; booking_id?: string };
 
 async function onDisputeOpened(
   deps: PaymentDeps,
   dispute: Stripe.Dispute,
 ): Promise<void> {
   const intent = idOf(dispute.payment_intent);
-  const payment = intent ? await paymentByIntent(deps, intent) : null;
+  const opened = intent
+    ? await rpc<DisputeResult>(deps, "open_dispute", {
+        p_payment_intent_id: intent,
+      })
+    : null;
   await queue(
     deps,
     "host_dispute_opened",
     {
-      bookingId: payment?.booking_id,
+      bookingId: opened?.booking_id,
       amountCents: dispute.amount,
       reason: `${dispute.reason}. ${DISPUTE_NOTE}`,
     },
@@ -376,10 +383,18 @@ async function onDisputeClosed(
   dispute: Stripe.Dispute,
 ): Promise<void> {
   const intent = idOf(dispute.payment_intent);
-  const payment = intent ? await paymentByIntent(deps, intent) : null;
+  // Only `lost` takes the money. `warning_closed` was an inquiry that ended.
+  const closed = intent
+    ? await rpc<DisputeResult>(deps, "close_dispute", {
+        p_payment_intent_id: intent,
+        p_dispute_id: dispute.id,
+        p_won: dispute.status !== "lost",
+        p_amount_cents: dispute.amount,
+      })
+    : null;
   await alertHost(deps, {
     key: `dispute_closed:${dispute.id}`,
-    bookingId: payment?.booking_id,
+    bookingId: closed?.booking_id,
     amountCents: dispute.amount,
     reason: `A card dispute closed with the result: ${dispute.status}. Check it in Stripe.`,
   });
@@ -389,7 +404,7 @@ async function dispatch(deps: PaymentDeps, event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case "checkout.session.completed":
     case "checkout.session.async_payment_succeeded":
-      return onSessionPaid(deps, event.data.object);
+      return applyPaidSession(deps, event.data.object);
     case "checkout.session.async_payment_failed":
       return onAsyncFailed(deps, event.data.object);
     case "checkout.session.expired":
@@ -402,6 +417,7 @@ async function dispatch(deps: PaymentDeps, event: Stripe.Event): Promise<void> {
       return syncChargeRefunds(deps, event.data.object);
     case "refund.created":
     case "refund.updated":
+    case "refund.failed":
       return syncStripeRefund(deps, event.data.object);
     case "charge.dispute.created":
       return onDisputeOpened(deps, event.data.object);
@@ -445,7 +461,7 @@ export async function handleStripeWebhook(
   }
 
   try {
-    await dispatch(deps, event);
+    await dispatch({ ...deps, strictEmail: true }, event);
     await finishEvent(deps, event.id, null);
     return { status: 200, body: { received: true } };
   } catch (error) {

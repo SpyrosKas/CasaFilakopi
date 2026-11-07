@@ -1,7 +1,7 @@
 import type { Locale } from "@/lib/domain/contracts";
 import { balanceOf, summariseMoney } from "@/lib/admin/stays";
 import { sessionParams } from "./checkout";
-import { requireStripe, type PaymentDeps } from "./deps";
+import { dbCode, requireStripe, type PaymentDeps } from "./deps";
 import { balanceSlot, MIN_CHARGE_CENTS } from "./policy";
 
 // Paying what is left on a confirmed booking (T4.10). Every entry point, guest
@@ -54,27 +54,62 @@ export async function removeBalanceSession(
   if (error) throw new Error(error.message);
 }
 
-/** After a cancellation nobody should be able to pay on. Best effort. */
+const openRows = async (deps: PaymentDeps, bookingId: string) => {
+  const { payments } = await loadBookingMoney(deps, bookingId);
+  return payments.flatMap((row) =>
+    row.status === "pending" && row.stripe_checkout_session_id
+      ? [row.stripe_checkout_session_id]
+      : [],
+  );
+};
+
+/**
+ * The amount owed has changed, so an open page would ask for the wrong sum, or
+ * for money nobody owes. Best effort: a payment that still gets through is
+ * recorded, and alertIfOverpaid tells the host.
+ */
 export async function closeBalanceSessions(
   deps: PaymentDeps,
   bookingId: string,
 ): Promise<void> {
   if (!deps.stripe) return;
-  const { payments } = await loadBookingMoney(deps, bookingId);
-  for (const row of payments) {
-    if (row.status !== "pending" || !row.stripe_checkout_session_id) continue;
-    try {
-      await deps.stripe.checkout.sessions.expire(
-        row.stripe_checkout_session_id,
-      );
-      await removeBalanceSession(deps, row.stripe_checkout_session_id);
-    } catch (error) {
-      // Expired already, or paid: the webhook deals with both.
-      console.warn(
-        `balance session on ${bookingId} not closed: ${(error as Error).message}`,
-      );
+  try {
+    for (const sessionId of await openRows(deps, bookingId)) {
+      await deps.stripe.checkout.sessions.expire(sessionId);
+      await removeBalanceSession(deps, sessionId);
     }
+  } catch (error) {
+    // Expired already, or paid: the webhook deals with both.
+    console.warn(`balance session on ${bookingId}: ${dbCode(error)}`);
   }
+}
+
+/**
+ * Before a cancellation works out a refund. False means a balance has been paid
+ * and its webhook has not landed, so the sum on screen is wrong: the caller
+ * stops. Open pages are closed here, so nobody can pay during the cancellation.
+ */
+export async function settleBalanceSessions(
+  deps: PaymentDeps,
+  bookingId: string,
+): Promise<boolean> {
+  if (!deps.stripe) return true;
+  const stripe = deps.stripe;
+  for (const sessionId of await openRows(deps, bookingId)) {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (session.status === "complete") return false;
+    if (session.status === "open") {
+      try {
+        await stripe.checkout.sessions.expire(sessionId);
+      } catch (error) {
+        const latest = await stripe.checkout.sessions.retrieve(sessionId);
+        if (latest.status === "complete") return false;
+        if (latest.status !== "expired") throw error;
+      }
+    }
+    await removeBalanceSession(deps, sessionId);
+  }
+  return true;
 }
 
 async function reuseOpenSession(
@@ -103,6 +138,27 @@ async function reuseOpenSession(
     }
   }
   return null;
+}
+
+const UNIQUE_VIOLATION = "23505";
+
+async function joinOpenSession(
+  deps: PaymentDeps,
+  bookingId: string,
+  mine: string,
+  myUrl: string | null,
+): Promise<BalanceResult> {
+  const stripe = requireStripe(deps);
+  const [winner] = await openRows(deps, bookingId);
+  if (winner === mine) {
+    return myUrl ? { kind: "redirect", url: myUrl } : { kind: "unavailable" };
+  }
+  await stripe.checkout.sessions.expire(mine).catch(() => {});
+  if (!winner) return { kind: "processing" };
+  const session = await stripe.checkout.sessions.retrieve(winner);
+  return session.status === "open" && session.url
+    ? { kind: "redirect", url: session.url }
+    : { kind: "processing" };
 }
 
 export async function startBalancePayment(
@@ -170,22 +226,25 @@ export async function startBalancePayment(
       expiresAt,
       cancelPath: `/${locale}/book/cancelled`,
     }),
-    { idempotencyKey: `balance:${bookingId}:${balanceCents}:${slot}` },
+    {
+      idempotencyKey: `balance:${bookingId}:${balanceCents}:${locale}:${slot}`,
+    },
   );
 
-  // Two tabs in one slot get one Session, so the second insert changes nothing.
-  const { error: insertError } = await deps.db.from("payments").upsert(
-    {
-      booking_id: bookingId,
-      kind: "balance",
-      method: "card",
-      status: "pending",
-      amount_cents: balanceCents,
-      stripe_checkout_session_id: session.id,
-    },
-    { onConflict: "stripe_checkout_session_id", ignoreDuplicates: true },
-  );
+  // One booking has one pending row, by a unique index. Whoever loses that race
+  // uses the winner's Session, so two tabs can never hold two open payments.
+  const { error: insertError } = await deps.db.from("payments").insert({
+    booking_id: bookingId,
+    kind: "balance",
+    method: "card",
+    status: "pending",
+    amount_cents: balanceCents,
+    stripe_checkout_session_id: session.id,
+  });
   if (insertError) {
+    if (insertError.code === UNIQUE_VIOLATION) {
+      return joinOpenSession(deps, bookingId, session.id, session.url);
+    }
     await stripe.checkout.sessions.expire(session.id).catch(() => {});
     throw new Error(insertError.message);
   }

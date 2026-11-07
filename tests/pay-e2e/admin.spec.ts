@@ -1,12 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import { addDays, athensDate } from "@/lib/domain/dates";
+import { deriveGuestToken } from "@/lib/email/guest-link";
 import { skipCookieBanner } from "../e2e/helpers";
 import {
   createTestUser,
   db,
   deleteCreatedUsers,
   newOwnerPage,
+  signInWithPassword,
+  testAddress,
 } from "../e2e/admin-helpers";
 
 // Yorgos's side of a card payment, on a real paid booking: refunds through
@@ -14,6 +17,9 @@ import {
 // is left from their private page.
 
 test.describe.configure({ mode: "serial" });
+
+const guestToken = (bookingId: string) =>
+  deriveGuestToken("pay-e2e-guest-token-secret-of-enough-length", bookingId);
 
 const FAKE = `http://127.0.0.1:${process.env.FAKE_STRIPE_PORT ?? 12111}`;
 let dayOffset = 490;
@@ -124,6 +130,84 @@ test("refunds to the card, after a confirm, and handles a refusal", async ({
   await page.context().close();
 });
 
+const fakeSessionStatus = async (
+  request: APIRequestContext,
+  sessionId: string,
+) =>
+  (
+    (await (
+      await request.get(`${FAKE}/v1/checkout/sessions/${sessionId}`)
+    ).json()) as { status: string }
+  ).status;
+
+test("a cash payment closes an open balance page", async ({
+  browser,
+  request,
+  baseURL,
+}) => {
+  const booking = await paidBooking(request, baseURL!);
+  await db.query(
+    `update public.bookings set total_cents = total_cents + 5000 where id = $1`,
+    [booking.id],
+  );
+  const opened = await request.post("/api/checkout/balance", {
+    headers: { origin: baseURL! },
+    data: { token: guestToken(booking.id), locale: "en" },
+  });
+  expect(opened.status()).toBe(200);
+  const { url } = (await opened.json()) as { url: string };
+  const sessionId = url.split("/").at(-1)!;
+  expect(await fakeSessionStatus(request, sessionId)).toBe("open");
+
+  const owner = await createTestUser("owner");
+  const page = await newOwnerPage(browser, owner, { width: 1280, height: 800 });
+  await page.goto(`/admin/bookings/${booking.id}`);
+  await page.getByLabel("Amount in euros").first().fill("20");
+  await page.getByRole("button", { name: "Record a payment" }).click();
+  await expect(page.getByText("Payment recorded.")).toBeVisible();
+  expect(await fakeSessionStatus(request, sessionId)).toBe("expired");
+  await page.context().close();
+});
+
+test("cancelling from Admin refunds the card and emails the guest", async ({
+  browser,
+  request,
+  baseURL,
+}) => {
+  const booking = await paidBooking(request, baseURL!);
+  const owner = await createTestUser("owner");
+  const page = await newOwnerPage(browser, owner, { width: 1280, height: 800 });
+  await page.goto(`/admin/bookings/${booking.id}/cancel`);
+  await page.getByRole("button", { name: "Yes, cancel this booking" }).click();
+  await expect(page).toHaveURL(new RegExp(`/admin/bookings/${booking.id}$`));
+  await page.context().close();
+
+  const { rows } = await db.query(
+    `select template_key from public.email_logs where booking_id = $1`,
+    [booking.id],
+  );
+  const keys = rows.map((row) => row.template_key);
+  expect(keys).toContain("booking_cancellation");
+  expect(keys).toContain("refund_confirmation");
+  expect(await refundRows(booking.id)).toEqual([
+    { status: "succeeded", amount_cents: booking.total_cents },
+  ]);
+});
+
+test("Staff do not get card refunds", async ({ browser, request, baseURL }) => {
+  const booking = await paidBooking(request, baseURL!);
+  const staff = await createTestUser("staff");
+  const context = await browser.newContext({
+    extraHTTPHeaders: { "x-forwarded-for": testAddress() },
+  });
+  const page = await context.newPage();
+  await signInWithPassword(page, staff);
+  await page.goto(`/admin/bookings/${booking.id}`);
+  await expect(page.getByRole("heading", { name: "Payments" })).toBeVisible();
+  await expect(page.getByText("Refund to the card")).toHaveCount(0);
+  await context.close();
+});
+
 test("sends a payment link, and the guest pays what is left", async ({
   browser,
   request,
@@ -153,13 +237,11 @@ test("sends a payment link, and the guest pays what is left", async ({
     .toBe(1);
   await page.context().close();
 
-  const secret = "pay-e2e-guest-token-secret-of-enough-length";
-  const { deriveGuestToken } = await import("@/lib/email/guest-link");
   const guest = await browser.newPage({
     viewport: { width: 375, height: 800 },
   });
   await skipCookieBanner(guest);
-  await guest.goto(`/en/booking/${deriveGuestToken(secret, booking.id)}`);
+  await guest.goto(`/en/booking/${guestToken(booking.id)}`);
   await expect(guest.getByTestId("guest-balance")).toHaveText("€50.00");
 
   await guest.getByRole("button", { name: "Pay the balance" }).click();

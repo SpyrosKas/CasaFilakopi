@@ -22,6 +22,7 @@ import {
 import { parseBookingSettings } from "@/lib/domain/settings";
 import { describeCancellation } from "@/lib/email/format";
 import type { PaymentDeps } from "./deps";
+import { turnstileReady } from "./env";
 import { loadHouse } from "./room";
 import type { QuoteRequest } from "./schemas";
 
@@ -29,7 +30,7 @@ import type { QuoteRequest } from "./schemas";
 // nothing here says whether a night is a booking, a block or an import (AVL-09).
 
 const paymentsOpen = (deps: PaymentDeps) =>
-  deps.stripe !== null && !!deps.guestTokenSecret;
+  deps.stripe !== null && !!deps.guestTokenSecret && turnstileReady();
 
 export interface AvailabilityView {
   today: IsoDate;

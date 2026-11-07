@@ -257,31 +257,36 @@ async function findRow(deps: PaymentDeps, refund: Stripe.Refund) {
 const intentId = (value: string | { id: string } | null) =>
   typeof value === "string" ? value : (value?.id ?? null);
 
-/**
- * Brings our records in line with one refund at Stripe, from any event, in any
- * order. A refund made in the Stripe dashboard has no row yet and gets one here.
- */
-export async function syncStripeRefund(
+const alertFailedRefund = (
+  deps: PaymentDeps,
+  refundId: string,
+  bookingId: string,
+  amountCents: number,
+) =>
+  alertHost(deps, {
+    key: `refund_failed:${refundId}`,
+    bookingId,
+    amountCents,
+    reason: `Stripe reports that this refund failed (${refundId}), so the guest does not have the money back. Please check it in Stripe and refund again from Admin.`,
+  });
+
+/** Applies a refund as Stripe has it now. A failed one always alerts. */
+async function applyRefund(
   deps: PaymentDeps,
   refund: Stripe.Refund,
 ): Promise<void> {
   const row = await findRow(deps, refund);
   if (row) {
-    const wasCounted = row.status === "succeeded";
     const result = await applyStatus(deps, row.id, refund);
-    if (result === "failed" && wasCounted) {
-      await alertHost(deps, {
-        key: `refund_failed:${refund.id}`,
-        bookingId: row.booking_id,
-        reason: `Stripe reports that a refund failed after it had gone out (${refund.id}). The money stays on your Stripe balance. Please check it in Stripe.`,
-        amountCents: refund.amount,
-      });
+    if (result === "failed") {
+      await alertFailedRefund(deps, refund.id, row.booking_id, refund.amount);
     }
     return;
   }
 
-  // Money that never left needs no record.
-  if (refund.status !== "succeeded") return;
+  const failed = refund.status === "failed" || refund.status === "canceled";
+  // Money still on its way needs no record until it lands.
+  if (refund.status !== "succeeded" && !failed) return;
 
   const paymentIntent = intentId(refund.payment_intent);
   if (!paymentIntent) return;
@@ -301,6 +306,12 @@ export async function syncStripeRefund(
     return;
   }
 
+  // Never left, so there is nothing to record, but someone tried to send it.
+  if (failed) {
+    await alertFailedRefund(deps, refund.id, payment.booking_id, refund.amount);
+    return;
+  }
+
   await rpc(deps, "record_refund", {
     p_booking_id: payment.booking_id,
     p_payment_id: payment.id,
@@ -308,6 +319,18 @@ export async function syncStripeRefund(
     p_stripe_refund_id: refund.id,
     p_reason: "Refund made in Stripe",
   });
+}
+
+/**
+ * From a refund event, in any order. A refund made in the Stripe dashboard has
+ * no row yet and gets one. Events can arrive stale, so Stripe is asked for the
+ * refund as it stands now, and the event only says which one to look at.
+ */
+export async function syncStripeRefund(
+  deps: PaymentDeps,
+  event: Pick<Stripe.Refund, "id">,
+): Promise<void> {
+  await applyRefund(deps, await requireStripe(deps).refunds.retrieve(event.id));
 }
 
 /** charge.refunded does not list its refunds, so they are asked for. */
@@ -321,7 +344,7 @@ export async function syncChargeRefunds(
     payment_intent: paymentIntent,
     limit: 100,
   });
-  for await (const refund of refunds) await syncStripeRefund(deps, refund);
+  for await (const refund of refunds) await applyRefund(deps, refund);
 }
 
 const STALE_MS = 10 * 60_000;
@@ -366,6 +389,14 @@ export async function resumeStaleRefunds(
         ? await applyStatus(deps, row.id, found)
         : await sendReservedRefund(deps, row);
       if (result === "failed" || result === "unknown") failed += 1;
+      if (result === "failed") {
+        await alertFailedRefund(
+          deps,
+          found?.id ?? row.id,
+          row.booking_id,
+          row.amount_cents,
+        );
+      }
     } catch (rowError) {
       failed += 1;
       console.error(`stale refund ${row.id}: ${dbCode(rowError)}`);

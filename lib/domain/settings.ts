@@ -33,6 +33,8 @@ const bookingSettingsSchema = z.object({
     .default(DEFAULT_WEEKEND_DAYS),
   /** Not in the seed yet. Minimum days between today and check-in. */
   minLeadDays: z.number().int().min(0).default(0),
+  /** The longest stay a guest can book online. Admin can arrange longer. */
+  maxStayNights: z.number().int().min(1).max(731).default(30),
 });
 
 export type BookingSettings = z.output<typeof bookingSettingsSchema>;

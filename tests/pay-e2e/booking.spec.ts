@@ -179,6 +179,28 @@ for (const locale of ["en", "el"] as const) {
   });
 }
 
+test("stops saying confirming after a few minutes", async ({ page }) => {
+  await page.clock.install();
+  await page.route("**/api/checkout/status**", (route) =>
+    route.fulfill({ json: { state: "confirming" } }),
+  );
+  await skipCookieBanner(page);
+  await page.goto("/en/book/return?session_id=cs_test_stuck");
+  await expect(page.getByText(copy.en.waiting)).toBeVisible();
+
+  await page.clock.runFor(5_000);
+  await page.clock.fastForward("06:00");
+  await page.clock.runFor(16_000);
+  await expect(
+    page.getByRole("heading", { name: "We are still confirming your booking" }),
+  ).toBeVisible();
+  await expect(page.getByText(copy.en.waiting)).toHaveCount(0);
+  await expect(page.getByText(/do not pay again/i)).toBeVisible();
+  await expect(page.locator('main a[href^="mailto:"]')).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 800 });
+  expect(await findOverflow(page)).toEqual([]);
+});
+
 test("the calendar works from the keyboard", async ({ page }) => {
   await openBook(page, "en", 1280);
   await page.getByRole("button", { name: "Next month" }).click();

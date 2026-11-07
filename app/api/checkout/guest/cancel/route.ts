@@ -12,6 +12,8 @@ import { LIMITS, requestAddress } from "@/lib/payments/rate-limit";
 import { guestCancelSchema } from "@/lib/payments/schemas";
 import { paymentDeps } from "@/lib/payments/server";
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   const parsed = await readJson(request, guestCancelSchema, 1024);
   if ("response" in parsed) return parsed.response;

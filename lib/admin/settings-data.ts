@@ -47,6 +47,7 @@ const bookingSettings = z.looseObject({
   checkoutSessionMinutes: z.number().default(30),
   sameDayCutoffHour: z.number().default(12),
   horizonMonths: z.number().default(18),
+  maxStayNights: z.number().default(30),
 });
 
 /** Keys this screen does not edit are kept as stored. */

@@ -28,6 +28,12 @@ export interface PaymentDeps {
   roomId?: string;
   /** Email rows queued during this request, for kickEmails in after(). */
   queued: string[];
+  /**
+   * A webhook sets this, so an email that could not be stored fails the event
+   * and Stripe retries it. Dedupe keys make the retry safe. Elsewhere the money
+   * step has already happened, and an email problem must not hide that.
+   */
+  strictEmail?: boolean;
 }
 
 export class PaymentsClosedError extends Error {
@@ -74,5 +80,8 @@ export async function queue<T extends EmailType>(
 ): Promise<QueueResult> {
   const result = await queueEmailWith(deps.db, type, data, options);
   if (result.ok) deps.queued.push(...result.ids);
+  else if (deps.strictEmail && result.reason === "database_error") {
+    throw new Error(`email_not_stored:${type}`);
+  }
   return result;
 }

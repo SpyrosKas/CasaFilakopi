@@ -85,10 +85,6 @@ export async function apologiseForLostDates(
       { onConflict: "id", ignoreDuplicates: true },
     )
     .select("id");
-  if (insertError) {
-    // The refund is the part that matters, and the host has been told.
-    console.error(`apology for ${bookingId}: ${insertError.message}`);
-    return;
-  }
+  if (insertError) throw new Error(insertError.message);
   deps.queued.push(...data.map((row) => row.id));
 }

@@ -3,7 +3,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { BookingMessages } from "@/components/site/booking/booking-messages";
 import { ReturnStatus } from "@/components/site/booking/return-status";
 import { PageHero } from "@/components/site/hero";
-import { loadPage } from "@/lib/cms/public";
+import { loadContact, loadPage } from "@/lib/cms/public";
 import { sessionIdSchema } from "@/lib/payments/schemas";
 
 type Props = {
@@ -26,18 +26,25 @@ export default async function ReturnPage({ params, searchParams }: Props) {
   setRequestLocale(locale);
   const t = await getTranslations("Book.return");
   const hero = await loadPage("book", locale);
+  const contact = await loadContact(locale);
   const parsed = sessionIdSchema.safeParse((await searchParams).session_id);
 
   return (
     <>
-      <PageHero
-        image={hero.photo("page.hero")?.src}
-        title={t("title")}
-      />
+      <PageHero image={hero.photo("page.hero")?.src} title={t("title")} />
       <section className="section">
         <div className="wrap book-page">
           <BookingMessages>
-            <ReturnStatus sessionId={parsed.success ? parsed.data : null} />
+            <ReturnStatus
+              sessionId={parsed.success ? parsed.data : null}
+              contact={{
+                email: contact.email,
+                phoneDisplay: contact.phoneDisplay,
+                phoneHref: contact.phoneHref,
+                whatsappDisplay: contact.whatsappDisplay,
+                whatsappHref: contact.whatsappHref,
+              }}
+            />
           </BookingMessages>
         </div>
       </section>

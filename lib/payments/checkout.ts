@@ -243,8 +243,9 @@ export function sessionParams(input: {
 
   return {
     mode: "payment",
-    // No payment_method_types: Stripe offers what the Dashboard has switched
-    // on, which is how Apple Pay and Google Pay appear (PAY-01).
+    // Cards only, because a delayed method could end in a refund. Apple Pay and
+    // Google Pay are card payments, so they stay available (PAY-01).
+    allowed_payment_method_types: ["card"],
     line_items: [
       {
         quantity: 1,

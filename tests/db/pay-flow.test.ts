@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -34,12 +35,17 @@ import { deriveGuestToken, hashGuestToken } from "@/lib/email/guest-link";
 import { releaseKey, startCheckout } from "@/lib/payments/checkout";
 import { checkoutSchema } from "@/lib/payments/schemas";
 import { loadGuestView } from "@/lib/payments/guest";
+import { closeBalanceSessions } from "@/lib/payments/balance";
+import { reconcilePayments } from "@/lib/payments/reconcile";
 import { resumeStaleRefunds, refundShares } from "@/lib/payments/refunds";
+import { handleStripeWebhook } from "@/lib/payments/webhook";
+import { sendScheduledEmails } from "@/lib/email/scheduled";
 import { FakeStripe, type FakeSession } from "../support/fake-stripe";
 import { createRoom, db } from "./helpers";
 import {
   address,
   cleanUp,
+  client,
   emailsFor,
   guestDetails,
   GUEST_SECRET,
@@ -159,6 +165,11 @@ async function withPaymentRules<T>(value: unknown, run: () => Promise<T>) {
   }
 }
 
+const balanceSessions = (bookingId: string) =>
+  [...fake.sessions.values()].filter(
+    (s) => s.metadata.booking_id === bookingId && s.metadata.kind === "balance",
+  );
+
 const DEPOSIT = {
   mode: "deposit",
   deposit: { kind: "percent", percent: 30 },
@@ -187,7 +198,7 @@ describe("checkout", () => {
 
     const created = fake.creates.at(-1)!;
     expect(created.key).toBe(`checkout:${started.bookingId}`);
-    expect(created.params.payment_method_types).toBeUndefined();
+    expect(created.params.allowed_payment_method_types).toEqual({ 0: "card" });
 
     const { rows } = await db.query(
       `select expires_at, stripe_checkout_session_id from public.holds where booking_id = $1`,
@@ -1394,8 +1405,6 @@ describe("refunds", () => {
     );
     expect(keys.filter((key) => key === "host_dispute_opened")).toHaveLength(1);
     expect(keys).toContain("host_payment_failed");
-    const [payment] = await paymentsFor(started.bookingId);
-    expect(payment.status).toBe("succeeded");
   });
 });
 
@@ -1422,6 +1431,603 @@ describe("cron", () => {
     const response = await run(`Bearer ${process.env.CRON_SECRET}`);
     expect(response.status).toBe(200);
     expect((await loadBooking(started.bookingId)).status).toBe("expired");
+  });
+});
+
+describe("reconciliation", () => {
+  const age = (session: FakeSession) => {
+    session.created = Math.floor(Date.now() / 1000) - 60 * 60;
+    return session;
+  };
+
+  it("confirms a paid Session whose webhook never came, then alerts", async () => {
+    const started = await start();
+    age(fake.pay(started.session.id));
+    const deps = testDeps(fake, roomId);
+
+    const result = await reconcilePayments(deps);
+    expect(result.recovered).toBeGreaterThanOrEqual(1);
+
+    expect((await loadBooking(started.bookingId)).status).toBe("confirmed");
+    const emails = await emailsFor(started.bookingId);
+    const keys = emails.map((row) => row.template_key);
+    expect(keys).toContain("booking_confirmation");
+    expect(
+      emails.filter((row) => /never reached/.test(String(row.payload.reason))),
+    ).toHaveLength(1);
+
+    await reconcilePayments(deps);
+    expect(await paymentsFor(started.bookingId)).toHaveLength(1);
+    expect(
+      (await emailsFor(started.bookingId)).filter((row) =>
+        /never reached/.test(String(row.payload.reason)),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("refunds through the same path when the dates have gone", async () => {
+    const stay = nextStay();
+    const lost = await start(stay);
+    await db.query(
+      `update public.holds set expires_at = now() - interval '1 minute' where booking_id = $1`,
+      [lost.bookingId],
+    );
+    const rival = await start(stay);
+    await paid(rival);
+
+    age(fake.pay(lost.session.id));
+    await reconcilePayments(testDeps(fake, roomId));
+    const [refund] = await refundsFor(lost.bookingId);
+    expect(refund.status).toBe("succeeded");
+    expect((await loadBooking(rival.bookingId)).status).toBe("confirmed");
+  });
+
+  it("records a balance paid with no webhook", async () => {
+    await withPaymentRules(DEPOSIT, async () => {
+      const started = await confirmed();
+      await balanceRoute(
+        jsonRequest("/api/checkout/balance", {
+          token: started.token,
+          locale: "en",
+        }),
+      );
+      const [open] = balanceSessions(started.bookingId);
+      age(fake.pay(open.id));
+      await reconcilePayments(testDeps(fake, roomId));
+      const rows = await paymentsFor(started.bookingId);
+      expect(rows.map((row) => [row.kind, row.status])).toEqual([
+        ["deposit", "succeeded"],
+        ["balance", "succeeded"],
+      ]);
+    });
+  });
+
+  it("leaves a fresh Session to its webhook", async () => {
+    const started = await start();
+    fake.pay(started.session.id);
+    await reconcilePayments(testDeps(fake, roomId));
+    expect((await loadBooking(started.bookingId)).status).toBe(
+      "pending_payment",
+    );
+  });
+
+  it("skips anything unpaid or not ours", async () => {
+    const unpaid = await start();
+    age(fake.pay(unpaid.session.id, { status: "unpaid" }));
+    const other = await start();
+    age(fake.pay(other.session.id)).metadata = {};
+    await reconcilePayments(testDeps(fake, roomId));
+    expect(await paymentsFor(unpaid.bookingId)).toHaveLength(0);
+    expect(await paymentsFor(other.bookingId)).toHaveLength(0);
+  });
+
+  it("alerts once on an event stuck for over an hour", async () => {
+    const eventId = `evt_${randomUUID()}`;
+    await db.query(
+      `insert into public.stripe_events (id, type, payload, received_at, error)
+       values ($1, 'charge.refunded', '{}', now() - interval '2 hours', 'boom')`,
+      [eventId],
+    );
+    const deps = testDeps(fake, roomId);
+    await reconcilePayments(deps);
+    await reconcilePayments(deps);
+    const { rows } = await db.query(
+      `select count(*)::int as n from public.email_logs where payload->>'reason' like $1`,
+      [`%${eventId}%`],
+    );
+    expect(rows[0].n).toBe(1);
+  });
+});
+
+describe("failed refunds", () => {
+  const pendingRefund = async () => {
+    const started = await confirmed();
+    const [payment] = await paymentsFor(started.bookingId);
+    fake.refundStatus = "pending";
+    try {
+      await refundShares(testDeps(fake, roomId), started.bookingId, [
+        { paymentId: payment.id, amountCents: 300 },
+      ]);
+    } finally {
+      fake.refundStatus = "succeeded";
+    }
+    const [row] = await refundsFor(started.bookingId);
+    return { started, row, refund: fake.refunds.get(row.stripe_refund_id)! };
+  };
+  const alerts = async (bookingId: string) =>
+    (await emailsFor(bookingId)).filter((row) =>
+      /refund failed/.test(String(row.payload.reason)),
+    );
+
+  it("goes straight from pending to failed on refund.failed, and alerts", async () => {
+    const { started, refund } = await pendingRefund();
+    refund.status = "failed";
+    const { response } = await deliver("refund.failed", refund);
+    expect(response.status).toBe(200);
+    expect((await refundsFor(started.bookingId))[0].status).toBe("failed");
+    expect(await alerts(started.bookingId)).toHaveLength(1);
+  });
+
+  it("alerts on a dashboard refund that failed, recording nothing", async () => {
+    const started = await confirmed();
+    const refund = fake.dashboardRefund(
+      started.session.payment_intent!,
+      500,
+      "failed",
+    );
+    await deliver("refund.failed", refund);
+    expect(await refundsFor(started.bookingId)).toHaveLength(0);
+    expect(await alerts(started.bookingId)).toHaveLength(1);
+  });
+
+  it("the cron job alerts when it finds a refund failed", async () => {
+    const { started, refund } = await pendingRefund();
+    refund.status = "failed";
+    await db.query(
+      `update public.refunds set created_at = now() - interval '1 hour' where booking_id = $1`,
+      [started.bookingId],
+    );
+    await resumeStaleRefunds(testDeps(fake, roomId));
+    expect((await refundsFor(started.bookingId))[0].status).toBe("failed");
+    expect(await alerts(started.bookingId)).toHaveLength(1);
+  });
+
+  it("trusts Stripe over a stale event", async () => {
+    const { started, refund } = await pendingRefund();
+    const stale = { ...refund };
+    refund.status = "succeeded";
+    await deliver("refund.updated", stale);
+    expect((await refundsFor(started.bookingId))[0].status).toBe("succeeded");
+  });
+});
+
+describe("an email that cannot be stored", () => {
+  /** A database where writing certain email rows fails. */
+  const failingEmails = (
+    shouldFail: (row: Record<string, unknown>) => boolean,
+  ) => {
+    const deps = testDeps(fake, roomId);
+    const realFrom = deps.db.from.bind(deps.db);
+    deps.db = new Proxy(deps.db, {
+      get(target, property, receiver) {
+        if (property !== "from") return Reflect.get(target, property, receiver);
+        return (table: string) => {
+          const query = realFrom(table as never);
+          if (table !== "email_logs") return query;
+          return new Proxy(query, {
+            get(inner, name, innerReceiver) {
+              if (name !== "upsert") {
+                return Reflect.get(inner, name, innerReceiver);
+              }
+              return (rows: unknown, options: never) => {
+                const list = (Array.isArray(rows) ? rows : [rows]) as Record<
+                  string,
+                  unknown
+                >[];
+                if (list.some(shouldFail)) {
+                  return {
+                    select: async () => ({
+                      data: null,
+                      error: { message: "db_down" },
+                    }),
+                  };
+                }
+                return (inner as never as {
+                  upsert: (a: unknown, b: never) => unknown;
+                }).upsert(
+                  rows,
+                  options,
+                );
+              };
+            },
+          });
+        };
+      },
+    });
+    return deps;
+  };
+
+  const webhook = (
+    deps: ReturnType<typeof testDeps>,
+    session: FakeSession,
+    eventId: string,
+  ) => {
+    const { payload, signature } = fake.event(
+      "checkout.session.completed",
+      session,
+      eventId,
+    );
+    return handleStripeWebhook(deps, payload, signature);
+  };
+
+  it("fails the event, and the retry finishes it", async () => {
+    const started = await start();
+    const session = fake.pay(started.session.id);
+    const eventId = `evt_${randomUUID()}`;
+
+    const first = await webhook(
+      failingEmails(() => true),
+      session,
+      eventId,
+    );
+    expect(first.status).toBe(500);
+    const { rows } = await db.query(
+      `select processed_at, error from public.stripe_events where id = $1`,
+      [eventId],
+    );
+    expect(rows[0].processed_at).toBeNull();
+    expect(rows[0].error).toMatch(/email_not_stored/);
+    expect((await loadBooking(started.bookingId)).status).toBe("confirmed");
+
+    const second = await webhook(testDeps(fake, roomId), session, eventId);
+    expect(second.status).toBe(200);
+    const keys = (await emailsFor(started.bookingId)).map(
+      (row) => row.template_key,
+    );
+    expect(keys.filter((key) => key === "booking_confirmation")).toHaveLength(
+      1,
+    );
+  });
+
+  it("does not fail the event when there is simply no recipient", async () => {
+    const started = await start();
+    await db.query(
+      `update public.bookings set guest_email = null where id = $1`,
+      [started.bookingId],
+    );
+    const session = fake.pay(started.session.id);
+    const answer = await webhook(
+      testDeps(fake, roomId),
+      session,
+      `evt_${randomUUID()}`,
+    );
+    expect(answer.status).toBe(200);
+  });
+
+  it("does not swallow a failed apology", async () => {
+    const stay = nextStay();
+    const lost = await start(stay);
+    await db.query(
+      `update public.holds set expires_at = now() - interval '1 minute' where booking_id = $1`,
+      [lost.bookingId],
+    );
+    await paid(await start(stay));
+
+    const session = fake.pay(lost.session.id);
+    const eventId = `evt_${randomUUID()}`;
+    const first = await webhook(
+      failingEmails((row) => row.template_key === "host_message"),
+      session,
+      eventId,
+    );
+    expect(first.status).toBe(500);
+
+    const second = await webhook(testDeps(fake, roomId), session, eventId);
+    expect(second.status).toBe(200);
+    expect(await refundsFor(lost.bookingId)).toHaveLength(1);
+    expect(
+      (await emailsFor(lost.bookingId)).map((row) => row.template_key),
+    ).toContain("host_message");
+  });
+});
+
+describe("balance Sessions", () => {
+  const open = async (token: string, locale = "en") =>
+    balanceRoute(jsonRequest("/api/checkout/balance", { token, locale }));
+
+  it("gives two tabs in two languages one Session", async () => {
+    await withPaymentRules(DEPOSIT, async () => {
+      const started = await confirmed();
+      const answers = await Promise.all([
+        open(started.token, "en"),
+        open(started.token, "el"),
+      ]);
+      const urls = await Promise.all(answers.map((a) => a.json()));
+      expect(answers.map((a) => a.status)).toEqual([200, 200]);
+      expect(urls[0].url).toBe(urls[1].url);
+
+      const rows = (await paymentsFor(started.bookingId)).filter(
+        (row) => row.status === "pending",
+      );
+      expect(rows).toHaveLength(1);
+      expect(
+        balanceSessions(started.bookingId).filter((s) => s.status === "open"),
+      ).toHaveLength(1);
+    });
+  });
+
+  it("closes an open Session when the balance changes", async () => {
+    await withPaymentRules(DEPOSIT, async () => {
+      const started = await confirmed();
+      await open(started.token);
+      const [session] = balanceSessions(started.bookingId);
+      await closeBalanceSessions(testDeps(fake, roomId), started.bookingId);
+      expect(session.status).toBe("expired");
+      expect(
+        (await paymentsFor(started.bookingId)).filter(
+          (row) => row.status === "pending",
+        ),
+      ).toHaveLength(0);
+    });
+  });
+
+  it("stops a cancellation when a balance has just been paid", async () => {
+    const started = await confirmed();
+    const total = (await loadBooking(started.bookingId)).total_cents;
+    await db.query(
+      `update public.bookings set total_cents = total_cents + 5000 where id = $1`,
+      [started.bookingId],
+    );
+    await open(started.token);
+    const [session] = balanceSessions(started.bookingId);
+    fake.pay(session.id); // Paid, webhook on its way.
+
+    const response = await cancelRoute(
+      jsonRequest("/api/checkout/guest/cancel", {
+        token: started.token,
+        expectedRefundCents: total,
+      }),
+    );
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "moved" });
+    expect((await loadBooking(started.bookingId)).status).toBe("confirmed");
+    expect(await refundsFor(started.bookingId)).toHaveLength(0);
+  });
+
+  it("closes an open balance page before cancelling", async () => {
+    const started = await confirmed();
+    const total = (await loadBooking(started.bookingId)).total_cents;
+    await db.query(
+      `update public.bookings set total_cents = total_cents + 5000 where id = $1`,
+      [started.bookingId],
+    );
+    await open(started.token);
+    const [session] = balanceSessions(started.bookingId);
+
+    const response = await cancelRoute(
+      jsonRequest("/api/checkout/guest/cancel", {
+        token: started.token,
+        expectedRefundCents: total,
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(session.status).toBe("expired");
+  });
+});
+
+describe("disputes", () => {
+  const dispute = (intent: string, overrides: object = {}) => ({
+    id: `dp_${randomUUID()}`,
+    object: "dispute",
+    amount: 5000,
+    reason: "fraudulent",
+    status: "needs_response",
+    payment_intent: intent,
+    ...overrides,
+  });
+
+  it("marks the payment and sends the guest to Yorgos", async () => {
+    const started = await confirmed();
+    const [before] = await paymentsFor(started.bookingId);
+    await deliver(
+      "charge.dispute.created",
+      dispute(started.session.payment_intent!),
+    );
+    const [payment] = await paymentsFor(started.bookingId);
+    expect(payment.status).toBe("disputed");
+
+    const view = await loadGuestView(testDeps(fake, roomId), started.token);
+    expect(view?.cancel.route).toBe("host");
+    const response = await cancelRoute(
+      jsonRequest("/api/checkout/guest/cancel", {
+        token: started.token,
+        expectedRefundCents: before.amount_cents,
+      }),
+    );
+    expect(await response.json()).toEqual({ error: "needs_host" });
+    expect((await loadBooking(started.bookingId)).status).toBe("confirmed");
+  });
+
+  it("restores the payment when the dispute is won", async () => {
+    const started = await confirmed();
+    const opened = dispute(started.session.payment_intent!);
+    await deliver("charge.dispute.created", opened);
+    await deliver("charge.dispute.closed", { ...opened, status: "won" });
+    const [payment] = await paymentsFor(started.bookingId);
+    expect(payment.status).toBe("succeeded");
+    expect(await refundsFor(started.bookingId)).toHaveLength(0);
+  });
+
+  it("records the money as gone when it is lost, once", async () => {
+    const started = await confirmed();
+    const opened = dispute(started.session.payment_intent!);
+    await deliver("charge.dispute.created", opened);
+    const closed = { ...opened, status: "lost" };
+    await deliver("charge.dispute.closed", closed);
+    await deliver("charge.dispute.closed", closed);
+    const rows = await refundsFor(started.bookingId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      amount_cents: 5000,
+      status: "succeeded",
+      stripe_refund_id: opened.id,
+    });
+  });
+
+  it("an inquiry that closes takes no money", async () => {
+    const started = await confirmed();
+    const opened = dispute(started.session.payment_intent!, {
+      status: "warning_needs_response",
+    });
+    await deliver("charge.dispute.created", opened);
+    await deliver("charge.dispute.closed", {
+      ...opened,
+      status: "warning_closed",
+    });
+    expect(await refundsFor(started.bookingId)).toHaveLength(0);
+  });
+
+  it("releases the reservation when Stripe refuses a disputed charge", async () => {
+    const started = await confirmed();
+    const [payment] = await paymentsFor(started.bookingId);
+    fake.disputed.add(started.session.payment_intent!);
+    const run = await refundShares(testDeps(fake, roomId), started.bookingId, [
+      { paymentId: payment.id, amountCents: 500 },
+    ]);
+    expect(run.failedCents).toBe(500);
+    expect((await refundsFor(started.bookingId))[0].status).toBe("failed");
+  });
+});
+
+describe("same-key refunds in flight", () => {
+  it("survives Stripe's 409 and still refunds once", async () => {
+    const stay = nextStay();
+    const lost = await start(stay);
+    await db.query(
+      `update public.holds set expires_at = now() - interval '1 minute' where booking_id = $1`,
+      [lost.bookingId],
+    );
+    await paid(await start(stay));
+    const session = fake.pay(lost.session.id);
+
+    fake.refundDelayMs = 200;
+    const before = fake.refunds.size;
+    try {
+      const results = await Promise.all(
+        Array.from({ length: 3 }, () =>
+          deliver("checkout.session.completed", session),
+        ),
+      );
+      for (const { response } of results) {
+        expect([200, 500]).toContain(response.status);
+      }
+    } finally {
+      fake.refundDelayMs = 0;
+    }
+    await deliver("checkout.session.completed", session);
+    expect(fake.refunds.size).toBe(before + 1);
+    const rows = await refundsFor(lost.bookingId);
+    expect(rows.filter((row) => row.status !== "failed")).toHaveLength(1);
+    expect(rows.find((row) => row.status !== "failed").status).toBe(
+      "succeeded",
+    );
+  });
+});
+
+describe("what is owed (O1)", () => {
+  it("a goodwill refund does not bring a balance request back", async () => {
+    await withPaymentRules(DEPOSIT, async () => {
+      const started = await confirmed();
+      await balanceRoute(
+        jsonRequest("/api/checkout/balance", {
+          token: started.token,
+          locale: "en",
+        }),
+      );
+      const [open] = balanceSessions(started.bookingId);
+      await deliver("checkout.session.completed", fake.pay(open.id));
+
+      const [deposit] = await paymentsFor(started.bookingId);
+      await refundShares(testDeps(fake, roomId), started.bookingId, [
+        { paymentId: deposit.id, amountCents: 1000 },
+      ]);
+
+      const booking = await loadBooking(started.bookingId);
+      const dueOn = booking.price_breakdown.balanceDueOn as string;
+      await sendScheduledEmails(client, new Date(`${dueOn}T12:00:00Z`), {
+        bookingIds: [started.bookingId],
+      });
+      expect(
+        (await emailsFor(started.bookingId)).map((row) => row.template_key),
+      ).not.toContain("balance_request");
+    });
+  });
+});
+
+describe("Turnstile on checkout", () => {
+  const siteverify = vi.fn();
+  const realFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "site-key";
+    process.env.TURNSTILE_SECRET_KEY = "secret-key";
+    siteverify.mockReset();
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) =>
+      String(url).includes("challenges.cloudflare.com")
+        ? Promise.resolve(Response.json({ success: siteverify() }))
+        : realFetch(url, init),
+    );
+  });
+
+  afterEach(() => {
+    delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    delete process.env.TURNSTILE_SECRET_KEY;
+    vi.unstubAllGlobals();
+  });
+
+  const siteTries = async () =>
+    (
+      await db.query(
+        `select count(*)::int as n from public.admin_attempts where scope = 'pay_checkout_site'`,
+      )
+    ).rows[0].n;
+
+  it("refuses a failed check before anything is held", async () => {
+    siteverify.mockReturnValue(false);
+    const before = fake.creates.length;
+    const response = await checkout({
+      ...nextStay(),
+      ...guestDetails(),
+      turnstileToken: "bad",
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "verification_failed" });
+    expect(fake.creates.length).toBe(before);
+    // A bot that fails the check cannot use up the limit real guests share.
+    expect(await siteTries()).toBe(0);
+  });
+
+  it("refuses no token at all", async () => {
+    const response = await checkout({ ...nextStay(), ...guestDetails() });
+    expect(response.status).toBe(403);
+    expect(siteverify).not.toHaveBeenCalled();
+  });
+
+  it("lets a passed check through", async () => {
+    siteverify.mockReturnValue(true);
+    const response = await checkout({
+      ...nextStay(),
+      ...guestDetails(),
+      turnstileToken: "good",
+    });
+    expect(response.status).toBe(200);
+    expect(await siteTries()).toBe(1);
+  });
+
+  it("closes checkout with only one key set", async () => {
+    delete process.env.TURNSTILE_SECRET_KEY;
+    const response = await checkout({ ...nextStay(), ...guestDetails() });
+    expect(response.status).toBe(503);
   });
 });
 
@@ -1492,6 +2098,55 @@ describe("quotes and availability", () => {
     await db.query(`delete from public.restrictions where room_id = $1`, [
       roomId,
     ]);
+  });
+
+  it("refuses a stay past the longest online stay", async () => {
+    const stay = nextStay(31);
+    const answer = await quote({
+      ...stay,
+      adults: 2,
+      children: 0,
+      locale: "en",
+    });
+    expect(await answer.json()).toEqual({
+      ok: false,
+      reason: "above_max_stay",
+    });
+    const thirty = nextStay(30);
+    const fine = await quote({
+      ...thirty,
+      adults: 2,
+      children: 0,
+      locale: "en",
+    });
+    expect(await fine.json()).toMatchObject({ ok: true });
+  });
+
+  it("answers a guessed promo the same way once limited", async () => {
+    const code = `PAY${randomUUID().slice(0, 8)}`;
+    await db.query(
+      `insert into public.promo_codes (code, kind, value) values ($1, 'percent', 1000)`,
+      [code],
+    );
+    try {
+      const from = { "x-forwarded-for": "203.0.113.88" };
+      const stay = { ...nextStay(), adults: 2, children: 0, locale: "en" };
+      const ask = async (promoCode: string) =>
+        (await quote({ ...stay, promoCode }, from)).json();
+
+      expect((await ask(code)).promoApplied).toBe(true);
+      for (let i = 0; i < 10; i += 1) {
+        expect((await ask(`WRONG${i}`)).promoRejected).toBe(true);
+      }
+      const limited = await ask(code);
+      expect(limited).toMatchObject({
+        ok: true,
+        promoApplied: false,
+        promoRejected: true,
+      });
+    } finally {
+      await db.query(`delete from public.promo_codes where code = $1`, [code]);
+    }
   });
 
   it("limits quotes from one address", async () => {

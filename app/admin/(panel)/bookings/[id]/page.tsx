@@ -442,7 +442,7 @@ export default async function BookingPage({
             </Panel>
           )}
 
-          {cardLeftCents > 0 && cardConnected && (
+          {cardLeftCents > 0 && cardConnected && admin.role === "owner" && (
             <Panel title={a.cardRefund}>
               <details className="edit-box" open={giveBack > 0}>
                 <summary>{a.cardRefund}</summary>

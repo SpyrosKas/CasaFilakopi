@@ -12,6 +12,8 @@ import { LIMITS, requestAddress } from "@/lib/payments/rate-limit";
 import { balanceSchema } from "@/lib/payments/schemas";
 import { paymentDeps } from "@/lib/payments/server";
 
+export const maxDuration = 60;
+
 /** Pay what is left. The amount is worked out here, never sent by the page. */
 export async function POST(request: Request) {
   const parsed = await readJson(request, balanceSchema, 1024);

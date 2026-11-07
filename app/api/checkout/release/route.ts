@@ -11,6 +11,8 @@ import { LIMITS } from "@/lib/payments/rate-limit";
 import { releaseSchema } from "@/lib/payments/schemas";
 import { paymentDeps } from "@/lib/payments/server";
 
+export const maxDuration = 60;
+
 /**
  * The guest pressed back on Stripe's page. The cancel page calls this once it
  * has loaded, as a POST so a link scanner following the URL frees nothing.

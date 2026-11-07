@@ -373,7 +373,7 @@ const en = {
     cardRefundSent:
       "Refund sent to the guest's card. If a document was issued for this payment, remember to issue a credit note in Invoices.",
     cardRefundUnclear:
-      "Stripe did not answer clearly, so the refund shows as in progress. It is checked again automatically within a few minutes. Do not send it a second time.",
+      "Stripe did not answer clearly, so the refund shows as in progress. It is checked again automatically, which can take up to a day. Do not send it a second time.",
     cardRefundFailed: (amount: string) =>
       `Stripe refused ${amount} of this refund, so that part did not go back. Nothing was recorded for it. Check Stripe, then try again.`,
     cardNotConnected: "Online payments are not connected yet.",
@@ -934,6 +934,9 @@ const en = {
     cutoffNever: "Never: guests cannot book for today",
     cutoffAt: (hour: number) => `${String(hour).padStart(2, "0")}:00`,
     horizon: "How many months ahead guests can book",
+    maxStay: "Longest stay guests can book online, in nights",
+    maxStayHint:
+      "A longer stay can still be added by you on the bookings page.",
   },
   rules: {
     title: "Payment and cancellation",
@@ -1052,6 +1055,7 @@ const en = {
     weekdays: "Please tick at least one day.",
     code: "Use letters, numbers and dashes, with no spaces.",
     horizonMonths: "Must be a whole number from 1 to 36.",
+    maxStayNights: "Must be a whole number from 1 to 731.",
   },
 } as const;
 

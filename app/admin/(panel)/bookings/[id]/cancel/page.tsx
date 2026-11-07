@@ -132,7 +132,7 @@ export default async function CancelBookingPage({
             hint={c.gaveBackHint}
           />
         )}
-        {plan.cardCents > 0 && cardConnected && (
+        {plan.cardCents > 0 && cardConnected && admin.role === "owner" && (
           <CheckField
             label={c.cardRefundNow(formatEuro(plan.cardCents))}
             name="refundCard"

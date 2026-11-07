@@ -10,7 +10,7 @@ import {
   type CalendarRules,
 } from "@/lib/payments/calendar";
 import { bookingFromReleaseKey, releaseKey } from "@/lib/payments/checkout";
-import { readStripeSettings } from "@/lib/payments/env";
+import { readStripeSettings, turnstileReady } from "@/lib/payments/env";
 import {
   balanceSlot,
   cancelRoute,
@@ -284,6 +284,28 @@ describe("Stripe settings", () => {
     expect(
       readStripeSettings({ ...fake, NODE_ENV: "production" })?.api,
     ).toBeUndefined();
+  });
+});
+
+describe("Turnstile", () => {
+  const both = {
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: "site",
+    TURNSTILE_SECRET_KEY: "secret",
+  };
+
+  it("is required in production", () => {
+    expect(turnstileReady({ NODE_ENV: "production" })).toBe(false);
+    expect(turnstileReady({ NODE_ENV: "production", ...both })).toBe(true);
+  });
+
+  it("is skipped only outside production with neither key", () => {
+    expect(turnstileReady({ NODE_ENV: "development" })).toBe(true);
+    expect(
+      turnstileReady({
+        NODE_ENV: "development",
+        TURNSTILE_SECRET_KEY: "secret",
+      }),
+    ).toBe(false);
   });
 });
 

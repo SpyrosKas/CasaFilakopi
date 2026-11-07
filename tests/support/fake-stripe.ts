@@ -101,6 +101,12 @@ export class FakeStripe {
     { params: string; status: number; body: unknown }
   >();
   private readonly intents = new Map<string, Json>();
+  /** Keys with a request still running: Stripe answers those with a 409. */
+  private readonly inFlight = new Set<string>();
+  /** Intents with an open dispute: Stripe refuses to refund them. */
+  readonly disputed = new Set<string>();
+  /** Holds a refund open this long, so a same-key request can overlap it. */
+  refundDelayMs = 0;
   private readonly failures = new Map<string, Failure[]>();
   private server!: Server;
   private eventCount = 0;
@@ -260,6 +266,19 @@ export class FakeStripe {
       return this.hostedPage(pathname, request, response);
     }
 
+    if (request.method === "GET" && pathname === "/v1/checkout/sessions") {
+      const status = url.searchParams.get("status");
+      const since = Number(url.searchParams.get("created[gte]") ?? 0);
+      return send(200, {
+        object: "list",
+        url: "/v1/checkout/sessions",
+        has_more: false,
+        data: [...this.sessions.values()].filter(
+          (s) => (!status || s.status === status) && Number(s.created) >= since,
+        ),
+      });
+    }
+
     if (request.method === "POST" && pathname === "/v1/checkout/sessions") {
       const replay = this.replay(request, body, send);
       if (replay) return;
@@ -306,19 +325,48 @@ export class FakeStripe {
     if (request.method === "POST" && pathname === "/v1/refunds") {
       const key = request.headers["idempotency-key"] as string | undefined;
       this.refundKeys.push(key);
+      if (key && this.inFlight.has(key)) {
+        return send(409, {
+          error: {
+            type: "idempotency_error",
+            code: "idempotency_key_in_use",
+            message: "A request with this key is still being processed",
+          },
+        });
+      }
       const replay = this.replay(request, body, send);
       if (replay) return;
-      const failure = this.takeFailure("refund");
-      if (failure) {
-        this.remember(request, body, failure.status, {
-          error: { type: failure.type, message: failure.message },
-        });
-        return refuse(failure);
+      if (key) this.inFlight.add(key);
+      try {
+        if (this.refundDelayMs > 0) {
+          await new Promise((done) => setTimeout(done, this.refundDelayMs));
+        }
+        const failure = this.takeFailure("refund");
+        if (failure) {
+          this.remember(request, body, failure.status, {
+            error: { type: failure.type, message: failure.message },
+          });
+          return refuse(failure);
+        }
+        const result = this.createRefund(parseForm(body));
+        if (isFailure(result)) return refuse(result);
+        this.remember(request, body, 200, result);
+        return send(200, result);
+      } finally {
+        if (key) this.inFlight.delete(key);
       }
-      const result = this.createRefund(parseForm(body));
-      if (isFailure(result)) return refuse(result);
-      this.remember(request, body, 200, result);
-      return send(200, result);
+    }
+
+    const oneRefund = pathname.match(/^\/v1\/refunds\/([^/]+)$/);
+    if (request.method === "GET" && oneRefund) {
+      const found = this.refunds.get(oneRefund[1]);
+      return found
+        ? send(200, found)
+        : refuse({
+            status: 404,
+            type: "invalid_request_error",
+            message: "No such refund",
+          });
     }
 
     if (request.method === "GET" && pathname === "/v1/refunds") {
@@ -415,6 +463,7 @@ export class FakeStripe {
       payment_intent: null,
       client_reference_id: (params.client_reference_id as string) ?? null,
       customer_email: (params.customer_email as string) ?? null,
+      created: Math.floor(Date.now() / 1000),
       expires_at: expiresAt,
       success_url: String(params.success_url),
       cancel_url: String(params.cancel_url),
@@ -425,6 +474,13 @@ export class FakeStripe {
 
   private createRefund(params: Json): FakeRefund | Failure {
     const intent = String(params.payment_intent);
+    if (this.disputed.has(intent)) {
+      return {
+        status: 400,
+        type: "invalid_request_error",
+        message: "This charge has been disputed and cannot be refunded",
+      };
+    }
     const paid = Number(this.intents.get(intent)?.amount ?? 0);
     const used = [...this.refunds.values()]
       .filter((r) => r.payment_intent === intent && r.status !== "failed")

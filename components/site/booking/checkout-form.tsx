@@ -2,6 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -10,9 +11,16 @@ import {
 } from "react";
 import { Link } from "@/i18n/navigation";
 import type { QuoteView } from "@/lib/payments/quote";
+import { useConsent } from "../consent-store";
+import { Turnstile } from "../turnstile";
 import type { StayChoice } from "./use-stay";
 
 type ReadyQuote = Extract<QuoteView, { ok: true }>;
+
+// Same rule as the contact form: Turnstile sends the visitor's address to
+// Cloudflare, so nothing loads until they have agreed, by accepting cookies or
+// with the button here for this one form.
+const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 /** Survives a guest pressing back from Stripe. This tab only. */
 const DRAFT_KEY = "cf-checkout-draft";
@@ -102,6 +110,16 @@ export function CheckoutForm({
   const [invalid, setInvalid] = useState<string[]>([]);
   const [draft] = useState(readDraft);
   const [promoDraft, setPromoDraft] = useState(promoCode);
+  const { choice: consent } = useConsent();
+  const [allowedHere, setAllowedHere] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [resetKey, setResetKey] = useState(0);
+  const handleToken = useCallback(
+    (value: string | null) => setToken(value),
+    [],
+  );
+  const checkAllowed = consent === "accepted" || allowedHere;
+  const waitingForCheck = !!SITE_KEY && !token;
   const heading = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -155,6 +173,7 @@ export function CheckoutForm({
           ...fields,
           marketing: data.get("marketing") === "on",
           acceptTerms: data.get("acceptTerms") === "on",
+          ...(token ? { turnstileToken: token } : {}),
         }),
       });
       const result = (await response.json()) as {
@@ -177,6 +196,11 @@ export function CheckoutForm({
       // The message below covers a dropped connection too.
     }
     setSending(false);
+    if (SITE_KEY) {
+      // One token works only once.
+      setToken(null);
+      setResetKey((key) => key + 1);
+    }
     setProblem(
       t.has(`errors.${code}`) ? t(`errors.${code}`) : t("errors.unavailable"),
     );
@@ -309,13 +333,39 @@ export function CheckoutForm({
         </p>
       )}
 
+      {SITE_KEY &&
+        (checkAllowed ? (
+          <Turnstile
+            siteKey={SITE_KEY}
+            locale={locale}
+            resetKey={resetKey}
+            failedText={t("check.blocked")}
+            onToken={handleToken}
+          />
+        ) : (
+          <div className="contact-check">
+            <p>{t("check.notice")}</p>
+            <button
+              type="button"
+              className="btn btn-outline-primary"
+              onClick={() => setAllowedHere(true)}
+            >
+              {t("check.allow")}
+            </button>
+          </div>
+        ))}
+
       {problem && (
         <p className="contact-problem" role="alert">
           {problem}
         </p>
       )}
 
-      <button type="submit" className="btn btn-primary" disabled={sending}>
+      <button
+        type="submit"
+        className="btn btn-primary"
+        disabled={sending || waitingForCheck}
+      >
         {sending
           ? t("details.sending")
           : quote.dueNowCents === 0

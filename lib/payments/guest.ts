@@ -11,7 +11,7 @@ import type {
 import { athensDate } from "@/lib/domain/dates";
 import { sumCents } from "@/lib/domain/money";
 import { alertHost } from "./alerts";
-import { closeBalanceSessions, loadBookingMoney } from "./balance";
+import { loadBookingMoney, settleBalanceSessions } from "./balance";
 import { queue, rpc, type PaymentDeps } from "./deps";
 import { cancelRoute, planCardRefund, type CancelRoute } from "./policy";
 import { refundShares } from "./refunds";
@@ -139,6 +139,9 @@ export async function cancelForGuest(
   }
   const refundCents = cancel.outcome.refundCents;
   if (refundCents !== expectedRefundCents) return { kind: "moved" };
+  if (!(await settleBalanceSessions(deps, booking.id))) {
+    return { kind: "moved" };
+  }
 
   const cancelled = await rpc<{ outcome: string }>(deps, "cancel_booking", {
     p_booking_id: booking.id,
@@ -148,17 +151,20 @@ export async function cancelForGuest(
   // A second tap landed first, and the refund belongs to that request.
   if (cancelled.outcome !== "cancelled") return { kind: "closed" };
 
-  await closeBalanceSessions(deps, booking.id);
-
   let refundDelayed = false;
   if (refundCents > 0) {
-    const { payments, refunds } = await loadBookingMoney(deps, booking.id);
-    const { shares } = planCardRefund(refundCents, payments, refunds);
     try {
+      const { payments, refunds } = await loadBookingMoney(deps, booking.id);
+      const { shares, shortCents } = planCardRefund(
+        refundCents,
+        payments,
+        refunds,
+      );
       const run = await refundShares(deps, booking.id, shares, {
         reason: "Guest cancelled within the free period",
       });
-      refundDelayed = run.failedCents > 0 || run.unknownCents > 0;
+      refundDelayed =
+        shortCents > 0 || run.failedCents > 0 || run.unknownCents > 0;
     } catch (error) {
       console.error(`guest refund on ${booking.id}: ${String(error)}`);
       refundDelayed = true;

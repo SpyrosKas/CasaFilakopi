@@ -12,6 +12,14 @@ export interface StripeSettings {
 
 type Env = Record<string, string | undefined>;
 
+/** Same rule as turnstileMode, without its logging: see lib/email/contact.ts. */
+export function turnstileReady(env: Env = process.env): boolean {
+  const hasSite = !!env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const hasSecret = !!env.TURNSTILE_SECRET_KEY;
+  if (hasSite || hasSecret) return hasSite && hasSecret;
+  return env.NODE_ENV !== "production";
+}
+
 const mode = (key: string) => (/_live_/.test(key) ? "live" : "test");
 
 /** Null means checkout is closed. Half a setup also counts as closed. */
