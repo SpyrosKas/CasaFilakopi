@@ -65,7 +65,7 @@ async function main() {
       .maybeSingle();
     if (blockError) throw blockError;
 
-    const draft = readJson(file) as Json;
+    const draft = readJson(file) as NonNullable<Json>;
     if (!block) {
       const { error: insertError } = await db
         .from("content_blocks")
@@ -88,8 +88,8 @@ async function main() {
   let faq = 0;
   if (!count) {
     const entries = readJson("faq.json") as {
-      question: Json;
-      answer: Json;
+      question: NonNullable<Json>;
+      answer: NonNullable<Json>;
     }[];
     const { error } = await db.from("faq").insert(
       entries.map((entry, index) => ({
