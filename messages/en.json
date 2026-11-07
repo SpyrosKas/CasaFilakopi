@@ -300,8 +300,6 @@
     "homeIntro": "See which dates are free and what your stay costs.",
     "loading": "Loading the calendar",
     "loadFailed": "The calendar did not load. Please reload the page, or write to us.",
-    "closedTitle": "Booking by message for now",
-    "closedBody": "Online payment is not open yet. To reserve these dates, please contact your host:",
     "emailLabel": "Email: {email}",
     "whatsappLabel": "Whatsapp: {number}",
     "calendar": {
@@ -396,7 +394,8 @@
       "payment_unavailable": "We could not open the payment page. Nothing was charged. Please try again in a moment.",
       "payments_closed": "Online payment is not open yet. Please contact your host.",
       "rate_limited": "Too many tries. Please wait a few minutes and try again.",
-      "unavailable": "Something went wrong and nothing was charged. Please try again."
+      "unavailable": "Something went wrong and nothing was charged. Please try again.",
+      "verification_failed": "The security check did not pass. Please try again."
     },
     "return": {
       "metaTitle": "Your payment",
@@ -413,7 +412,9 @@
       "problemBody": "Your booking is not confirmed yet. Yorgos has been told and will contact you by email. Any money that should come back to you will be refunded in full.",
       "unknownTitle": "We could not find this payment",
       "unknownBody": "If you paid, you will get an email from us. Otherwise, you can start again.",
-      "again": "Back to reservations"
+      "again": "Back to reservations",
+      "stuckTitle": "We are still confirming your booking",
+      "stuckBody": "This is taking longer than it should. Please do not pay again. Your host can check it for you straight away:"
     },
     "cancelled": {
       "metaTitle": "Payment not completed",
@@ -476,6 +477,13 @@
       "messageSent": "Your message has gone to Yorgos. He will reply by email.",
       "messageTooMany": "Too many messages. Please wait a while and try again.",
       "failed": "Something went wrong. Please try again."
+    },
+    "soon": "Online booking is coming soon.",
+    "body": "In case you would like to make a reservation, please contact your host via",
+    "check": {
+      "notice": "Before booking, a short security check from Cloudflare runs here. It sends your address and browser details to Cloudflare.",
+      "allow": "Allow the check",
+      "blocked": "The security check could not load. Please turn off any blocker for this page, or contact your host."
     }
   },
   "NotFound": {

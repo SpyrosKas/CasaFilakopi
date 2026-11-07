@@ -958,3 +958,116 @@ describe("channel link privacy", () => {
     expect(Array.isArray(rows)).toBe(true);
   });
 });
+
+describe("scheduled jobs (T4.32)", () => {
+  it("every job is scheduled", async () => {
+    const { rows } = await db.query(`select jobname from cron.job order by 1`);
+    expect(rows.map((r) => r.jobname)).toEqual(
+      expect.arrayContaining([
+        "channel-sync",
+        "cms-cleanup",
+        "complete-finished-bookings",
+        "email-queue",
+        "email-scheduled",
+        "payments",
+        "purge-admin-attempts",
+        "release-expired-holds",
+      ]),
+    );
+  });
+
+  it("a site job does nothing until the secrets exist", async () => {
+    const { rows } = await db.query(
+      `select count(*)::int as n from vault.decrypted_secrets where name in ('site_url', 'cron_secret')`,
+    );
+    if (rows[0].n < 2) {
+      const call = await db.query(
+        `select public.call_cron_route('/api/cron/email') as id`,
+      );
+      expect(call.rows[0].id).toBeNull();
+    }
+  });
+
+  it("a database job logs its run, and failures are recorded", async () => {
+    await db.query(`select public.run_database_job('purge_admin_attempts')`);
+    const ok = await db.query(
+      `select status from public.job_runs where job = 'purge_admin_attempts' order by id desc limit 1`,
+    );
+    expect(ok.rows[0].status).toBe("success");
+
+    await db.query(`select public.run_database_job('nope')`);
+    const bad = await db.query(
+      `select status, detail from public.job_runs where job = 'nope' order by id desc limit 1`,
+    );
+    expect(bad.rows[0]).toEqual({ status: "failed", detail: "unknown_job" });
+    await db.query(`delete from public.job_runs where job = 'nope'`);
+  });
+
+  it("the hold job really expires a hold", async () => {
+    const id = await createHold({ roomId, ...JUNE });
+    await expireHold(id);
+    await db.query(`select public.run_database_job('release_expired_holds')`);
+    expect(await statusOf(id)).toBe("expired");
+  });
+
+  it("signed-in sessions cannot run jobs", async () => {
+    const owner = await createAdmin("owner");
+    await expect(
+      admin(owner.id, "aal2", (c) =>
+        c.query(`select public.call_cron_route('/api/cron/email')`),
+      ),
+    ).rejects.toThrow(/permission denied/);
+  });
+});
+
+describe("disputes", () => {
+  const dispute = async () => {
+    const id = await createHold({ roomId, ...JUNE });
+    const intent = randomUUID();
+    await confirm(id, intent);
+    return { id, intent };
+  };
+  const statusOfPayment = async (intent: string) =>
+    (
+      await db.query(
+        `select status from public.payments where stripe_payment_intent_id = $1`,
+        [intent],
+      )
+    ).rows[0].status as string;
+  const open = async (intent: string) =>
+    (await db.query(`select public.open_dispute($1) as r`, [intent])).rows[0].r;
+  const close = async (intent: string, won: boolean, id = "dp_1") =>
+    (
+      await db.query(`select public.close_dispute($1, $2, $3, 10000) as r`, [
+        intent,
+        `${id}-${intent}`,
+        won,
+      ])
+    ).rows[0].r;
+
+  it("opens once, and a won dispute restores the payment", async () => {
+    const { intent } = await dispute();
+    expect((await open(intent)).outcome).toBe("opened");
+    expect((await open(intent)).outcome).toBe("already_open");
+    expect(await statusOfPayment(intent)).toBe("disputed");
+    expect((await close(intent, true)).outcome).toBe("won");
+    expect(await statusOfPayment(intent)).toBe("succeeded");
+  });
+
+  it("a lost dispute counts as money gone, once only", async () => {
+    const { id, intent } = await dispute();
+    await open(intent);
+    await close(intent, false);
+    await close(intent, false);
+    const { rows } = await db.query(
+      `select count(*)::int as n, sum(amount_cents)::int as cents
+       from public.refunds where booking_id = $1`,
+      [id],
+    );
+    expect(rows[0]).toEqual({ n: 1, cents: 10000 });
+  });
+
+  it("ignores an unknown payment", async () => {
+    expect((await open(randomUUID())).outcome).toBe("unknown");
+  });
+});

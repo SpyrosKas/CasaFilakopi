@@ -1,6 +1,5 @@
 "use client";
 
-import { useLocale } from "next-intl";
 import { useState } from "react";
 import { Dialog } from "./dialog";
 
@@ -9,12 +8,13 @@ export function ReviewButton({
   label,
   title,
   text,
+  textLang,
 }: {
   label: string;
   title: string;
   text: string;
+  textLang?: string;
 }) {
-  const locale = useLocale();
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -28,7 +28,7 @@ export function ReviewButton({
       {open && (
         <Dialog label={title} onClose={() => setOpen(false)}>
           <div className="modal-body">
-            <p lang={locale === "en" ? undefined : "en"}>{text}</p>
+            <p lang={textLang}>{text}</p>
           </div>
         </Dialog>
       )}

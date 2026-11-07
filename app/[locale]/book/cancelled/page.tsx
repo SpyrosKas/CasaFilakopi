@@ -3,7 +3,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { BookingMessages } from "@/components/site/booking/booking-messages";
 import { CancelledNotice } from "@/components/site/booking/cancelled-notice";
 import { PageHero } from "@/components/site/hero";
-import { heroImages } from "@/content/house";
+import { loadPage } from "@/lib/cms/public";
 
 type Props = {
   params: Promise<{ locale: string }>;
@@ -26,6 +26,7 @@ export default async function CancelledPage({ params, searchParams }: Props) {
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("Book.cancelled");
+  const hero = await loadPage("book", locale);
   const query = await searchParams;
   const again = new URLSearchParams({
     checkIn: text(query.checkIn),
@@ -36,7 +37,10 @@ export default async function CancelledPage({ params, searchParams }: Props) {
 
   return (
     <>
-      <PageHero image={heroImages.page} title={t("title")} />
+      <PageHero
+        image={hero.photo("page.hero")?.src}
+        title={t("title")}
+      />
       <section className="section">
         <div className="wrap book-page">
           <BookingMessages>

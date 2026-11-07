@@ -11,7 +11,7 @@ import {
 import { PriceLines } from "@/components/site/booking/price-summary";
 import "@/components/site/booking/booking.css";
 import { PageHero } from "@/components/site/hero";
-import { heroImages } from "@/content/house";
+import { loadPage } from "@/lib/cms/public";
 import type { EmailLocale } from "@/emails/types";
 import {
   describeCancellation,
@@ -51,6 +51,7 @@ export default async function GuestBookingPage({ params }: Props) {
   const view = await loadGuestView(paymentDeps(), token);
   if (!view) notFound();
 
+  const hero = await loadPage("book", locale);
   const t = await getTranslations("Book.guest");
   const tSummary = await getTranslations("Book.summary");
   const { booking, cancel } = view;
@@ -71,7 +72,10 @@ export default async function GuestBookingPage({ params }: Props) {
 
   return (
     <>
-      <PageHero image={heroImages.page} title={t("title")} />
+      <PageHero
+        image={hero.photo("page.hero")?.src}
+        title={t("title")}
+      />
       <section className="section">
         <div className="wrap">
           <BookingMessages>

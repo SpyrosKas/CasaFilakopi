@@ -1,11 +1,11 @@
-// Regenerates content/image-sizes.json from public/img, so pages can give the
+// Regenerates content/image-sizes.json from legacy/img, so pages can give the
 // browser each photo's size before it loads (no layout jump).
 // Run after adding a photo: node content/generate-image-sizes.mjs
 import { readdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import sharp from "sharp";
 
-const root = "public";
+const root = "legacy";
 
 function walk(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

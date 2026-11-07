@@ -3,7 +3,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { BookingFlow } from "@/components/site/booking/booking-flow";
 import { BookingMessages } from "@/components/site/booking/booking-messages";
 import { PageHero } from "@/components/site/hero";
-import { heroImages } from "@/content/house";
+import { loadContact, loadPage, pageMetadata } from "@/lib/cms/public";
 import { isValidIsoDate } from "@/lib/domain/dates";
 
 type Props = {
@@ -14,7 +14,7 @@ type Props = {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "Book" });
-  return { title: t("metaTitle") };
+  return pageMetadata("book", locale, t("metaTitle"));
 }
 
 const date = (value: unknown) =>
@@ -32,15 +32,29 @@ export default async function BookPage({ params, searchParams }: Props) {
   setRequestLocale(locale);
   const t = await getTranslations("Book");
   const query = await searchParams;
+  const page = await loadPage("book", locale);
+  const contact = await loadContact(locale);
 
   return (
     <>
-      <PageHero image={heroImages.page} title={t("title")} />
+      <PageHero
+        image={page.photo("page.hero")?.src}
+        title={page.text("hero", "title")}
+      />
       <section className="section">
         <div className="wrap book-page">
           <p className="book-intro">{t("intro")}</p>
           <BookingMessages>
             <BookingFlow
+              closed={{
+                title: page.text("main", "soon"),
+                body: page.text("main", "body"),
+              }}
+              contact={{
+                email: contact.email,
+                whatsappHref: contact.whatsappHref,
+                whatsappDisplay: contact.whatsappDisplay,
+              }}
               initial={{
                 checkIn: date(query.checkIn),
                 checkOut: date(query.checkOut),

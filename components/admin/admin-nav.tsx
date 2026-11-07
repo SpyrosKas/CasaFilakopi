@@ -21,6 +21,7 @@ const STAFF_LINKS = [
 const OWNER_LINKS = [
   { href: "/admin/reports", label: t.nav.reports },
   { href: "/admin/rates", label: t.nav.rates },
+  { href: "/admin/content", label: t.nav.content },
   { href: "/admin/property", label: t.nav.property },
   { href: "/admin/house", label: t.nav.house },
   { href: "/admin/booking", label: t.nav.booking },

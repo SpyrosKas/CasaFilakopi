@@ -1175,6 +1175,44 @@ html[data-reveal-active] [data-reveal] {
   max-width: var(--measure);
 }
 
+/* Text comes from Admin, so a very long word must wrap, not widen the page. */
+.site-hero__panel,
+.room__text,
+.gallery-group h2,
+.page-content,
+.visit-block,
+.visit-amenities,
+.host-letter,
+.step__body,
+.box,
+.contact-list,
+.reserve-band__text,
+.footer-brand {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.room {
+  min-width: 0;
+}
+
+.visit-places {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.visit-places li + li {
+  margin-top: 16px;
+}
+
+.visit-places img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-bottom: 8px;
+}
+
 .amenities {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1663,6 +1701,10 @@ html[data-reveal-active] [data-reveal] {
 .contact-layout {
   display: grid;
   gap: 48px;
+}
+
+.contact-layout > div {
+  min-width: 0;
 }
 
 .contact-list {

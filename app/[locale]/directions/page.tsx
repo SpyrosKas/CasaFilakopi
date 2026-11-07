@@ -1,47 +1,35 @@
 import type { Metadata } from "next";
-import { useTranslations } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { use, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Accordion, AccordionLink } from "@/components/site/accordion";
 import { Hero, HeroReserveButton } from "@/components/site/hero";
 import { LineIcon, type LineIconName } from "@/components/site/line-icon";
 import { Photo } from "@/components/site/photo";
 import { ReserveBand } from "@/components/site/reserve-band";
-import { richTags } from "@/components/site/rich-text";
-import {
-  adamasSteps,
-  airportSteps,
-  type Step,
-  type StepIcon,
-} from "@/content/directions";
-import { heroImages } from "@/content/house";
+import { RichInline } from "@/components/site/rich-text";
+import { loadPage, pageMetadata, type PageView } from "@/lib/cms/public";
 
 type Props = { params: Promise<{ locale: string }> };
-
-const stepIcons: Record<StepIcon, LineIconName> = {
-  arrowCircleRight: "turnRight",
-  arrowCircleLeft: "turnLeft",
-  arrowCircleUp: "arrowUp",
-  smileBeam: "smile",
-};
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "Directions" });
-  return { title: t("metaTitle") };
+  return pageMetadata("directions", locale, t("metaTitle"));
 }
 
-export default function DirectionsPage({ params }: Props) {
-  const { locale } = use(params);
+export default async function DirectionsPage({ params }: Props) {
+  const { locale } = await params;
   setRequestLocale(locale);
-  const t = useTranslations("Directions");
-  const tCommon = useTranslations("Common");
+  const tCommon = await getTranslations("Common");
+  const t = await getTranslations("Directions");
+  const page = await loadPage("directions", locale);
+  const picture = (number: number) => t("picture", { number });
 
   return (
     <>
       <Hero
-        image={heroImages.directions}
-        welcome={t("welcome")}
+        image={page.photo("directions.hero")?.src}
+        welcome={page.text("hero", "welcome")}
         title={tCommon("siteName")}
         action={<HeroReserveButton />}
       />
@@ -51,19 +39,20 @@ export default function DirectionsPage({ params }: Props) {
             panels={[
               {
                 id: "adamas",
-                title: t("adamasTitle"),
-                content: <Route route="adamas" steps={adamasSteps} />,
+                title: page.text("adamas", "title"),
+                content: <Route page={page} route="adamas" picture={picture} />,
               },
               {
                 id: "airport",
-                title: t("airportTitle"),
+                title: page.text("airport", "title"),
                 content: (
                   <Route
+                    page={page}
                     route="airport"
-                    steps={airportSteps}
+                    picture={picture}
                     afterFirstStep={
                       <AccordionLink panelId="adamas">
-                        {t("airportLink")}
+                        {page.text("airport", "link")}
                       </AccordionLink>
                     }
                   />
@@ -79,43 +68,46 @@ export default function DirectionsPage({ params }: Props) {
 }
 
 function Route({
+  page,
   route,
-  steps,
+  picture,
   afterFirstStep,
 }: {
+  page: PageView;
   route: "adamas" | "airport";
-  steps: Step[];
+  picture: (number: number) => string;
   afterFirstStep?: ReactNode;
 }) {
-  const t = useTranslations("Directions");
   return (
     <ol className="steps">
-      {steps.map((step, index) => {
+      {page.items(route).map((step, index) => {
         const number = index + 1;
-        const key = `${route}.${number}` as "adamas.1";
+        const photo = page.photo(`step.${step.id}`);
         return (
-          <li key={number} className="step" data-reveal="fade-up">
+          <li key={step.id} className="step" data-reveal="fade-up">
             <span className="step__number" aria-hidden="true">
               {number}
             </span>
-            <figure className="step__photo">
-              <Photo
-                src={step.image}
-                alt={t(`${key}.alt`)}
-                sizes="(min-width: 768px) 420px, 100vw"
-              />
-              <figcaption>{t("picture", { number })}</figcaption>
-            </figure>
+            {photo && (
+              <figure className="step__photo">
+                <Photo {...photo} sizes="(min-width: 768px) 420px, 100vw" />
+                <figcaption>{picture(number)}</figcaption>
+              </figure>
+            )}
             <div className="step__body">
               <span className="step__icon">
                 <LineIcon
-                  name={stepIcons[step.icon]}
-                  label={t(`${key}.icon`)}
+                  name={step.choice as LineIconName}
+                  label={step.text("iconLabel")}
                 />
               </span>
               <p>
-                {t.rich(`${key}.text`, richTags)}
-                {index === 0 && afterFirstStep}
+                <RichInline text={step.text("text")} />
+                {index === 0 && afterFirstStep && (
+                  <>
+                    <br /> {afterFirstStep}
+                  </>
+                )}
               </p>
             </div>
           </li>

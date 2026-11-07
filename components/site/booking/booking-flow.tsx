@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { contact } from "@/content/contact";
+import type { SiteContact } from "@/lib/cms/public";
 import { CheckoutForm } from "./checkout-form";
 import { StayPicker, StaySummary } from "./stay-picker";
 import {
@@ -13,12 +13,29 @@ import {
 } from "./use-stay";
 import "./booking.css";
 
-export function PaymentsClosed() {
+type HostContact = Pick<
+  SiteContact,
+  "email" | "whatsappHref" | "whatsappDisplay"
+>;
+
+/** The two lines come from Admin's text for this page. */
+export interface ClosedNotice {
+  title: string;
+  body: string;
+}
+
+export function PaymentsClosed({
+  contact,
+  notice,
+}: {
+  contact: HostContact;
+  notice: ClosedNotice;
+}) {
   const t = useTranslations("Book");
   return (
     <div className="booking-closed">
-      <h3>{t("closedTitle")}</h3>
-      <p>{t("closedBody")}</p>
+      <h3>{notice.title}</h3>
+      <p>{notice.body}</p>
       <p className="book-links">
         <a href={`mailto:${contact.email}`}>
           {t("emailLabel", { email: contact.email })}
@@ -32,7 +49,15 @@ export function PaymentsClosed() {
 }
 
 /** The dates step, then the details step, on one page (BKG-07). */
-export function BookingFlow({ initial }: { initial: Partial<StayChoice> }) {
+export function BookingFlow({
+  initial,
+  contact,
+  closed,
+}: {
+  initial: Partial<StayChoice>;
+  contact: HostContact;
+  closed: ClosedNotice;
+}) {
   const t = useTranslations("Book");
   const { availability, failed, rules } = useAvailability(true);
   const { choice, pick, clear, setGuests } = useStayChoice(initial);
@@ -90,7 +115,7 @@ export function BookingFlow({ initial }: { initial: Partial<StayChoice> }) {
               {t("continue")}
             </button>
           ) : (
-            <PaymentsClosed />
+            <PaymentsClosed contact={contact} notice={closed} />
           ))
         }
       />

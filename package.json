@@ -14,8 +14,12 @@
     "test:db": "vitest run -c vitest.db.config.ts",
     "db:types": "supabase gen types typescript --local > lib/db/types.ts",
     "test:e2e": "playwright test",
+    "test:pay": "playwright test -c tests/pay-e2e/playwright.config.ts",
+    "test:static": "playwright test -c playwright.static.config.ts",
     "baseline": "playwright test -c playwright.baseline.config.ts",
     "seed:invoices": "tsx scripts/seed-invoice-demo.ts",
+    "migrate:content": "tsx scripts/migrate-content.ts",
+    "migrate:media": "tsx scripts/migrate-media.ts",
     "visual": "playwright test -c tests/visual/playwright.config.ts"
   },
   "dependencies": {
@@ -30,6 +34,7 @@
     "react-dom": "19.3.0",
     "resend": "6.37.0",
     "server-only": "^0.0.1",
+    "sharp": "^0.35.5",
     "stripe": "^23.1.0",
     "zod": "^4.6.7"
   },
@@ -45,7 +50,6 @@
     "pdfjs-dist": "6.5.438",
     "pg": "^8.23.1",
     "prettier": "^3.9.10",
-    "sharp": "^0.35.5",
     "tsx": "4.23.15",
     "typescript": "^5",
     "vitest": "^5.1.0"

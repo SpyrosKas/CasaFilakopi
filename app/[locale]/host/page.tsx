@@ -1,45 +1,45 @@
 import type { Metadata } from "next";
-import { useTranslations } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { use } from "react";
 import { Hero, HeroReserveButton } from "@/components/site/hero";
 import { Photo } from "@/components/site/photo";
 import { ReserveBand } from "@/components/site/reserve-band";
-import { richTags } from "@/components/site/rich-text";
-import { heroImages, hostPhoto } from "@/content/house";
+import { RichInline } from "@/components/site/rich-text";
+import { loadPage, pageMetadata } from "@/lib/cms/public";
 
 type Props = { params: Promise<{ locale: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "Host" });
-  return { title: t("metaTitle") };
+  return pageMetadata("host", locale, t("metaTitle"));
 }
 
-export default function HostPage({ params }: Props) {
-  const { locale } = use(params);
+export default async function HostPage({ params }: Props) {
+  const { locale } = await params;
   setRequestLocale(locale);
-  const t = useTranslations("Host");
+  const page = await loadPage("host", locale);
+  const portrait = page.photo("host.portrait");
 
   return (
     <>
       <Hero
-        image={heroImages.host}
-        title={t("title")}
+        image={page.photo("host.hero")?.src}
+        title={page.text("hero", "title")}
         action={<HeroReserveButton />}
       />
       <section className="section" id="section-thehost">
         <div className="wrap host-layout">
-          <div data-reveal="fade-up">
-            <Photo
-              src={hostPhoto}
-              alt={t("photoAlt")}
-              className="host-photo"
-              sizes="(min-width: 900px) 480px, 100vw"
-            />
-          </div>
+          {portrait && (
+            <div data-reveal="fade-up">
+              <Photo
+                {...portrait}
+                className="host-photo"
+                sizes="(min-width: 900px) 480px, 100vw"
+              />
+            </div>
+          )}
           <p className="host-letter" data-reveal="fade-up">
-            {t.rich("letter", richTags)}
+            <RichInline text={page.text("letter", "body")} />
           </p>
         </div>
       </section>
