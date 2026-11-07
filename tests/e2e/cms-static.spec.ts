@@ -1,3 +1,4 @@
+import { existsSync, readdirSync } from "node:fs";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import {
   createTestUser,
@@ -6,9 +7,11 @@ import {
   newOwnerPage,
   type TestUser,
 } from "./admin-helpers";
+import { locales, publicPaths, skipCookieBanner } from "./helpers";
 import {
   baseBlocks,
   cleanTestContent,
+  expectNoBrokenImages,
   filePayload,
   mediaInSection,
   photoWithGps,
@@ -139,4 +142,49 @@ test("draft text is not in the static page, and preview still works", async ({
   // The Owner's own preview must not have poisoned the cache.
   const state = await cacheState(browser, PUBLIC_EN);
   expect(state.text).not.toContain(`Secret ${mark}`);
+});
+
+test("every photo on every public page comes from Supabase and loads", async ({
+  page: visitor,
+}) => {
+  test.setTimeout(240_000);
+  // This proof only counts on a build with no content photos in public/.
+  expect(readdirSync("public/img")).toEqual(["casa-icon-1.png"]);
+  expect(existsSync("public/img/tinified")).toBe(false);
+
+  const storage = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/`;
+  await skipCookieBanner(visitor);
+  let checked = 0;
+  for (const locale of locales) {
+    for (const path of publicPaths) {
+      await visitor.goto(`/${locale}${path}`);
+      await expectNoBrokenImages(visitor);
+      const sources = await visitor.evaluate(() =>
+        [...document.querySelectorAll("img")].map(
+          (image) => image.getAttribute("src") ?? "",
+        ),
+      );
+      const originals = sources.map((src) =>
+        src.startsWith("/_next/image")
+          ? decodeURIComponent(
+              new URL(src, "http://x").searchParams.get("url")!,
+            )
+          : src,
+      );
+      expect(sources.length, `${locale}${path}`).toBeGreaterThan(0);
+      expect(
+        originals.filter((src) => !src.startsWith(storage)),
+        `${locale}${path}`,
+      ).toEqual([]);
+      checked += originals.length;
+    }
+  }
+  expect(checked).toBeGreaterThan(100);
+});
+
+test("the content photos are gone from public/ on this server", async ({
+  request,
+}) => {
+  expect((await request.get("/img/tinified/_DSC1169.jpg")).status()).toBe(404);
+  expect((await request.get("/img/casa-icon-1.png")).status()).toBe(200);
 });
