@@ -1,4 +1,5 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
+import { HomeAvailability } from "@/components/site/booking/home-availability";
 import { Gallery } from "@/components/site/gallery";
 import { heroButtonClass, Hero } from "@/components/site/hero";
 import { Icon, type IconName } from "@/components/site/icon";
@@ -115,6 +116,7 @@ export default async function HomePage({ params }: Props) {
         </div>
       </section>
 
+      <HomeAvailability />
       <Reviews locale={locale} heading={page.text("reviews", "title")} />
       <ReserveBand />
     </>

@@ -17,6 +17,7 @@ export const BOOKING: BookingSettings = {
   horizonMonths: 18,
   weekendDays: [5, 6],
   minLeadDays: 0,
+  maxStayNights: 731,
 };
 
 export const FULL: PaymentRules = {

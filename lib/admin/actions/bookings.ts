@@ -2,7 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { callAdminRpc, callRecordingRpc } from "@/lib/admin/audit";
+import { after } from "next/server";
+import {
+  assertAdminRole,
+  callAdminRpc,
+  callRecordingRpc,
+} from "@/lib/admin/audit";
 import {
   dbErrorState,
   manualBreakdown,
@@ -21,15 +26,21 @@ import {
 } from "@/lib/admin/form-state";
 import {
   cancelSchema,
+  cardRefundSchema,
   changeDatesSchema,
   externalDetailsSchema,
   newBookingSchema,
   notesSchema,
+  idSchema,
   paymentSchema,
   refundSchema,
   transitionSchema,
 } from "@/lib/admin/ops-schemas";
-import { requireAdmin, type AdminContext } from "@/lib/admin/session";
+import {
+  requireAdmin,
+  requireOwner,
+  type AdminContext,
+} from "@/lib/admin/session";
 import { loadBooking, loadBookingMoney } from "@/lib/admin/stay-data";
 import {
   balanceOf,
@@ -43,6 +54,17 @@ import { createAdminClient } from "@/lib/db/admin";
 import type { Json } from "@/lib/db/types";
 import { athensDate } from "@/lib/domain/dates";
 import { loadRulesSnapshot } from "@/lib/domain/services";
+import { kickEmails, queueEmail, type QueueResult } from "@/lib/email";
+import { formatEuro } from "@/lib/admin/format";
+import {
+  closeBalanceSessions,
+  settleBalanceSessions,
+} from "@/lib/payments/balance";
+import { queue } from "@/lib/payments/deps";
+import { sendQueued } from "@/lib/payments/http";
+import { planCardRefund } from "@/lib/payments/policy";
+import { refundShares, type RefundRun } from "@/lib/payments/refunds";
+import { paymentDeps } from "@/lib/payments/server";
 
 // Staff may do booking work, so these use requireAdmin. Money moves only
 // through the database functions, after the role check inside callAdminRpc.
@@ -241,6 +263,9 @@ export async function changeDates(
     return dbErrorState(error);
   }
 
+  // The balance has changed, so an open payment page asks for the wrong sum.
+  await closeBalanceSessions(paymentDeps(), value.id);
+
   refresh();
   redirect(`/admin/bookings/${value.id}`);
 }
@@ -340,15 +365,18 @@ export async function recordPayment(
   } catch (error) {
     return dbErrorState(error);
   }
+
+  // What is owed has changed, so an open payment page is now out of date.
+  await closeBalanceSessions(paymentDeps(), value.id);
+
   refresh();
   return okState(t.act.paymentSaved);
 }
 
 /**
- * For cash, bank or card-machine money already given back. Card payments must
- * go reserve_refund, then Stripe, then settle_refund, which belongs to the PAY
- * track. Until that exists they are refused here, so the record can never say
- * money left that did not.
+ * For cash, bank or card-machine money already given back. Card payments go
+ * through refundToCard instead, so the record can never say money left that
+ * did not.
  */
 export async function recordRefund(
   _previous: ActionState,
@@ -381,6 +409,113 @@ export async function recordRefund(
   }
   refresh();
   return okState(t.act.refundSaved);
+}
+
+/**
+ * Owner only (O2). The secret key skips MFA, so the database is asked first.
+ * Tells the guest about each refund Stripe accepted.
+ */
+async function sendCardRefund(
+  admin: AdminContext,
+  bookingId: string,
+  shares: { paymentId: string; amountCents: number }[],
+  reason: string | null,
+): Promise<RefundRun | null> {
+  const { data: role, error } = await admin.supabase.rpc("current_admin_role");
+  if (error) throw error;
+  if (role !== "owner") throw new Error("not_authorised");
+
+  const deps = paymentDeps();
+  if (!deps.stripe) return null;
+  const run = await refundShares(deps, bookingId, shares, {
+    reason: reason ?? undefined,
+    actorId: admin.userId,
+  });
+  for (const refundId of run.refundIds) {
+    await queue(deps, "refund_confirmation", { bookingId, refundId });
+  }
+  sendQueued(deps);
+  return run;
+}
+
+function refundMessage(run: RefundRun): ActionState {
+  if (run.failedCents > 0) {
+    return errorState(t.act.cardRefundFailed(formatEuro(run.failedCents)));
+  }
+  return run.unknownCents > 0
+    ? errorState(t.act.cardRefundUnclear)
+    : okState(t.act.cardRefundSent);
+}
+
+/**
+ * PAY-06: reserve_refund, then Stripe, then settle_refund, across as many card
+ * payments as the amount needs. A refund Stripe refuses releases its
+ * reservation, so nothing says money left that did not.
+ */
+export async function refundToCard(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const admin = await requireOwner();
+  const parsed = cardRefundSchema.safeParse(formFields(formData));
+  if (!parsed.success) return fromZodError(parsed.error);
+  const value = parsed.data;
+
+  const { payments, refunds } = await loadBookingMoney(admin, value.id);
+  if (
+    summariseMoney(payments, refunds).refundedCents !== value.expectedRefunded
+  ) {
+    return errorState(t.act.moneyMoved);
+  }
+  const { shares, shortCents } = planCardRefund(
+    value.amount,
+    payments,
+    refunds,
+  );
+  if (shortCents > 0) return errorState(t.act.errors.refund_exceeds_payment);
+
+  let run: RefundRun | null;
+  try {
+    run = await sendCardRefund(admin, value.id, shares, value.reason);
+  } catch (error) {
+    return dbErrorState(error);
+  }
+  if (!run) return errorState(t.act.cardNotConnected);
+  refresh();
+  return refundMessage(run);
+}
+
+/** PAY-03. The link in the email is the guest's page, which works out the sum. */
+export async function sendPaymentLink(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const admin = await requireAdmin();
+  const parsed = idSchema.safeParse(formFields(formData));
+  if (!parsed.success) return fromZodError(parsed.error);
+  const { id } = parsed.data;
+
+  const booking = await loadBooking(admin, id);
+  if (!booking) return errorState(t.act.errors.booking_not_found);
+  if (!booking.guest_email) return errorState(t.act.sendLinkNoEmail);
+  const { payments, refunds } = await loadBookingMoney(admin, id);
+  const balance = balanceOf(
+    summariseMoney(payments, refunds),
+    booking.total_cents,
+  );
+  if (balance <= 0) return errorState(t.act.sendLinkNothing);
+
+  await assertAdminRole(admin);
+  // Each tap is a new email: the automatic one is keyed per booking.
+  const result = await queueEmail(
+    "balance_request",
+    { bookingId: id },
+    { dedupeKey: `balance_request:manual:${id}:${Date.now()}` },
+  );
+  if (!result.ok) return errorState(t.common.somethingWrong);
+  await kickEmails(result.ids);
+  refresh();
+  return okState(t.act.sendLinkSent);
 }
 
 export async function cancelBooking(
@@ -417,6 +552,11 @@ export async function cancelBooking(
     return errorState(t.cancel.moved);
   }
 
+  // A balance paid a moment ago changes what goes back.
+  if (!(await settleBalanceSessions(paymentDeps(), value.id))) {
+    return errorState(t.cancel.moved);
+  }
+
   let cancelled: { outcome: string };
   try {
     cancelled = (await callAdminRpc(admin, "cancel_booking", {
@@ -431,23 +571,59 @@ export async function cancelBooking(
     return errorState(t.cancel.alreadyCancelled);
   }
 
+  const emails: string[] = [];
+  const mail = (result: QueueResult) => {
+    if (result.ok) emails.push(...result.ids);
+  };
+  mail(
+    await queueEmail("booking_cancellation", {
+      bookingId: value.id,
+      refundCents: outcome.refundCents,
+    }),
+  );
+
+  const plan = planRefund(outcome.refundCents, payments, refunds);
   if (value.gaveBack) {
-    const plan = planRefund(outcome.refundCents, payments, refunds);
     try {
       for (const share of plan.manual) {
-        await callRecordingRpc(admin, "record_refund", {
+        const refundId = await callRecordingRpc(admin, "record_refund", {
           p_booking_id: value.id,
           p_payment_id: share.paymentId,
           p_amount_cents: share.amountCents,
           p_reason: value.reason ?? undefined,
         });
+        mail(
+          await queueEmail("refund_confirmation", {
+            bookingId: value.id,
+            refundId,
+          }),
+        );
       }
     } catch {
+      after(() => kickEmails(emails));
       refresh();
       return errorState(t.cancel.partial);
     }
-    // plan.cardCents stays on the booking as still to give back until the PAY
-    // track adds reserve_refund, Stripe, settle_refund here.
+  }
+
+  after(() => kickEmails(emails));
+
+  if (value.refundCard && plan.cardCents > 0) {
+    const { shares } = planCardRefund(plan.cardCents, payments, refunds);
+    let run: RefundRun | null = null;
+    try {
+      run = await sendCardRefund(admin, value.id, shares, value.reason);
+    } catch {
+      // Handled below: the amount stays on the booking as still to give back.
+    }
+    if (!run || run.failedCents > 0) {
+      refresh();
+      return errorState(t.cancel.cardFailed);
+    }
+    if (run.unknownCents > 0) {
+      refresh();
+      return errorState(t.act.cardRefundUnclear);
+    }
   }
 
   refresh();

@@ -64,8 +64,14 @@ const nextConfig: NextConfig = {
       fallback: [],
     };
   },
-  // Admin responses get their own, stricter set in lib/admin/proxy.ts.
+  // Admin responses get their own, stricter set in lib/admin/proxy.ts. The
+  // private rules come last so they win where both set the same header.
   async headers() {
+    const privatePage = [
+      { key: "Cache-Control", value: "private, no-store" },
+      { key: "Referrer-Policy", value: "no-referrer" },
+      { key: "X-Robots-Tag", value: "noindex, nofollow" },
+    ];
     return [
       {
         source: "/((?!admin(?:/|$)).*)",
@@ -77,6 +83,10 @@ const nextConfig: NextConfig = {
           ),
         ),
       },
+      // A guest's private link, and the pages around a payment (SUP-15).
+      { source: "/:locale(en|el)/booking/:token*", headers: privatePage },
+      { source: "/:locale(en|el)/book/return", headers: privatePage },
+      { source: "/:locale(en|el)/book/cancelled", headers: privatePage },
     ];
   },
   // Old static URLs (MIG-06). statusCode, because `permanent` would send 308.

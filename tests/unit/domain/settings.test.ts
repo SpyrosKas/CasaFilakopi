@@ -26,6 +26,7 @@ describe("booking settings", () => {
       ...SEED_BOOKING,
       weekendDays: [5, 6],
       minLeadDays: 0,
+      maxStayNights: 30,
     });
     expect(DEFAULT_WEEKEND_DAYS).toEqual([5, 6]);
   });

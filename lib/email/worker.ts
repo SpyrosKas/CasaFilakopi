@@ -25,7 +25,7 @@ import {
   asLocale,
   buildContext,
   isClosedBooking,
-  paidCents,
+  receivedCents,
   type EmailContext,
 } from "./variables";
 
@@ -240,7 +240,7 @@ async function checkStillWanted(
   if (isClosedBooking(booking.status)) {
     throw new Skip(`booking is ${booking.status}`);
   }
-  balanceSkip(row, booking.total_cents - (await paidCents(db, booking.id)));
+  balanceSkip(row, booking.total_cents - (await receivedCents(db, booking.id)));
 }
 
 /**
