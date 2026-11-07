@@ -815,6 +815,9 @@ isOneToOne: false
 "booking_for_token":
 { Args: { "p_token": string }; Returns: Json
                            },
+"call_cron_route":
+{ Args: { "p_path": string }; Returns: number
+                           },
 "cancel_booking":
 { Args: { "p_actor"?: string,"p_booking_id": string,"p_reason"?: string }; Returns: Json
                            },
@@ -906,6 +909,9 @@ isOneToOne: false
                            },
 "reserve_refund":
 { Args: { "p_actor"?: string,"p_amount_cents": number,"p_booking_id": string,"p_payment_id": string,"p_reason"?: string }; Returns: string
+                           },
+"run_database_job":
+{ Args: { "p_job": string }; Returns: undefined
                            },
 "save_rules":
 { Args: { "p_actor"?: string,"p_is_non_refundable": boolean,"p_payment": Json,"p_tiers": Json }; Returns: undefined

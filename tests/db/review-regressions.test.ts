@@ -958,3 +958,61 @@ describe("channel link privacy", () => {
     expect(Array.isArray(rows)).toBe(true);
   });
 });
+
+describe("scheduled jobs (T4.32)", () => {
+  it("every job is scheduled", async () => {
+    const { rows } = await db.query(`select jobname from cron.job order by 1`);
+    expect(rows.map((r) => r.jobname)).toEqual([
+      "channel-sync",
+      "cms-cleanup",
+      "complete-finished-bookings",
+      "email-queue",
+      "email-scheduled",
+      "purge-admin-attempts",
+      "release-expired-holds",
+    ]);
+  });
+
+  it("a site job does nothing until the secrets exist", async () => {
+    const { rows } = await db.query(
+      `select count(*)::int as n from vault.decrypted_secrets where name in ('site_url', 'cron_secret')`,
+    );
+    if (rows[0].n < 2) {
+      const call = await db.query(
+        `select public.call_cron_route('/api/cron/email') as id`,
+      );
+      expect(call.rows[0].id).toBeNull();
+    }
+  });
+
+  it("a database job logs its run, and failures are recorded", async () => {
+    await db.query(`select public.run_database_job('purge_admin_attempts')`);
+    const ok = await db.query(
+      `select status from public.job_runs where job = 'purge_admin_attempts' order by id desc limit 1`,
+    );
+    expect(ok.rows[0].status).toBe("success");
+
+    await db.query(`select public.run_database_job('nope')`);
+    const bad = await db.query(
+      `select status, detail from public.job_runs where job = 'nope' order by id desc limit 1`,
+    );
+    expect(bad.rows[0]).toEqual({ status: "failed", detail: "unknown_job" });
+    await db.query(`delete from public.job_runs where job = 'nope'`);
+  });
+
+  it("the hold job really expires a hold", async () => {
+    const id = await createHold({ roomId, ...JUNE });
+    await expireHold(id);
+    await db.query(`select public.run_database_job('release_expired_holds')`);
+    expect(await statusOf(id)).toBe("expired");
+  });
+
+  it("signed-in sessions cannot run jobs", async () => {
+    const owner = await createAdmin("owner");
+    await expect(
+      admin(owner.id, "aal2", (c) =>
+        c.query(`select public.call_cron_route('/api/cron/email')`),
+      ),
+    ).rejects.toThrow(/permission denied/);
+  });
+});
