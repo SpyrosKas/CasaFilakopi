@@ -25,6 +25,23 @@ export async function listAuthUsers(db: Client): Promise<User[]> {
 export const findAuthUser = (users: User[], email: string) =>
   users.find((user) => user.email?.toLowerCase() === email.toLowerCase());
 
+/** One admin's role and email, read fresh for a check. */
+export async function findMember(
+  db: Client,
+  id: string,
+): Promise<{ role: "owner" | "staff"; email: string } | null> {
+  const { data, error } = await db
+    .from("admin_profiles")
+    .select("role")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const { data: found, error: authError } = await db.auth.admin.getUserById(id);
+  if (authError) throw authError;
+  return { role: data.role, email: found.user.email ?? "" };
+}
+
 export interface AdminMember {
   id: string;
   name: string;

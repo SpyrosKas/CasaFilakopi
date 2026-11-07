@@ -20,19 +20,33 @@ const digits = (value: string | null | undefined) =>
 const plain = (value: string | null | undefined) =>
   (value ?? "").trim().toLowerCase();
 
-/** The same rule the database uses to find someone's imported stays. */
-export function isSamePerson(
-  row: { email: string | null; phone: string | null; name: string | null },
-  identity: Identity,
-): boolean {
+/** Fewer digits than this could be anything, such as a year. */
+const MIN_PHONE_DIGITS = 8;
+
+export interface PersonRow {
+  email: string | null;
+  phone: string | null;
+  name: string | null;
+}
+
+/** The same rule the database uses: exact email, or a real phone number. */
+export function isSamePerson(row: PersonRow, identity: Identity): boolean {
   const email = plain(row.email);
   const phone = digits(row.phone);
-  const name = plain(row.name);
   return (
     (email !== "" && identity.emails.some((known) => plain(known) === email)) ||
-    (phone !== "" &&
-      identity.phones.some((known) => digits(known) === phone)) ||
-    (name !== "" && identity.names.some((known) => plain(known) === name))
+    (phone.length >= MIN_PHONE_DIGITS &&
+      identity.phones.some((known) => digits(known) === phone))
+  );
+}
+
+/** A name alone is only a guess: shown to the Owner, never acted on. */
+export function isNameCandidate(row: PersonRow, identity: Identity): boolean {
+  const name = plain(row.name);
+  return (
+    name !== "" &&
+    !isSamePerson(row, identity) &&
+    identity.names.some((known) => plain(known) === name)
   );
 }
 
@@ -121,6 +135,11 @@ export interface GuestDataExport {
     granted: boolean;
     created_at: string;
   }[];
+  /** Name-only matches. Left out of the file unless the Owner asks. */
+  candidates: {
+    imported: (GuestDataExport["imported"][number] & { id: string })[];
+    messages: (GuestDataExport["messages"][number] & { id: string })[];
+  };
 }
 
 const text = (value: string | null | undefined): Cell =>
@@ -188,7 +207,17 @@ function guestSheet(data: GuestDataExport): Sheet {
   };
 }
 
-export function guestWorkbook(data: GuestDataExport): Uint8Array {
+export function guestWorkbook(
+  input: GuestDataExport,
+  withCandidates = false,
+): Uint8Array {
+  const data = withCandidates
+    ? {
+        ...input,
+        imported: [...input.imported, ...input.candidates.imported],
+        messages: [...input.messages, ...input.candidates.messages],
+      }
+    : input;
   return buildXlsx([
     guestSheet(data),
     table(

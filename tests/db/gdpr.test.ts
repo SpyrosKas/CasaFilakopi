@@ -104,6 +104,25 @@ async function insertBooking(
   return rows[0].id;
 }
 
+/** An issued document, so the payment counts as settled for the books. */
+async function issueDocument(
+  bookingId: string,
+  paymentId: string | null,
+  customer: object,
+): Promise<string> {
+  const { rows: series } = await db.query(
+    `insert into public.invoice_series (doc_type, prefix, is_active)
+     values ('receipt', $1, false) returning id`,
+    [`T${randomUUID().slice(0, 8)}`],
+  );
+  const { rows } = await db.query(
+    `insert into public.invoices (booking_id, payment_id, doc_type, customer, series_id, number, status, issued_at, total_cents)
+     values ($1, $2, 'receipt', $3::jsonb, $4, 1, 'issued', now(), 10000) returning id`,
+    [bookingId, paymentId, JSON.stringify(customer), series[0].id],
+  );
+  return rows[0].id;
+}
+
 /** A guest with personal data in every place the product can put it. */
 async function fullyLoaded() {
   const p = person();
@@ -126,7 +145,9 @@ async function fullyLoaded() {
     [bookingId, paid[0].id, `For ${p.name}`],
   );
 
-  // Linked by the booking, by address alone, and by a mention in the text.
+  await issueDocument(bookingId, paid[0].id, { name: "On the invoice" });
+
+  // Linked by the booking, and by address alone.
   const { rows: messages } = await db.query(
     `insert into public.contact_messages (name, email, phone, dates_of_interest, message, booking_id)
      values ($1, $2, $3, $4, $5, $6) returning id`,
@@ -143,11 +164,6 @@ async function fullyLoaded() {
     `insert into public.contact_messages (name, email, message)
      values ('Someone', $1, 'Unlinked')`,
     [p.email.toUpperCase()],
-  );
-  await db.query(
-    `insert into public.contact_messages (name, email, message)
-     values ('A friend', 'friend@example.test', $1)`,
-    [`Booking for ${p.name}`],
   );
 
   await db.query(
@@ -216,11 +232,6 @@ async function fullyLoaded() {
   await db.query(
     `select public.update_external_event_details($1, $2, $3, $4, $5, 5000, $6)`,
     [events[0].id, p.name, p.email, p.phone, `Notes ${p.marker}`, actor],
-  );
-
-  await db.query(
-    `insert into public.audit_log (action, entity, after) values ('note', 'email_logs', $1::jsonb)`,
-    [JSON.stringify({ wrote_to: p.email })],
   );
 
   return { p, guestId, bookingId, eventId: events[0].id as string, intent };
@@ -334,25 +345,16 @@ describe("anonymise_guest", () => {
 
   it("never touches an invoice, which stays a whole, immutable record", async () => {
     const { p, guestId, bookingId } = await fullyLoaded();
-    const customer = JSON.stringify({ name: p.name, email: p.email });
-    const { rows: series } = await db.query(
-      `insert into public.invoice_series (doc_type, prefix, is_active)
-       values ('receipt', $1, false) returning id`,
-      [`T${randomUUID().slice(0, 6)}`],
-    );
-    const { rows: created } = await db.query(
-      `insert into public.invoices (booking_id, doc_type, customer, series_id, number, status, issued_at, total_cents)
-       values ($1, 'receipt', $2::jsonb, $3, 1, 'issued', now(), 10000) returning id`,
-      [bookingId, customer, series[0].id],
-    );
+    const customer = { name: p.name, email: p.email };
+    const invoice = await issueDocument(bookingId, null, customer);
 
     await anonymise(guestId);
 
     const { rows } = await db.query(
       `select customer from public.invoices where id = $1`,
-      [created[0].id],
+      [invoice],
     );
-    expect(rows[0].customer).toEqual(JSON.parse(customer));
+    expect(rows[0].customer).toEqual(customer);
   });
 
   it("writes one audit entry that names the admin and no person", async () => {
@@ -604,8 +606,8 @@ describe("retention (JOB-08)", () => {
        values ('New', 'new@example.test', 'Recent') returning id`,
     );
     const { rows: oldMail } = await db.query(
-      `insert into public.email_logs (template_key, recipient, created_at, contact_message_id)
-       values ('contact_auto_reply', 'old@example.test', $1, $2) returning id`,
+      `insert into public.email_logs (template_key, recipient, created_at, contact_message_id, status)
+       values ('contact_auto_reply', 'old@example.test', $1, $2, 'sent') returning id`,
       [`${cutoff}T00:00:00Z`, oldMessage[0].id],
     );
     const { rows: newMail } = await db.query(

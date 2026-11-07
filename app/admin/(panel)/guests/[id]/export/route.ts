@@ -7,7 +7,7 @@ import { XLSX_TYPE } from "@/lib/admin/workbooks";
 
 /** Owner only. The file name holds no name, and the download is logged. */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const admin = await requireOwner();
@@ -19,11 +19,15 @@ export async function GET(
   const data = await loadGuestData(admin, id);
   if (!data) return new Response("Not found", { status: 404 });
 
-  const body = guestWorkbook(data);
+  // Name-only matches may be someone else, so they need asking for.
+  const withCandidates =
+    new URL(request.url).searchParams.get("candidates") === "1";
+  const body = guestWorkbook(data, withCandidates);
   await writeAudit(admin, {
     action: "export",
     entity: "guests",
     entityId: id,
+    after: { with_candidates: withCandidates },
   });
 
   return new Response(Buffer.from(body), {

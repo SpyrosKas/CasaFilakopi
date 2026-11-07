@@ -87,23 +87,23 @@ The first Owner is created by hand: see "First Owner" in the [runbook](docs/runb
 
 Secrets never go in the repo, the browser or chat. `.env.example` lists them with notes.
 
-| Variable                               | Where            | Purpose                                                                                |
-| -------------------------------------- | ---------------- | -------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_SITE_URL`                 | All              | Site address. Decides canonicals, and whether the site is indexed                      |
-| `NEXT_PUBLIC_INDEXABLE`                | Optional         | `true` allows indexing on another host. Leave empty on staging                         |
-| `NEXT_PUBLIC_SUPABASE_URL`             | All              | Supabase project                                                                       |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | All              | Public key, bound by RLS                                                               |
-| `SUPABASE_SECRET_KEY`                  | Server only      | Bypasses RLS. Also keys the sign-in throttles                                          |
-| `CRON_SECRET`                          | Server, Vault    | Protects `/api/cron/*`. 32 or more characters                                          |
-| `GUEST_TOKEN_SECRET`                   | Server only      | Computes guests' private links. Changing it breaks links already sent                  |
-| `RESEND_API_KEY`                       | Server only      | Sending. Empty locally: mail goes to Mailpit                                           |
-| `RESEND_WEBHOOK_SECRET`                | Server only      | Delivery events                                                                        |
-| `NEXT_PUBLIC_TURNSTILE_SITE_KEY`       | All              | Contact form. Required in production, or the form closes and shows the phone and email |
-| `TURNSTILE_SECRET_KEY`                 | Server only      | As above                                                                               |
-| `STRIPE_SECRET_KEY`                    | Server only      | Track PAY                                                                              |
-| `STRIPE_WEBHOOK_SECRET`                | Server only      | Track PAY                                                                              |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`   | All              | Track PAY                                                                              |
-| `SENTRY_DSN`                           | Optional, server | EU project only (`*.ingest.de.sentry.io`), or tracking stays off                       |
+| Variable                               | Where            | Purpose                                                                                         |
+| -------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SITE_URL`                 | All              | Site address. Decides canonicals, and whether the site is indexed                               |
+| `NEXT_PUBLIC_INDEXABLE`                | Optional         | `true` allows indexing on another host, on a production deployment only. Leave empty on staging |
+| `NEXT_PUBLIC_SUPABASE_URL`             | All              | Supabase project                                                                                |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | All              | Public key, bound by RLS                                                                        |
+| `SUPABASE_SECRET_KEY`                  | Server only      | Bypasses RLS. Also keys the sign-in throttles                                                   |
+| `CRON_SECRET`                          | Server, Vault    | Protects `/api/cron/*`. 32 or more characters                                                   |
+| `GUEST_TOKEN_SECRET`                   | Server only      | Computes guests' private links. Changing it breaks links already sent                           |
+| `RESEND_API_KEY`                       | Server only      | Sending. Empty locally: mail goes to Mailpit                                                    |
+| `RESEND_WEBHOOK_SECRET`                | Server only      | Delivery events                                                                                 |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY`       | All              | Contact form. Required in production, or the form closes and shows the phone and email          |
+| `TURNSTILE_SECRET_KEY`                 | Server only      | As above                                                                                        |
+| `STRIPE_SECRET_KEY`                    | Server only      | Track PAY                                                                                       |
+| `STRIPE_WEBHOOK_SECRET`                | Server only      | Track PAY                                                                                       |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`   | All              | Track PAY                                                                                       |
+| `SENTRY_DSN`                           | Optional, server | EU project only (`*.ingest.de.sentry.io`), or tracking stays off                                |
 
 Jobs that call the site also need two Vault secrets per environment, `site_url` and `cron_secret`. Until both exist those jobs do nothing, and Home says so. See the [runbook](docs/runbook.md).
 
@@ -151,6 +151,6 @@ Vercel builds every push; `master` is production and `dev-booking` is staging.
 4. Set the Vault secrets, and `CRON_SECRET` in Vercel to the same value.
 5. Add `https://<host>/admin/auth/confirm` to the Auth redirect URLs of that Supabase project, or invitation and reset links will not work.
 6. Point the Stripe and Resend webhooks at that host.
-7. Set `NEXT_PUBLIC_SITE_URL`. Only `miloscasa.com` and `www.miloscasa.com` are indexed, so staging is noindex by itself.
+7. Set `NEXT_PUBLIC_SITE_URL`. Only a production deployment (`VERCEL_ENV=production`) on `miloscasa.com` or `www.miloscasa.com` is indexed, so staging and previews are noindex by themselves, even with the production address.
 
 The app is `output: "standalone"`, so a `Dockerfile` keeps it portable to any Docker host.

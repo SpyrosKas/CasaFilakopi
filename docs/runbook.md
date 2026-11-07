@@ -21,6 +21,12 @@ Sign-ups are closed, so the first Owner is created by hand, once per environment
 3. Sign in at `/admin`. The panel requires two-step sign-in before anything else.
 4. Add the second Owner from Users (D27). This is what makes lost-phone recovery possible.
 
+## Removing an Owner
+
+Any Owner can remove another, by typing their email in full. The same typing is needed to make someone an Owner, to invite one, and to make an Owner Staff. The database refuses to remove or demote the last Owner, however it is asked. Deleting the auth user itself in the Supabase dashboard is the one way past that, so do not.
+
+Removing someone bans the account, ends its sessions and takes away the role. The account stays, because invoices name who issued them. Inviting the same email again replaces the password with a random one, so they have to choose a new one from the email. An old authenticator stays until an Owner resets it.
+
 ## Backups and restore
 
 Production runs on Supabase Pro, which keeps daily backups. Staging on the free plan has none (D10). Whether to buy point-in-time recovery is an open decision for SUP-10.
@@ -63,7 +69,7 @@ Two-step sign-in has no recovery codes. Recovery is the other Owner, which is wh
 **The other Owner can sign in:**
 
 1. Check it really is them: call them on a known number. An email saying "I lost my phone" is not proof.
-2. Admin, Users, find the person, Reset two-step sign-in. This is recorded in the audit log.
+2. Admin, Users, find the person, Reset two-step sign-in. This is recorded in the audit log, and ends all their sessions.
 3. They sign in with their password and set up a new authenticator straight away.
 
 **Both Owners are locked out** (Not yet rehearsed):
@@ -88,7 +94,7 @@ A dispute (chargeback) means the guest's bank has pulled the money back until th
 1. Open the dispute in Stripe. The deadline there is strict, usually one to three weeks.
 2. Gather evidence: the booking page, the terms version and timestamp stored on the booking, emails from Emails, and any messages.
 3. Submit through Stripe.
-4. **Do not anonymise this guest while a dispute is open.** The evidence would go. The anonymise button does not check this.
+4. Removing this guest's details is refused while the dispute is open, so the evidence stays.
 5. The outcome reaches the booking by itself through Stripe's webhook: won clears the dispute, and lost is recorded like a refund, because the money has gone. After a lost dispute, ask the accountant what document is needed.
 
 ## Sync conflicts
@@ -114,7 +120,7 @@ Emails queue in `email_logs` and a job sends them every minute. Failed sends ret
 1. Admin, Emails, shows status per email. Resend one from there.
 2. A **bounced** guest address tells Yorgos by email. Get a good address by phone and change it on the booking.
 3. Nothing at all is going out:
-   - `RESEND_API_KEY` wrong or missing: the log line says `EMAIL STOPPED`, and the job fails. Queued mail waits.
+   - `RESEND_API_KEY` wrong or missing: the log event is `email.stopped`, and the job fails. Queued mail waits.
    - Jobs not running: Home shows "scheduled jobs have not run". See Jobs below.
    - Domain: `mail.miloscasa.com` must keep its DNS records in Namecheap.
 4. Repeated failures email the host, though if email itself is broken only Home can tell you.
@@ -162,10 +168,11 @@ select id, status_code, error_msg from net._http_response order by id desc limit
 ## Guest data requests and retention
 
 - **Copy of their data:** guest's page, Privacy, Download. Read it before sending, as it includes private notes. Send it securely. Yorgos answers within a month.
-- **Erasure:** guest's page, Privacy. Refused while a stay is current or to come. Cancel or wait.
+- **Erasure:** guest's page, Privacy. Refused while a stay is current or to come, and while money is open: a pending or disputed payment, a pending refund, or a succeeded payment with no issued document. Issue the document or settle it, then try again. Retention skips such a guest and tries again the next day.
 - **What stays:** invoices, invoice lines and their PDFs, because tax rules require them. Dates, amounts, statuses and references stay on the booking for the books, with no name attached.
 - **What it does not reach:** Stripe, Resend, Airbnb, Booking.com, Google Workspace mail, and backups. Handle a request there separately: Stripe keeps its own customer and payment records.
-- **Free text elsewhere:** erasure finds the guest's own records, plus any log, message or audit text that mentions their exact name, email or phone. A nickname in a note on another booking, or a block note, is not found.
+- **How a person is found:** by id, an exact email, or a phone number of at least 8 digits. Never by name: a guest called Mark must not match the word "marketing". Same-name records appear on the guest's page as candidates, left out of the file unless asked for, and never removed by themselves. Open one to deal with it.
+- **Free text is not searched:** a name in a note, a message from someone else, a host alert about a sync conflict, or a block note stays until retention removes that row. Block notes say "No guest names here" for this reason.
 - **Retention:** `apply_retention` runs daily. The period is `settings.retention`, `{"years": 5}` (D27), still to confirm with the accountant, question 15. To change it: `update settings set value = '{"years": 7}' where key = 'retention';`. Allowed values are 1 to 30, and anything else stops the job rather than erasing.
 - **Preview what it would do:** `select public.apply_retention();`. A dry run is the default. The job itself passes `false`.
 - **`consent_log` is never purged:** no retention policy covers it yet. Rows hold a booking, message or anonymous browser id, not contact details. Decide with the legal review, then add it.

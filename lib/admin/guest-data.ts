@@ -1,6 +1,7 @@
 import "server-only";
 import { assertAdminRole } from "@/lib/admin/audit";
 import {
+  isNameCandidate,
   isSamePerson,
   type GuestDataExport,
   type Identity,
@@ -178,11 +179,17 @@ export async function loadGuestData(
   const messages = allMessages.filter(
     (row) =>
       (row.booking_id && bookingIds.includes(row.booking_id)) ||
-      isSamePerson(
-        { email: row.email, phone: row.phone, name: row.name },
-        identity,
-      ),
+      isSamePerson(row, identity),
   );
+  const asPerson = (event: (typeof events)[number]) => ({
+    email: event.guest_email,
+    phone: event.guest_phone,
+    name: event.guest_name,
+  });
+  const asImported = (event: (typeof events)[number]) => ({
+    ...event,
+    channel: event.external_calendars?.channel ?? null,
+  });
 
   const emails = await loadEmails(
     db,
@@ -210,21 +217,20 @@ export async function loadGuestData(
     consents,
     imported: events
       .filter(
-        (event) =>
-          event.id === key ||
-          isSamePerson(
-            {
-              email: event.guest_email,
-              phone: event.guest_phone,
-              name: event.guest_name,
-            },
-            identity,
-          ),
+        (event) => event.id === key || isSamePerson(asPerson(event), identity),
       )
-      .map((event) => ({
-        ...event,
-        channel: event.external_calendars?.channel ?? null,
-      })),
+      .map(asImported),
+    candidates: {
+      imported: events
+        .filter(
+          (event) =>
+            event.id !== key && isNameCandidate(asPerson(event), identity),
+        )
+        .map(asImported),
+      messages: allMessages.filter(
+        (row) => !messages.includes(row) && isNameCandidate(row, identity),
+      ),
+    },
   };
 }
 

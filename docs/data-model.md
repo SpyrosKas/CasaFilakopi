@@ -228,8 +228,8 @@ All are called by the server with the secret key.
 | Documents | `issue_invoice`, `issue_credit_note`, `attach_invoice_pdf`, `mark_invoices_exported` |
 | Settings | `save_rules`, `update_booking_notes` |
 | Jobs | `run_database_job`, `release_expired_holds`, `complete_finished_bookings`, `purge_admin_attempts`, `apply_retention`, `call_cron_route` |
-| Privacy | `anonymise_guest`, `anonymise_external_guest`, internal `scrub_personal_data` |
-| Users | `add_admin`, `change_admin_role`, `remove_admin` |
+| Privacy | `anonymise_guest`, `anonymise_external_guest`, internal `scrub_personal_data`, `has_open_money` |
+| Users | `add_admin`, `change_admin_role`, `remove_admin`, `delete_auth_sessions` |
 | Guests | `booking_for_token`, `public_availability` |
 
 Errors are raised by message, such as `dates_unavailable` or `guest_has_stay`, and the app turns them into plain words.
