@@ -29,6 +29,7 @@ const OWNER_LINKS = [
   { href: "/admin/invoices", label: t.nav.invoices },
   { href: "/admin/integrations", label: t.nav.integrations },
   { href: "/admin/email", label: t.nav.email },
+  { href: "/admin/users", label: t.ops.users.nav },
 ];
 
 // The slash matters: /admin/bookings is not under /admin/booking.

@@ -79,7 +79,7 @@ export function LanguageSwitcher({ onSwitch }: { onSwitch?: () => void }) {
                 locale={option}
                 hrefLang={option}
                 lang={option}
-                aria-label={names[option]}
+                aria-label={`${option.toUpperCase()} ${names[option]}`}
                 aria-current={option === locale ? "true" : undefined}
                 onClick={onSwitch}
               >

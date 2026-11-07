@@ -1,5 +1,6 @@
 {
   "Common": {
+    "metaDescription": "Casa Filakopi, a whole-house rental on Milos, Greece.",
     "siteName": "Casa Filakopi",
     "skipToContent": "Skip to main content",
     "close": "Close",
@@ -37,6 +38,7 @@
     "whatsappLabel": "Whatsapp: {number}"
   },
   "Footer": {
+    "registration": "Registration number: {number}",
     "copyright": "Copyright ©{year} miloscasa.com | All rights reserved",
     "facebook": "Casa Filakopi on Facebook",
     "whatsapp": "Message the host on WhatsApp",

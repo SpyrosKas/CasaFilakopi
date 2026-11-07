@@ -21,6 +21,7 @@ supabase/.temp/
 playwright-report/
 test-results/
 coverage/
+.lighthouseci/
 
 # misc
 .DS_Store

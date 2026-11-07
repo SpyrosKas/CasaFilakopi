@@ -4,6 +4,7 @@ import { runEmailQueue } from "@/lib/email";
 import { isCronAuthorised } from "@/lib/email/cron-auth";
 import { emailSecrets } from "@/lib/email/env";
 import { alertIfRepeating, finishJob, startJob } from "@/lib/email/jobs";
+import { logError } from "@/lib/log";
 
 export const maxDuration = 60;
 
@@ -39,7 +40,7 @@ async function handle(request: Request) {
     return NextResponse.json(result, { status: stopped ? 500 : 200 });
   } catch (error) {
     const detail = error instanceof Error ? error.message : "unknown error";
-    console.error(`email queue failed: ${detail}`);
+    await logError("email_queue.failed", error);
     const db = createAdminClient();
     const run = await startJob(db, JOB);
     await finishJob(db, run, "failed", detail);

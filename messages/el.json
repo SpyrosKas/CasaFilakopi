@@ -1,5 +1,6 @@
 {
   "Common": {
+    "metaDescription": "Casa Filakopi, ένα ολόκληρο σπίτι προς ενοικίαση στη Μήλο.",
     "siteName": "Casa Filakopi",
     "skipToContent": "Μετάβαση στο κύριο περιεχόμενο",
     "close": "Κλείσιμο",
@@ -37,6 +38,7 @@
     "whatsappLabel": "Whatsapp: {number}"
   },
   "Footer": {
+    "registration": "Αριθμός μητρώου: {number}",
     "copyright": "Copyright ©{year} miloscasa.com | Με την επιφύλαξη παντός δικαιώματος",
     "facebook": "Η Casa Filakopi στο Facebook",
     "whatsapp": "Μήνυμα στον οικοδεσπότη μέσω WhatsApp",

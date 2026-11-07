@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logError } from "@/lib/log";
 import { createAdminClient } from "@/lib/db/admin";
 import { isCronAuthorised } from "@/lib/email/cron-auth";
 import { emailSecrets } from "@/lib/email/env";
@@ -29,7 +30,7 @@ async function handle(request: Request) {
     return NextResponse.json(result);
   } catch (error) {
     const detail = error instanceof Error ? error.message : "unknown error";
-    console.error(`scheduled emails failed: ${detail}`);
+    await logError("scheduled_emails.failed", error);
     await finishJob(db, run, "failed", detail);
     await alertIfRepeating(db, JOB, "Scheduled emails", detail, now);
     return NextResponse.json({ error: "failed" }, { status: 500 });

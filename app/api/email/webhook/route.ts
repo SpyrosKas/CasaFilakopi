@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
+import { logError, logWarn } from "@/lib/log";
 import { readCapped } from "@/lib/email/read-body";
 import { applyEvent, verifyEvent } from "@/lib/email/webhook";
 
@@ -9,7 +10,7 @@ const MAX_BODY_BYTES = 256 * 1024;
 export async function POST(request: Request) {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
   if (!secret) {
-    console.error("email webhook: RESEND_WEBHOOK_SECRET is not set");
+    logWarn("email_webhook.not_configured");
     return NextResponse.json({ error: "not_configured" }, { status: 503 });
   }
 
@@ -35,8 +36,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ outcome });
   } catch (error) {
     // A 500 makes Resend send it again later.
-    const message = error instanceof Error ? error.message : "unknown";
-    console.error(`email webhook failed: ${message}`);
+    await logError("email_webhook.failed", error);
     return NextResponse.json({ error: "failed" }, { status: 500 });
   }
 }

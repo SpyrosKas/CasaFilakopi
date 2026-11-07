@@ -1,5 +1,11 @@
 import "server-only";
 import { assertAdminRole } from "@/lib/admin/audit";
+import {
+  DATABASE_JOBS,
+  HEARTBEAT_JOB,
+  summariseJobs,
+  type JobHealth,
+} from "@/lib/admin/job-health";
 import type { MoneyMove, ReportInput } from "@/lib/admin/reports";
 import type { AdminContext } from "@/lib/admin/session";
 import {
@@ -23,7 +29,7 @@ const PAGE_SIZE = 1000;
  * PostgREST returns at most 1000 rows. A report that quietly stopped there
  * would show the wrong money, so every list is read to its end.
  */
-async function readAll<T>(
+export async function readAll<T>(
   page: (
     from: number,
     to: number,
@@ -455,4 +461,25 @@ export async function loadCalendarAlerts(admin: AdminContext) {
     .select("channel, is_enabled, consecutive_failures");
   if (error) throw error;
   return data.filter((row) => row.is_enabled && row.consecutive_failures > 0);
+}
+
+/** Owner only, as job_runs is. The last run of each job, one query each. */
+export async function loadJobHealth(admin: AdminContext): Promise<JobHealth> {
+  const latest = await Promise.all(
+    [...DATABASE_JOBS, HEARTBEAT_JOB].map(async (job) => {
+      const { data, error } = await admin.supabase
+        .from("job_runs")
+        .select("job, status, started_at")
+        .eq("job", job)
+        .order("id", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    }),
+  );
+  return summariseJobs(
+    latest.filter((run) => run !== null),
+    new Date(),
+  );
 }

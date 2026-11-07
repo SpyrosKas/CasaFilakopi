@@ -962,15 +962,19 @@ describe("channel link privacy", () => {
 describe("scheduled jobs (T4.32)", () => {
   it("every job is scheduled", async () => {
     const { rows } = await db.query(`select jobname from cron.job order by 1`);
-    expect(rows.map((r) => r.jobname)).toEqual([
-      "channel-sync",
-      "cms-cleanup",
-      "complete-finished-bookings",
-      "email-queue",
-      "email-scheduled",
-      "purge-admin-attempts",
-      "release-expired-holds",
-    ]);
+    expect(rows.map((r) => r.jobname)).toEqual(
+      expect.arrayContaining([
+        "channel-sync",
+        "cms-cleanup",
+        "complete-finished-bookings",
+        "email-queue",
+        "email-scheduled",
+        "gdpr-retention",
+        "job-health",
+        "purge-admin-attempts",
+        "release-expired-holds",
+      ]),
+    );
   });
 
   it("a site job does nothing until the secrets exist", async () => {

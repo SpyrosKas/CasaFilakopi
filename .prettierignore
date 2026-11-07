@@ -3,6 +3,7 @@ docs
 pnpm-lock.yaml
 .next
 .next-offline
+.lighthouseci
 tests/baseline/legacy
 lib/db/types.ts
 .claude

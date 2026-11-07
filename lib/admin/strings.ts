@@ -4,6 +4,7 @@
 
 import { emailStrings } from "@/lib/admin/email-strings";
 import { invoiceStrings } from "@/lib/admin/invoice-strings";
+import { opsStrings } from "@/lib/admin/ops-strings";
 
 const dayWord = (days: number) => (days === 1 ? "1 day" : `${days} days`);
 
@@ -995,6 +996,7 @@ const en = {
   },
   invoices: invoiceStrings,
   email: emailStrings,
+  ops: opsStrings,
   validation: {
     required: "Please fill this in.",
     tooLong: "This is too long.",

@@ -3,6 +3,7 @@ import { Gallery } from "@/components/site/gallery";
 import { heroButtonClass, Hero } from "@/components/site/hero";
 import { Icon, type IconName } from "@/components/site/icon";
 import { LineIcon, type LineIconName } from "@/components/site/line-icon";
+import { LodgingJsonLd } from "@/components/site/lodging-json-ld";
 import { Photo } from "@/components/site/photo";
 import { ReserveBand } from "@/components/site/reserve-band";
 import { ReviewButton } from "@/components/site/review-button";
@@ -24,9 +25,10 @@ const pairSizes = {
 
 export async function generateMetadata({ params }: Props) {
   const { locale } = await params;
-  // No title of its own: the name of the house is the layout's default title.
-  const { description, openGraph } = await pageMetadata("home", locale, "");
-  return { description, openGraph };
+  const t = await getTranslations({ locale, namespace: "Common" });
+  const metadata = await pageMetadata("home", locale, t("siteName"));
+  // Not "Casa Filakopi | Casa Filakopi".
+  return { ...metadata, title: { absolute: metadata.title as string } };
 }
 
 export default async function HomePage({ params }: Props) {
@@ -39,6 +41,7 @@ export default async function HomePage({ params }: Props) {
 
   return (
     <>
+      <LodgingJsonLd locale={locale} />
       <Hero
         image={page.photo("home.hero")?.src}
         welcome={page.text("hero", "welcome")}
