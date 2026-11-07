@@ -323,7 +323,14 @@
       "dayCheckOut": "{date}, your departure",
       "dayInStay": "{date}, in your stay",
       "dayDepartureOnly": "{date}, departure only",
-      "picked": "Arrival {checkIn}, departure {checkOut}."
+      "picked": "Arrival {checkIn}, departure {checkOut}.",
+      "past": "Past dates",
+      "priceNote": "Prices are per night. Your total, with any extras, shows once you choose your dates.",
+      "dayFreePrice": "{date}, available, {price} a night",
+      "tooShort": "The minimum stay from this arrival date is {count, plural, one {# night} other {# nights}}. Please choose a later departure date.",
+      "tooLong": "The longest stay you can book online is {count, plural, one {# night} other {# nights}}. For a longer stay, please write to us.",
+      "minFromArrival": "Minimum stay from this date: {count, plural, one {# night} other {# nights}}.",
+      "minGeneral": "Minimum stay: {count, plural, one {# night} other {# nights}}."
     },
     "guests": {
       "adults": "Adults",
@@ -360,7 +367,8 @@
       "check_in_day_not_allowed": "Arrivals are not possible on that day of the week. Please choose another.",
       "lead_time_not_met": "That arrival is too soon to book online. Please choose a later date or write to us.",
       "beyond_booking_horizon": "We are not taking bookings that far ahead yet.",
-      "over_capacity": "The house does not sleep that many guests."
+      "over_capacity": "The house does not sleep that many guests.",
+      "above_max_stay_nights": "The longest stay you can book online is {count, plural, one {# night} other {# nights}}. For a longer stay, please write to us."
     },
     "continue": "Continue",
     "back": "Change dates",

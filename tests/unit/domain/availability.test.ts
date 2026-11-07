@@ -4,6 +4,8 @@ import {
   checkStayRules,
   effectiveRestrictions,
   MAX_STAY_NIGHTS,
+  parseBookingSettings,
+  stayLengthLimits,
   type RestrictionRow,
   type StayRulesInput,
 } from "@/lib/domain";
@@ -192,6 +194,36 @@ describe("booking horizon", () => {
     expect(
       check({ checkIn: "2027-06-14", checkOut: "2029-06-15" }, { booking }),
     ).toEqual(rejected("above_max_stay"));
+  });
+});
+
+describe("minimum nights from the booking setting", () => {
+  it("refuses a stay shorter than the setting on any date", () => {
+    const booking = { ...BOOKING, minStayNights: 2 };
+    expect(
+      check({ checkIn: "2027-06-14", checkOut: "2027-06-15" }, { booking }),
+    ).toEqual(rejected("below_min_stay"));
+    expect(
+      check({ checkIn: "2027-06-14", checkOut: "2027-06-16" }, { booking }),
+    ).toEqual(OK);
+  });
+
+  it("lets a stricter stay rule win, and the setting win over a looser one", () => {
+    const booking = { ...BOOKING, minStayNights: 2, maxStayNights: 10 };
+    expect(stayLengthLimits({ minStay: 5, maxStay: null }, booking)).toEqual({
+      minNights: 5,
+      maxNights: 10,
+    });
+    expect(stayLengthLimits({ minStay: 1, maxStay: 20 }, booking)).toEqual({
+      minNights: 2,
+      maxNights: 10,
+    });
+  });
+
+  it("refuses a setting where the shortest stay is longer than the longest", () => {
+    expect(() =>
+      parseBookingSettings({ ...BOOKING, minStayNights: 8, maxStayNights: 7 }),
+    ).toThrow();
   });
 });
 

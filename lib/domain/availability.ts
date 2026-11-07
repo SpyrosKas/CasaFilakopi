@@ -136,6 +136,24 @@ function withinHorizon(
   return addDays(checkOut, -1) <= addMonths(today, booking.horizonMonths);
 }
 
+/**
+ * The shortest and longest stay from a check-in date: the general setting
+ * from Admin's booking page, narrowed by any stay rule covering that date.
+ */
+export function stayLengthLimits(
+  rules: Pick<EffectiveRestrictions, "minStay" | "maxStay">,
+  booking: Pick<BookingSettings, "minStayNights" | "maxStayNights">,
+): { minNights: number; maxNights: number } {
+  return {
+    minNights: Math.max(booking.minStayNights, rules.minStay ?? 1),
+    maxNights: Math.min(
+      MAX_STAY_NIGHTS,
+      booking.maxStayNights,
+      rules.maxStay ?? MAX_STAY_NIGHTS,
+    ),
+  };
+}
+
 export interface StayRulesInput {
   stay: StayRequest;
   /** Null when the room does not exist. */
@@ -176,16 +194,9 @@ export function checkStayRules({
     stay.checkIn,
     stay.checkOut,
   );
-  if (rules.minStay !== null && nights < rules.minStay) {
-    return reject("below_min_stay");
-  }
-  if (
-    nights > MAX_STAY_NIGHTS ||
-    nights > booking.maxStayNights ||
-    (rules.maxStay !== null && nights > rules.maxStay)
-  ) {
-    return reject("above_max_stay");
-  }
+  const limits = stayLengthLimits(rules, booking);
+  if (nights < limits.minNights) return reject("below_min_stay");
+  if (nights > limits.maxNights) return reject("above_max_stay");
   if (rules.closedToArrival) return reject("closed_to_arrival");
   if (rules.closedToDeparture) return reject("closed_to_departure");
   if (

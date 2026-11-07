@@ -5,8 +5,10 @@ import {
   canCheckOut,
   isDateEnabled,
   monthWeeks,
+  nightsAllowed,
   pickDate,
   shiftMonth,
+  stayLengthProblem,
   type CalendarRules,
 } from "@/lib/payments/calendar";
 import { bookingFromReleaseKey, releaseKey } from "@/lib/payments/checkout";
@@ -90,6 +92,49 @@ describe("calendar", () => {
       checkIn: "2027-06-03",
       checkOut: null,
     });
+  });
+});
+
+describe("calendar stay length", () => {
+  const limited: CalendarRules = {
+    ...rules,
+    minNights: 2,
+    maxNights: 7,
+    stayRules: [{ from: "2027-08-01", to: "2027-08-31", min: 5, max: null }],
+  };
+  const open = { checkIn: "2027-06-02", checkOut: null };
+
+  it("takes the strictest of the setting and the stay rules", () => {
+    expect(nightsAllowed("2027-06-02", limited)).toEqual({ min: 2, max: 7 });
+    expect(nightsAllowed("2027-08-03", limited)).toEqual({ min: 5, max: 7 });
+    expect(nightsAllowed("2027-06-02", rules)).toEqual({
+      min: 1,
+      max: Number.POSITIVE_INFINITY,
+    });
+  });
+
+  it("keeps the arrival and says why a departure is too soon or too late", () => {
+    expect(stayLengthProblem("2027-06-03", open, limited)).toEqual({
+      kind: "short",
+      nights: 2,
+    });
+    expect(pickDate(open, "2027-06-03", limited)).toEqual(open);
+    expect(stayLengthProblem("2027-06-04", open, limited)).toBeNull();
+    expect(pickDate(open, "2027-06-04", limited)).toEqual({
+      checkIn: "2027-06-02",
+      checkOut: "2027-06-04",
+    });
+    expect(stayLengthProblem("2027-06-10", open, limited)).toEqual({
+      kind: "long",
+      nights: 7,
+    });
+    expect(pickDate(open, "2027-06-10", limited)).toEqual(open);
+    expect(canCheckOut("2027-06-09", "2027-06-02", limited)).toBe(true);
+  });
+
+  it("does not complain about taken nights, which are a different problem", () => {
+    const beforeTaken = { checkIn: "2027-06-09", checkOut: null };
+    expect(stayLengthProblem("2027-06-12", beforeTaken, limited)).toBeNull();
   });
 });
 

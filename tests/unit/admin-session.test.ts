@@ -236,6 +236,7 @@ describe("form validation", () => {
     holdMinutes: "35",
     sameDayCutoffHour: "12",
     horizonMonths: "18",
+    minStayNights: "1",
     maxStayNights: "30",
   };
 

@@ -8,13 +8,22 @@ import {
   canCheckIn,
   isDateEnabled,
   monthKey,
+  nightsAllowed,
+  stayLengthProblem,
   monthWeeks,
   shiftMonth,
   type CalendarRules,
+  type LengthProblem,
   type Selection,
 } from "@/lib/payments/calendar";
 
 const intlLocale = (locale: string) => (locale === "el" ? "el-GR" : "en-GB");
+
+/** Short enough for a phone-width day: €120 or 120€, no decimals. */
+const nightPrice = (cents: number, locale: string) => {
+  const euros = Math.round(cents / 100);
+  return locale === "el" ? `${euros}€` : `€${euros}`;
+};
 
 const utc = (date: string) => new Date(`${date}T00:00:00Z`);
 
@@ -60,6 +69,8 @@ function useMonthsShown() {
 
 interface Props {
   rules: CalendarRules;
+  /** Price per night in cents, for free nights only. */
+  prices?: Readonly<Record<IsoDate, number>>;
   selection: Selection;
   onPick: (date: IsoDate) => void;
   onClear: () => void;
@@ -72,6 +83,7 @@ interface Props {
  */
 export function AvailabilityCalendar({
   rules,
+  prices = {},
   selection,
   onPick,
   onClear,
@@ -84,6 +96,10 @@ export function AvailabilityCalendar({
   const [month, setMonth] = useState(monthKey(start));
   const [cursor, setCursor] = useState<IsoDate>(start);
   const moved = useRef(false);
+  const [notice, setNotice] = useState<{
+    checkIn: IsoDate | null;
+    problem: LengthProblem;
+  } | null>(null);
   const root = useRef<HTMLDivElement>(null);
 
   const firstMonth = monthKey(rules.firstCheckIn);
@@ -139,6 +155,11 @@ export function AvailabilityCalendar({
   }
 
   const { checkIn, checkOut } = selection;
+  // A notice belongs to the arrival it was about, and goes once that changes.
+  const shownNotice =
+    notice && notice.checkIn === checkIn && !checkOut ? notice.problem : null;
+  const allowed = checkIn && !checkOut ? nightsAllowed(checkIn, rules) : null;
+  const generalMin = rules.minNights ?? 1;
 
   function dayLabel(date: IsoDate) {
     const when = longDate(date, locale);
@@ -148,6 +169,13 @@ export function AvailabilityCalendar({
       return t("dayInStay", { date: when });
     }
     if (isDateEnabled(date, selection, rules)) {
+      const price = prices[date];
+      if (canCheckIn(date, rules) && price !== undefined) {
+        return t("dayFreePrice", {
+          date: when,
+          price: nightPrice(price, locale),
+        });
+      }
       return canCheckIn(date, rules)
         ? t("dayFree", { date: when })
         : t("dayDepartureOnly", { date: when });
@@ -157,6 +185,18 @@ export function AvailabilityCalendar({
 
   function dayClass(date: IsoDate) {
     const classes = ["cal-day"];
+    if (date < rules.firstCheckIn && date !== checkIn && date !== checkOut) {
+      classes.push("cal-day--past");
+    }
+    if (
+      checkIn &&
+      !checkOut &&
+      allowed &&
+      date > checkIn &&
+      date < addDays(checkIn, allowed.min)
+    ) {
+      classes.push("cal-day--short");
+    }
     if (rules.taken.has(date)) classes.push("cal-day--taken");
     if (date === checkIn) classes.push("cal-day--start");
     if (date === checkOut) classes.push("cal-day--end");
@@ -212,7 +252,16 @@ export function AvailabilityCalendar({
               {monthWeeks(value).map((week, index) => (
                 <tr key={index}>
                   {week.map((date, day) => (
-                    <td key={date ?? `gap-${day}`}>
+                    <td
+                      key={date ?? `gap-${day}`}
+                      className={
+                        date &&
+                        prices[date] !== undefined &&
+                        date >= rules.firstCheckIn
+                          ? "cal-cell--priced"
+                          : undefined
+                      }
+                    >
                       {date && (
                         <button
                           type="button"
@@ -224,15 +273,43 @@ export function AvailabilityCalendar({
                           tabIndex={date === tabStop ? 0 : -1}
                           onClick={() => {
                             setCursor(date);
+                            const problem = stayLengthProblem(
+                              date,
+                              selection,
+                              rules,
+                            );
+                            setNotice(problem && { checkIn, problem });
                             if (isDateEnabled(date, selection, rules)) {
                               onPick(date);
                             }
                           }}
                           onKeyDown={(event) => onKeyDown(event, date)}
                         >
-                          {Number(date.slice(8))}
+                          <span className="cal-day__num">
+                            {Number(date.slice(8))}
+                          </span>
                         </button>
                       )}
+                      {/* Outside the button, so its visible text matches its
+                          spoken name. The name already says the price. */}
+                      {date &&
+                        prices[date] !== undefined &&
+                        date >= rules.firstCheckIn && (
+                          <span
+                            className="cal-day__price"
+                            aria-hidden="true"
+                            // A tap on the price is a tap on its day. Keyboard
+                            // and screen readers reach the button itself.
+                            onClick={(event) =>
+                              (
+                                event.currentTarget
+                                  .previousElementSibling as HTMLButtonElement | null
+                              )?.click()
+                            }
+                          >
+                            {nightPrice(prices[date], locale)}
+                          </span>
+                        )}
                     </td>
                   ))}
                 </tr>
@@ -241,6 +318,18 @@ export function AvailabilityCalendar({
           </table>
         ))}
       </div>
+
+      <p className="calendar__notice" role="status" aria-live="polite">
+        {shownNotice?.kind === "short"
+          ? t("tooShort", { count: shownNotice.nights })
+          : shownNotice?.kind === "long"
+            ? t("tooLong", { count: shownNotice.nights })
+            : allowed && allowed.min > 1
+              ? t("minFromArrival", { count: allowed.min })
+              : !checkIn && generalMin > 1
+                ? t("minGeneral", { count: generalMin })
+                : null}
+      </p>
 
       <div className="calendar__foot">
         <ul className="calendar__legend">
@@ -256,7 +345,14 @@ export function AvailabilityCalendar({
             <span className="swatch swatch--selected" aria-hidden="true" />
             {t("selected")}
           </li>
+          <li>
+            <span className="swatch swatch--past" aria-hidden="true" />
+            {t("past")}
+          </li>
         </ul>
+        {Object.keys(prices).length > 0 && (
+          <p className="calendar__price-note">{t("priceNote")}</p>
+        )}
         {checkIn && (
           <button type="button" className="link-button" onClick={onClear}>
             {t("clear")}

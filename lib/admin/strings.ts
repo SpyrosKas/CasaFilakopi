@@ -944,6 +944,9 @@ const en = {
     cutoffNever: "Never: guests cannot book for today",
     cutoffAt: (hour: number) => `${String(hour).padStart(2, "0")}:00`,
     horizon: "How many months ahead guests can book",
+    minStay: "Shortest stay guests can book online, in nights",
+    minStayHint:
+      "For example 2: a guest who picks one night sees a message asking for a longer stay. For different minimums in some months, such as 5 nights in August, use Stay rules under Prices.",
     maxStay: "Longest stay guests can book online, in nights",
     maxStayHint:
       "A longer stay can still be added by you on the bookings page.",
@@ -1068,6 +1071,8 @@ const en = {
     code: "Use letters, numbers and dashes, with no spaces.",
     horizonMonths: "Must be a whole number from 1 to 36.",
     maxStayNights: "Must be a whole number from 1 to 731.",
+    minStayNights:
+      "Must be a whole number from 1 to 731, and no more than the longest stay.",
   },
 } as const;
 

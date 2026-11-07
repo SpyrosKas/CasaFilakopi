@@ -53,6 +53,13 @@ export default async function BookingSettingsPage() {
           defaultValue={settings.horizonMonths}
         />
         <Field
+          label={b.minStay}
+          name="minStayNights"
+          inputMode="numeric"
+          hint={b.minStayHint}
+          defaultValue={settings.minStayNights}
+        />
+        <Field
           label={b.maxStay}
           name="maxStayNights"
           inputMode="numeric"

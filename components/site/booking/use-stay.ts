@@ -48,6 +48,9 @@ export function useAvailability(enabled: boolean) {
             firstCheckIn: load.value.firstCheckIn,
             lastNight: load.value.lastNight,
             taken: new Set(load.value.taken),
+            minNights: load.value.minNights,
+            maxNights: load.value.maxNights,
+            stayRules: load.value.stayRules,
           }
         : null,
     [load],

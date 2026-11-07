@@ -150,9 +150,19 @@ body:has(.guest-booking) .book-bar {
 .calendar__month caption {
   height: 44px;
   font-family: var(--font-serif);
-  font-size: var(--text-lg);
+  font-size: 1.125rem;
   line-height: 44px;
   text-transform: capitalize;
+  white-space: nowrap;
+}
+
+/* Keep the month name clear of the arrow buttons on either side. */
+.calendar__month:first-child caption {
+  padding-left: 48px;
+}
+
+.calendar__month:last-child caption {
+  padding-right: 48px;
 }
 
 .calendar__month th {
@@ -179,6 +189,88 @@ body:has(.guest-booking) .book-bar {
   line-height: 40px;
   text-align: center;
   cursor: pointer;
+}
+
+.calendar .cal-day {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  line-height: 1.1;
+}
+
+.cal-day__num {
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar__month td {
+  position: relative;
+}
+
+/* The price sits over the lower part of its day, outside the button. */
+.cal-cell--priced .cal-day {
+  padding-bottom: 12px;
+}
+
+.cal-day__price {
+  position: absolute;
+  right: 1px;
+  bottom: 5px;
+  left: 1px;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 0.625rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.calendar__month td:hover > .cal-day:not([aria-disabled="true"]) {
+  border-color: var(--aegean);
+}
+
+.cal-day--start + .cal-day__price,
+.cal-day--end + .cal-day__price {
+  color: var(--on-dark);
+}
+
+/* Past dates: faded and struck through, clearly out of reach. */
+.calendar .cal-day--past {
+  background: transparent;
+  color: var(--ink-soft);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--ink-soft) 60%, transparent);
+  opacity: 0.4;
+}
+
+/* After choosing an arrival: nights too few for the minimum stay. */
+.calendar .cal-day--short {
+  background: color-mix(in srgb, var(--lime) 45%, transparent);
+  color: var(--ink-soft);
+}
+
+.calendar__notice {
+  min-height: 1.5em;
+  margin: 10px 0 0;
+  color: var(--ink);
+  font-size: var(--text-sm);
+}
+
+.calendar__notice:empty {
+  min-height: 0;
+  margin: 0;
+}
+
+.calendar__price-note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
 }
 
 .cal-day:hover:not([aria-disabled="true"]) {
@@ -267,6 +359,11 @@ body:has(.guest-booking) .book-bar {
 
 .swatch--selected {
   background: var(--aegean);
+}
+
+.swatch--past {
+  background: transparent;
+  opacity: 0.4;
 }
 
 .link-button {

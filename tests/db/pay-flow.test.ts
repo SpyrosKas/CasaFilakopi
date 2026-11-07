@@ -2130,6 +2130,7 @@ describe("quotes and availability", () => {
     expect(await answer.json()).toEqual({
       ok: false,
       reason: "above_max_stay",
+      maxNights: 30,
     });
     const thirty = nextStay(30);
     const fine = await quote({

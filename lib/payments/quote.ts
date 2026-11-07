@@ -1,5 +1,9 @@
 import { QuoteError } from "@/lib/domain/breakdown";
-import { effectiveRestrictions } from "@/lib/domain/availability";
+import {
+  effectiveRestrictions,
+  stayLengthLimits,
+} from "@/lib/domain/availability";
+import { nightlyPrices } from "@/lib/domain/pricing";
 import type {
   IsoDate,
   Locale,
@@ -39,9 +43,71 @@ export interface AvailabilityView {
   /** The last night on sale. */
   lastNight: IsoDate;
   taken: IsoDate[];
+  /** Price per night in cents for each night on sale, before extras. */
+  prices: Record<IsoDate, number>;
+  /** Shortest and longest stay from Admin's booking page. */
+  minNights: number;
+  maxNights: number;
+  /** Stay rules for date ranges. The strictest wins on a check-in date. */
+  stayRules: StayRuleView[];
   maxAdults: number;
   maxChildren: number;
   paymentsOpen: boolean;
+}
+
+export interface StayRuleView {
+  from: IsoDate;
+  to: IsoDate;
+  min: number | null;
+  max: number | null;
+}
+
+async function loadNightPrices(
+  deps: PaymentDeps,
+  roomId: string,
+  from: IsoDate,
+  lastNight: IsoDate,
+  weekendDays: number[],
+): Promise<Record<IsoDate, number>> {
+  if (from > lastNight) return {};
+  const [room, seasons, overrides] = await Promise.all([
+    deps.db
+      .from("rooms")
+      .select(
+        "base_price_cents, base_occupancy, extra_guest_fee_cents, cleaning_fee_cents",
+      )
+      .eq("id", roomId)
+      .single(),
+    deps.db
+      .from("seasons")
+      .select("start_date, end_date, nightly_cents, weekend_cents")
+      .eq("room_id", roomId)
+      .lte("start_date", lastNight)
+      .gte("end_date", from),
+    deps.db
+      .from("rate_overrides")
+      .select("night, nightly_cents")
+      .eq("room_id", roomId)
+      .gte("night", from)
+      .lte("night", lastNight),
+  ]);
+  for (const result of [room, seasons, overrides]) {
+    if (result.error) throw new Error(result.error.message);
+  }
+  const nights = nightlyPrices({
+    stay: {
+      roomId,
+      checkIn: from,
+      checkOut: addDays(lastNight, 1),
+      adults: 1,
+      children: 0,
+    },
+    room: room.data!,
+    seasons: seasons.data!,
+    overrides: overrides.data!,
+    weekendDays,
+  });
+  return Object.fromEntries(nights.map(({ night, cents }) => [night, cents]));
 }
 
 export async function loadAvailability(
@@ -72,11 +138,46 @@ export async function loadAvailability(
     today,
     addDays(lastNight, 1),
   );
+  const taken = calendar
+    .filter((day) => !day.isAvailable)
+    .map((day) => day.night);
+  const takenSet = new Set(taken);
+
+  const [allPrices, rules] = await Promise.all([
+    loadNightPrices(
+      deps,
+      house.id,
+      firstCheckIn,
+      lastNight,
+      booking.weekendDays,
+    ),
+    deps.db
+      .from("restrictions")
+      .select("start_date, end_date, min_stay, max_stay")
+      .eq("room_id", house.id)
+      .gte("end_date", firstCheckIn)
+      .lte("start_date", lastNight),
+  ]);
+  if (rules.error) throw new Error(rules.error.message);
+  // Only free nights carry a price, so a taken night says nothing more.
+  const prices = Object.fromEntries(
+    Object.entries(allPrices).filter(([night]) => !takenSet.has(night)),
+  );
+
   return {
     today,
     firstCheckIn,
     lastNight,
-    taken: calendar.filter((day) => !day.isAvailable).map((day) => day.night),
+    taken,
+    prices,
+    minNights: booking.minStayNights,
+    maxNights: booking.maxStayNights,
+    stayRules: rules.data.map((row) => ({
+      from: row.start_date,
+      to: row.end_date,
+      min: row.min_stay,
+      max: row.max_stay,
+    })),
     maxAdults: house.maxAdults,
     maxChildren: house.maxChildren,
     paymentsOpen: paymentsOpen(deps),
@@ -107,7 +208,12 @@ export type QuoteView =
       cancellation: string | null;
       paymentsOpen: boolean;
     }
-  | { ok: false; reason: StayRejection; minNights?: number };
+  | {
+      ok: false;
+      reason: StayRejection;
+      minNights?: number;
+      maxNights?: number;
+    };
 
 export function priceLines(
   breakdown: Pick<PriceBreakdown, "lines">,
@@ -122,22 +228,26 @@ export function priceLines(
   }));
 }
 
-async function minimumNights(
+async function lengthLimits(
   deps: PaymentDeps,
   stay: StayRequest,
-): Promise<number | undefined> {
-  const { data, error } = await deps.db
-    .from("restrictions")
-    .select(
-      "start_date, end_date, min_stay, max_stay, closed_to_arrival, closed_to_departure, allowed_check_in_days",
-    )
-    .eq("room_id", stay.roomId)
-    .lte("start_date", stay.checkOut)
-    .gte("end_date", stay.checkIn);
-  if (error) throw new Error(error.message);
-  return (
-    effectiveRestrictions(data, stay.checkIn, stay.checkOut).minStay ??
-    undefined
+): Promise<{ minNights: number; maxNights: number }> {
+  const [restrictions, settings] = await Promise.all([
+    deps.db
+      .from("restrictions")
+      .select(
+        "start_date, end_date, min_stay, max_stay, closed_to_arrival, closed_to_departure, allowed_check_in_days",
+      )
+      .eq("room_id", stay.roomId)
+      .lte("start_date", stay.checkOut)
+      .gte("end_date", stay.checkIn),
+    deps.db.from("settings").select("value").eq("key", "booking").single(),
+  ]);
+  if (restrictions.error) throw new Error(restrictions.error.message);
+  if (settings.error) throw new Error(settings.error.message);
+  return stayLengthLimits(
+    effectiveRestrictions(restrictions.data, stay.checkIn, stay.checkOut),
+    parseBookingSettings(settings.data.value),
   );
 }
 
@@ -164,7 +274,10 @@ export async function quoteStay(
       ok: false,
       reason: check.reason,
       ...(check.reason === "below_min_stay"
-        ? { minNights: await minimumNights(deps, stay) }
+        ? { minNights: (await lengthLimits(deps, stay)).minNights }
+        : {}),
+      ...(check.reason === "above_max_stay"
+        ? { maxNights: (await lengthLimits(deps, stay)).maxNights }
         : {}),
     };
   }

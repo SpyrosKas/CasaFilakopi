@@ -117,6 +117,7 @@ export const bookingSettingsSchema = z.object({
   holdMinutes: wholeNumber(0, 240, v.holdMinutes(MIN_HOLD_MINUTES)),
   sameDayCutoffHour: wholeNumber(0, 24, v.cutoffHour),
   horizonMonths: wholeNumber(0, 36, v.horizonMonths),
+  minStayNights: wholeNumber(0, 731, v.minStayNights),
   maxStayNights: wholeNumber(0, 731, v.maxStayNights),
 });
 
@@ -124,6 +125,7 @@ const BOOKING_MESSAGES: Record<string, string> = {
   holdMinutes: v.holdMinutes(MIN_HOLD_MINUTES),
   sameDayCutoffHour: v.cutoffHour,
   horizonMonths: v.horizonMonths,
+  minStayNights: v.minStayNights,
   maxStayNights: v.maxStayNights,
 };
 

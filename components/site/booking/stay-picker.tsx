@@ -53,7 +53,9 @@ function QuoteMessage({ quote }: { quote: Extract<QuoteView, { ok: false }> }) {
     <p className="contact-problem" role="alert">
       {quote.reason === "below_min_stay" && quote.minNights
         ? t("below_min_stay_nights", { count: quote.minNights })
-        : t(quote.reason)}
+        : quote.reason === "above_max_stay" && quote.maxNights
+          ? t("above_max_stay_nights", { count: quote.maxNights })
+          : t(quote.reason)}
     </p>
   );
 }
@@ -132,6 +134,7 @@ export function StayPicker({
       </p>
       <AvailabilityCalendar
         rules={rules}
+        prices={availability.prices}
         selection={choice}
         onPick={onPick}
         onClear={onClear}

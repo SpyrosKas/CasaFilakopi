@@ -20,22 +20,29 @@ const hasTwoDecimalsAtMost = (value: number) =>
 
 const twoDecimals = { message: "At most two decimals" };
 
-const bookingSettingsSchema = z.object({
-  /** create_hold refuses less, as a Checkout Session lives 30 minutes. */
-  holdMinutes: z.number().int().min(31),
-  checkoutSessionMinutes: z.number().int().positive(),
-  /** Same-day arrival is refused from this hour on, Athens time. */
-  sameDayCutoffHour: z.number().int().min(0).max(24),
-  horizonMonths: z.number().int().positive(),
-  /** Not in the seed yet. Nights priced at a season's weekend rate. */
-  weekendDays: z
-    .array(z.number().int().min(0).max(6))
-    .default(DEFAULT_WEEKEND_DAYS),
-  /** Not in the seed yet. Minimum days between today and check-in. */
-  minLeadDays: z.number().int().min(0).default(0),
-  /** The longest stay a guest can book online. Admin can arrange longer. */
-  maxStayNights: z.number().int().min(1).max(731).default(30),
-});
+const bookingSettingsSchema = z
+  .object({
+    /** create_hold refuses less, as a Checkout Session lives 30 minutes. */
+    holdMinutes: z.number().int().min(31),
+    checkoutSessionMinutes: z.number().int().positive(),
+    /** Same-day arrival is refused from this hour on, Athens time. */
+    sameDayCutoffHour: z.number().int().min(0).max(24),
+    horizonMonths: z.number().int().positive(),
+    /** Not in the seed yet. Nights priced at a season's weekend rate. */
+    weekendDays: z
+      .array(z.number().int().min(0).max(6))
+      .default(DEFAULT_WEEKEND_DAYS),
+    /** Not in the seed yet. Minimum days between today and check-in. */
+    minLeadDays: z.number().int().min(0).default(0),
+    /** The shortest stay a guest can book online, on any date. 2 by default (2026-11-07). */
+    minStayNights: z.number().int().min(1).max(731).default(2),
+    /** The longest stay a guest can book online. Admin can arrange longer. */
+    maxStayNights: z.number().int().min(1).max(731).default(30),
+  })
+  .refine((value) => value.minStayNights <= value.maxStayNights, {
+    path: ["minStayNights"],
+    message: "The shortest stay cannot be longer than the longest",
+  });
 
 export type BookingSettings = z.output<typeof bookingSettingsSchema>;
 
