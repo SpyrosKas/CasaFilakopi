@@ -70,6 +70,27 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 
 ---
 
+### Working defaults (D27, 2026-11-07)
+
+Used for the autonomous block. Each can change later; YOU or HOST confirm them before launch. Anything Yorgos edits in Admin is only a starting value.
+
+| Area | Default |
+|---|---|
+| Public email | `host@miloscasa.com`; Yorgos's personal Yahoo removed from the site. Phone and WhatsApp stay |
+| Default language | English, with Greek chosen from the browser or the flags. Admin is Greek first (D25) |
+| Sender | Name "Casa Filakopi", from `bookings@mail.miloscasa.com`, reply-to `host@miloscasa.com`. Each guest gets their booking's language |
+| Reminders | Balance request at the due date plus one reminder 3 days later. Pre-arrival email 3 days before. Thank-you built but off |
+| Payment | Stripe hosted Checkout, EUR, Apple Pay and Google Pay on; hold 35 min, session 30 min |
+| Late refund | Tiers as seeded: 100% until 30 days out, then 0% |
+| Pricing rules | Extra-guest fee per guest per night, children counted, promos also discount cleaning, taxes never discounted |
+| Booking rules | Horizon 18 months, same-day until 12:00, Friday and Saturday weekend, minimum stay set by Yorgos |
+| Prices, capacity, fees | Remain placeholders until HOST enters real ones (T6.9) |
+| Analytics | None at launch, so no analytics cookies. Setting stays available |
+| Data retention | Guest data anonymised 5 years after check-out, except what tax rules require. Confirm with ACC (question 15) |
+| Accounts | Yorgos Owner, plus Spyros as a second Owner for lost-phone recovery. No Staff at launch; the role is built |
+| Vrbo/HomeAway | Sync available as "Other iCal", off until HOST confirms the listing is active |
+| Launch | March 2027 target. Real invoices wait for ACC (D20) |
+
 ## 3. How we work (multi-agent model)
 
 **Principle:** serial until the contracts exist, parallel after. Most multi-agent failure comes from parallel work against a moving schema.
