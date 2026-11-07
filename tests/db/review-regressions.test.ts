@@ -941,3 +941,20 @@ describe("booking notes and price history", () => {
     expect(rows).toEqual([{ action: "insert" }]);
   });
 });
+
+describe("channel link privacy", () => {
+  it("no signed-in session reads an import link directly", async () => {
+    const owner = await createAdmin("owner");
+    await expect(
+      admin(owner.id, "aal2", (c) =>
+        c.query(`select import_url from public.external_calendars`),
+      ),
+    ).rejects.toThrow(/permission denied/);
+    const { rows } = await admin(owner.id, "aal2", (c) =>
+      c.query(
+        `select channel, is_enabled from public.external_calendars limit 1`,
+      ),
+    );
+    expect(Array.isArray(rows)).toBe(true);
+  });
+});
