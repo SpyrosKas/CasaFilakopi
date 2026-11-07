@@ -87,6 +87,7 @@ export function WriteToGuest({
           <select
             id="write-template"
             value={choice}
+            disabled={!isReady}
             onChange={(event) => choose(event.target.value)}
           >
             <option value="">{w.templateBlank}</option>
@@ -110,6 +111,7 @@ export function WriteToGuest({
             id="write-subject"
             name="subject"
             value={subject}
+            readOnly={!isReady}
             onChange={(event) => setSubject(event.target.value)}
           />
           {state.fieldErrors?.subject && (

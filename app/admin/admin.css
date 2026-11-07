@@ -192,7 +192,8 @@
 /* Each tab takes the width of its word: Ημερολόγιο is long, Μενού is short. */
 .tabbar-row {
   display: grid;
-  grid-template-columns: repeat(5, auto);
+  /* Each tab sizes to its word but always stays a comfortable tap. */
+  grid-template-columns: repeat(5, minmax(44px, auto));
 }
 
 .admin .tab,
@@ -218,6 +219,16 @@
   .admin .tab,
   .menu-button {
     font-size: 0.75rem;
+  }
+}
+
+/* Greek labels on the narrowest phones, whatever font the phone uses. */
+@media (max-width: 340px) {
+  .admin .tab,
+  .menu-button {
+    padding-right: 0;
+    padding-left: 0;
+    font-size: 0.6875rem;
   }
 }
 
