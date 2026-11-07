@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** All tracks built and reviewed. `dev-booking` local holds CMS, PAY, OPS; held back from origin until staging imports run, because `feat/cms` needs photos and text in Supabase first. `integration` branch carries the same for CI. Greek admin merges next. YOU next: run imports, Google Workspace, Resend, Stripe test mode, Vault secrets.
+**Status:** Every track built, reviewed, merged. CI fully green on `integration` (7def1e9). Staging database at migration 18. Local `dev-booking` is held back from origin until YOU run the staging imports, because the code then expects photos and text in Supabase. Order: imports, push, Google Workspace, Resend, Stripe test mode, Vault secrets, real Airbnb and Booking.com feeds.
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
@@ -387,14 +387,14 @@ Security and tooling:
 
 ### Phase 6: Hardening (QA, LEAD)
 
-- [ ] T6.1 Playwright E2E: booking, contact, manual booking, block, cancel with refund, sync conflict (`QA-05`)
+- [x] T6.1 Playwright E2E: booking, contact, manual booking, block, cancel with refund, sync conflict (`QA-05`)
 - [ ] T6.2 Lighthouse 90+ and WCAG 2.1 AA in CI (`WEB-01`, `WEB-14`, `QA-07`)
 - [x] T6.3 Security headers, CSP, Zod, rate limits (`PLT-05`)
 - [ ] T6.4 Full `/security-review`; independent review of payment and RLS paths
 - [ ] T6.5 Sentry, uptime, structured logs (`PLT-06`, `PLT-07`)
 - [ ] T6.6 Backup and tested restore on staging (`SUP-10`)
 - [x] T6.7 README, runbook, ER diagram, host guide in Greek and English (`DOC-01` to `DOC-04`)
-- [ ] T6.8 Late-payment and double-webhook drills
+- [x] T6.8 Late-payment and double-webhook drills
 
 - [ ] T6.9 HOST sets real starting values for payment and cancellation rules in Admin
 - [ ] T6.10 HOST test, unaided: change a cancellation rule, upload, delete and reorder photos, from a phone
