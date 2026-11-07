@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
+import { BookingFlow } from "@/components/site/booking/booking-flow";
+import { BookingMessages } from "@/components/site/booking/booking-messages";
 import { PageHero } from "@/components/site/hero";
 import { loadContact, loadPage, pageMetadata } from "@/lib/cms/public";
+import { isValidIsoDate } from "@/lib/domain/dates";
 
-type Props = { params: Promise<{ locale: string }> };
+type Props = {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
@@ -11,11 +17,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return pageMetadata("book", locale, t("metaTitle"));
 }
 
-/** Placeholder entry point. Track PAY builds the booking flow here. */
-export default async function BookPage({ params }: Props) {
+const date = (value: unknown) =>
+  isValidIsoDate(value) ? value : (null as string | null);
+
+const count = (value: unknown, min: number) => {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= min && number <= 30
+    ? number
+    : undefined;
+};
+
+export default async function BookPage({ params, searchParams }: Props) {
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("Book");
+  const query = await searchParams;
   const page = await loadPage("book", locale);
   const contact = await loadContact(locale);
 
@@ -26,17 +42,27 @@ export default async function BookPage({ params }: Props) {
         title={page.text("hero", "title")}
       />
       <section className="section">
-        <div className="wrap page-content">
-          <p className="lead">{page.text("main", "soon")}</p>
-          <p>{page.text("main", "body")}</p>
-          <p className="book-links">
-            <a href={`mailto:${contact.email}`}>
-              {t("emailLabel", { email: contact.email })}
-            </a>
-            <a href={contact.whatsappHref}>
-              {t("whatsappLabel", { number: contact.whatsappDisplay })}
-            </a>
-          </p>
+        <div className="wrap book-page">
+          <p className="book-intro">{t("intro")}</p>
+          <BookingMessages>
+            <BookingFlow
+              closed={{
+                title: page.text("main", "soon"),
+                body: page.text("main", "body"),
+              }}
+              contact={{
+                email: contact.email,
+                whatsappHref: contact.whatsappHref,
+                whatsappDisplay: contact.whatsappDisplay,
+              }}
+              initial={{
+                checkIn: date(query.checkIn),
+                checkOut: date(query.checkOut),
+                adults: count(query.adults, 1),
+                children: count(query.children, 0),
+              }}
+            />
+          </BookingMessages>
         </div>
       </section>
     </>

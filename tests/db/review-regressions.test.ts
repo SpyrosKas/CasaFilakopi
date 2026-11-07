@@ -969,6 +969,8 @@ describe("scheduled jobs (T4.32)", () => {
         "complete-finished-bookings",
         "email-queue",
         "email-scheduled",
+        "gdpr-retention",
+        "job-health",
         "payments",
         "purge-admin-attempts",
         "release-expired-holds",

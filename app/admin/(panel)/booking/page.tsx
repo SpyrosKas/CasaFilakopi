@@ -52,6 +52,13 @@ export default async function BookingSettingsPage() {
           inputMode="numeric"
           defaultValue={settings.horizonMonths}
         />
+        <Field
+          label={b.maxStay}
+          name="maxStayNights"
+          inputMode="numeric"
+          hint={b.maxStayHint}
+          defaultValue={settings.maxStayNights}
+        />
       </ActionForm>
     </div>
   );

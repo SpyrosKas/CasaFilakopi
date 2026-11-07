@@ -22,11 +22,14 @@ import { cmsEn } from "@/lib/cms/strings";
 import { cmsEl } from "@/lib/cms/strings.el";
 import { emailEl } from "@/lib/admin/email-strings.el";
 import { invoiceEl } from "@/lib/admin/invoice-strings.el";
+import { opsEn } from "@/lib/admin/ops-strings";
+import { opsEl } from "@/lib/admin/ops-strings.el";
 
 const CATALOGS: [string, unknown, unknown][] = [
   ["admin", adminEn, adminEl],
   ["email", emailEn, emailEl],
   ["invoices", invoiceEn, invoiceEl],
+  ["ops", opsEn, opsEl],
   ["channels", channelsEn, channelsEl],
   ["cms", cmsEn, cmsEl],
 ];

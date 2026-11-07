@@ -17,6 +17,7 @@ import {
   countUnread,
   loadBlocks,
   loadCalendarAlerts,
+  loadJobHealth,
   loadStayBook,
   toReportInput,
 } from "@/lib/admin/stay-data";
@@ -58,17 +59,19 @@ export default async function AdminHomePage() {
   const i18n = await adminI18n();
   const { t, formatDate, formatStay, formatEuro, formatTenths } = i18n;
   const h = t.home;
+  const j = t.ops.jobs;
 
   const admin = await requireAdmin();
   const isOwner = admin.role === "owner";
   const now = new Date();
   const today = athensDate(now);
 
-  const [book, blocks, unread, failures] = await Promise.all([
+  const [book, blocks, unread, failures, jobs] = await Promise.all([
     loadStayBook(admin),
     loadBlocks(admin),
     countUnread(admin),
     loadCalendarAlerts(admin),
+    isOwner ? loadJobHealth(admin) : null,
   ]);
 
   const plan = dayPlan(book.stays, today);
@@ -113,6 +116,22 @@ export default async function AdminHomePage() {
           {conflicts.length > MAX_LISTED && (
             <p>{h.andMore(conflicts.length - MAX_LISTED)}</p>
           )}
+        </section>
+      )}
+
+      {jobs && (jobs.failed.length > 0 || jobs.siteSilent) && (
+        <section
+          className="notice notice-bad"
+          role="status"
+          data-testid="job-health"
+        >
+          <h2>{j.title}</h2>
+          {jobs.failed.map(({ job, at }) => (
+            <p key={job}>
+              {j.failed(j.labels[job], formatDate(at.slice(0, 10)))}
+            </p>
+          ))}
+          {jobs.siteSilent && <p>{j.siteSilent}</p>}
         </section>
       )}
 

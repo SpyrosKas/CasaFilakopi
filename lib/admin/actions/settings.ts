@@ -62,6 +62,8 @@ export async function saveProperty(
   if (error) return errorState(t.common.somethingWrong);
 
   revalidatePath("/admin/property");
+  // The registration number is in every public footer (WEB-15).
+  revalidatePath("/", "layout");
   return okState(t.common.saved);
 }
 

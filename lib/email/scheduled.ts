@@ -11,7 +11,7 @@ import type { EmailDb } from "./db";
 import { queueEmailWith, type QueueResult } from "./queue";
 import { loadEmailSettings, type EmailSettings } from "./settings";
 import { validateText } from "./template-text";
-import { asLocale, balanceDueOn, paidCents } from "./variables";
+import { asLocale, balanceDueOn, receivedCents } from "./variables";
 
 // Timed emails (JOB-03, JOB-04, T5.8a). This job only decides and queues, and
 // it decides by "is today on or past the date", so a day the cron missed is
@@ -234,7 +234,7 @@ async function queueBalance(
 ): Promise<void> {
   const dueOn = balanceDueOn(stay);
   if (!dueOn || today < dueOn) return;
-  if ((await paidCents(db, stay.id)) >= stay.total_cents) return;
+  if ((await receivedCents(db, stay.id)) >= stay.total_cents) return;
 
   const bookingId = stay.id;
   const request = tally(

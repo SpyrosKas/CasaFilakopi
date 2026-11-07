@@ -197,7 +197,7 @@ describe("POST /api/contact", () => {
     expect(response.status).toBe(200);
     expect(mocks.queueEmail).toHaveBeenCalledTimes(2);
     expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining("consent not logged"),
+      expect.stringContaining("contact.consent_not_logged"),
     );
   });
 

@@ -100,6 +100,23 @@ export async function paidCents(
   return sum(payments.data) - sum(refunds.data);
 }
 
+/**
+ * What came in, ignoring refunds. What is still owed uses this: a goodwill
+ * refund never creates a debt (O1). A disputed payment was paid (D8).
+ */
+export async function receivedCents(
+  db: EmailDb,
+  bookingId: string,
+): Promise<number> {
+  const { data, error } = await db
+    .from("payments")
+    .select("amount_cents")
+    .eq("booking_id", bookingId)
+    .in("status", ["succeeded", "disputed"]);
+  if (error) throw new Error(error.message);
+  return data.reduce((total, row) => total + row.amount_cents, 0);
+}
+
 export function balanceDueOn(booking: {
   price_breakdown: unknown;
 }): string | null {
@@ -127,7 +144,7 @@ async function bookingValues(
 ): Promise<TemplateVariables> {
   const paid = await paidCents(db, booking.id);
   const money = (cents: number) => formatMoney(cents, locale);
-  const owed = booking.total_cents - paid;
+  const owed = booking.total_cents - (await receivedCents(db, booking.id));
   const dueOn = balanceDueOn(booking);
   const closed = isClosedBooking(booking.status);
 

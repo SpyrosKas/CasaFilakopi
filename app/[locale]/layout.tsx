@@ -18,6 +18,7 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
 import { routing } from "@/i18n/routing";
 import { isPreviewing, loadContactForLayout } from "@/lib/cms/public";
+import { indexable, siteOrigin } from "@/lib/seo";
 
 // Publishing revalidates the pages it changes at once (WEB-08). This is only
 // the safety net, for a page last rendered while the database was unreachable.
@@ -33,7 +34,10 @@ const firstFonts = {
 } as const;
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteOrigin()),
   title: { default: "Casa Filakopi", template: "%s | Casa Filakopi" },
+  // Only production is indexed: see lib/security-headers.ts.
+  robots: indexable() ? undefined : { index: false, follow: false },
   icons: { icon: "/img/casa-icon-1.png" },
 };
 

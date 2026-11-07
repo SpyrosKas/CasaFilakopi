@@ -181,6 +181,7 @@ export function checkStayRules({
   }
   if (
     nights > MAX_STAY_NIGHTS ||
+    nights > booking.maxStayNights ||
     (rules.maxStay !== null && nights > rules.maxStay)
   ) {
     return reject("above_max_stay");

@@ -33,6 +33,7 @@ const OWNER_LINKS: { href: string; key: NavKey }[] = [
   { href: "/admin/invoices", key: "invoices" },
   { href: "/admin/integrations", key: "integrations" },
   { href: "/admin/email", key: "email" },
+  { href: "/admin/users", key: "users" },
 ];
 
 // The slash matters: /admin/bookings is not under /admin/booking.

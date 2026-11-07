@@ -1,6 +1,6 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import { loadContactForLayout } from "@/lib/cms/public";
+import { loadContactForLayout, loadRegistrationNumber } from "@/lib/cms/public";
 import { CookieSettingsButton } from "./cookie-banner";
 import { Icon } from "./icon";
 
@@ -27,6 +27,7 @@ export async function SiteFooter() {
   const tNav = await getTranslations("Nav");
   const tCommon = await getTranslations("Common");
   const contact = await loadContactForLayout(await getLocale());
+  const registration = await loadRegistrationNumber();
 
   return (
     <footer id="site-footer" className="footer-section">
@@ -84,6 +85,11 @@ export async function SiteFooter() {
         </nav>
       </div>
       <div className="wrap">
+        {registration && (
+          <p className="footer-copyright" data-testid="registration-number">
+            {t("registration", { number: registration })}
+          </p>
+        )}
         <p className="footer-copyright">
           {t("copyright", { year: String(new Date().getFullYear()) })}
         </p>

@@ -24,7 +24,9 @@ import {
   markStay,
   recordPayment,
   recordRefund,
+  refundToCard,
   saveNotes,
+  sendPaymentLink,
 } from "@/lib/admin/actions/bookings";
 import { messageTemplates } from "@/lib/admin/message-templates";
 import { requireAdmin } from "@/lib/admin/session";
@@ -44,6 +46,7 @@ import {
 import type { PriceBreakdown } from "@/lib/domain/contracts";
 import { athensDate } from "@/lib/domain/dates";
 import type { AdminI18n } from "@/lib/admin/i18n";
+import { readStripeSettings } from "@/lib/payments/env";
 
 const manualMethods = ({ t }: AdminI18n) =>
   (["cash", "bank_transfer", "pos"] as const).map((value) => ({
@@ -108,10 +111,18 @@ export default async function BookingPage({
     loadBookingEmails(admin, id),
     loadMessagesForBooking(admin, id, booking.guest_email),
   ]);
-  const history = await loadHistory(admin, id, [
-    ...payments.map((row) => row.id),
-    ...refunds.map((row) => row.id),
-  ]);
+  // An open payment page has a pending row in payments, which is not money.
+  const paid = payments.filter((row) => row.status !== "pending");
+  const history = (
+    await loadHistory(admin, id, [
+      ...payments.map((row) => row.id),
+      ...refunds.map((row) => row.id),
+    ])
+  ).filter(
+    (entry) =>
+      entry.entity !== "payments" ||
+      (entry.action !== "delete" && entry.after?.status !== "pending"),
+  );
 
   const stay = stayFromBooking(booking, payments, refunds);
   const today = athensDate(new Date());
@@ -131,9 +142,14 @@ export default async function BookingPage({
         ]
       : [];
   });
-  const hasCardMoney = payments.some(
-    (row) => row.status === "succeeded" && row.method === "card",
+  const cardLeftCents = payments.reduce(
+    (total, row) =>
+      row.status === "succeeded" && row.method === "card"
+        ? total + refundableOf(row, refunds)
+        : total,
+    0,
   );
+  const cardConnected = readStripeSettings() !== null;
   const takesPayment = stay.balanceCents > 0;
 
   return (
@@ -295,11 +311,11 @@ export default async function BookingPage({
           </Panel>
 
           <Panel title={d.payments}>
-            {payments.length === 0 ? (
+            {paid.length === 0 ? (
               <p className="muted">{d.paymentsEmpty}</p>
             ) : (
               <ul className="rows">
-                {payments.map((row) => (
+                {paid.map((row) => (
                   <li key={row.id} className="money-line">
                     <span>
                       {t.stay.kind[row.kind]}, {t.stay.method[row.method]}
@@ -363,6 +379,21 @@ export default async function BookingPage({
             />
           </Panel>
 
+          {takesPayment && cardConnected && booking.guest_email && (
+            <Panel title={a.sendLink}>
+              <p className="muted small">
+                {a.sendLinkHint(formatEuro(stay.balanceCents))}
+              </p>
+              <ActionButton
+                action={sendPaymentLink}
+                fields={{ id }}
+                label={a.sendLink}
+                pendingLabel={t.common.saving}
+                variant="quiet"
+              />
+            </Panel>
+          )}
+
           {takesPayment && (
             <Panel title={a.recordPayment}>
               {stay.balanceCents > 0 && (
@@ -423,8 +454,35 @@ export default async function BookingPage({
             </Panel>
           )}
 
-          {hasCardMoney && (
-            // PAY track: card refunds go reserve_refund, Stripe, settle_refund.
+          {cardLeftCents > 0 && cardConnected && admin.role === "owner" && (
+            <Panel title={a.cardRefund}>
+              <details className="edit-box" open={giveBack > 0}>
+                <summary>{a.cardRefund}</summary>
+                <p className="muted small">
+                  {a.cardRefundIntro(formatEuro(cardLeftCents))}
+                </p>
+                <ActionForm
+                  action={refundToCard}
+                  submitLabel={a.cardRefundSubmit}
+                  pendingLabel={t.common.saving}
+                  resetOnOk
+                  danger
+                  confirm={a.cardRefundConfirm}
+                >
+                  <input type="hidden" name="id" value={id} />
+                  <input
+                    type="hidden"
+                    name="expectedRefunded"
+                    value={stay.money.refundedCents}
+                  />
+                  <Field label={a.amount} name="amount" inputMode="decimal" />
+                  <Field label={a.refundReason} name="reason" />
+                </ActionForm>
+              </details>
+            </Panel>
+          )}
+
+          {cardLeftCents > 0 && !cardConnected && (
             <p className="notice notice-info">{a.cardRefundLater}</p>
           )}
 

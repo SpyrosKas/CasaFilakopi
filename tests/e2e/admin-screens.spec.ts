@@ -160,5 +160,6 @@ test("booking settings refuse a hold under 31 minutes", async () => {
     ...(savedBooking as object),
     holdMinutes: 31,
     horizonMonths: 12,
+    maxStayNights: 30,
   });
 });

@@ -33,6 +33,28 @@ export async function finishJob(
   if (error) throw new Error(error.message);
 }
 
+/**
+ * For jobs that run in the database, which cannot send email themselves. True
+ * when the job has failed enough times in a row to be worth an alert.
+ */
+export async function alertAboutJob(
+  db: EmailDb,
+  job: string,
+  label: string,
+  now: Date,
+): Promise<boolean> {
+  const { data, error } = await db
+    .from("job_runs")
+    .select("status, detail")
+    .eq("job", job)
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (data?.status !== "failed") return false;
+  return alertIfRepeating(db, job, label, data.detail ?? "", now);
+}
+
 /** One alert a day per job, once the last few runs have all failed. */
 export async function alertIfRepeating(
   db: EmailDb,
@@ -40,28 +62,29 @@ export async function alertIfRepeating(
   label: string,
   detail: string,
   now: Date,
-): Promise<void> {
+): Promise<boolean> {
   const { data, error } = await db
     .from("job_runs")
     .select("status")
     .eq("job", job)
-    .order("started_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(ALERT_AFTER_FAILURES);
   if (error) throw new Error(error.message);
 
   const repeating =
     data.length === ALERT_AFTER_FAILURES &&
     data.every((run) => run.status === "failed");
-  if (!repeating) return;
+  if (!repeating) return false;
 
-  await queueEmailWith(
+  const result = await queueEmailWith(
     db,
     "host_job_failure",
     {
       job: label,
       failures: ALERT_AFTER_FAILURES,
-      error: detail.slice(0, 500),
+      ...(detail.trim() ? { error: detail.trim().slice(0, 500) } : {}),
     },
     { dedupeKey: `job-alert:${job}:${athensDate(now)}` },
   );
+  return result.ok;
 }

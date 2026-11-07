@@ -1,0 +1,502 @@
+/* The booking pages. Built on the tokens in styles/site.css, mobile first. */
+
+.book-section {
+  background: var(--sand);
+}
+
+.book-page,
+.booking-note,
+.guest-booking {
+  min-width: 0;
+}
+
+/* These pages already offer what the floating Book button would. */
+body:has(.book-page) .book-bar,
+body:has(.guest-booking) .book-bar {
+  display: none;
+}
+
+.book-intro {
+  max-width: var(--measure);
+  margin-bottom: 32px;
+  font-size: var(--text-lg);
+}
+
+.home-search h2 {
+  font-size: var(--heading-md);
+}
+
+.home-search > p {
+  max-width: var(--measure);
+}
+
+.calendar-loading {
+  min-height: 360px;
+  color: var(--ink-soft);
+}
+
+.booking-layout {
+  display: grid;
+  gap: 32px;
+  min-width: 0;
+}
+
+.booking-main {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .booking-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    align-items: start;
+    gap: 48px;
+  }
+
+  .stay-summary {
+    position: sticky;
+    top: calc(var(--header-h) + 24px);
+  }
+}
+
+.stay-picker {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.stay-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.stay-dates > div {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--lime);
+}
+
+.stay-dates dt {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.stay-dates dd {
+  margin: 0;
+  font-weight: 500;
+}
+
+.stay-help {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.calendar {
+  position: relative;
+  min-width: 0;
+}
+
+.calendar__nav {
+  position: absolute;
+  inset: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.calendar__arrow {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--lime);
+  color: var(--aegean);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.calendar__arrow:disabled {
+  color: var(--line);
+  cursor: default;
+}
+
+.calendar__months {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .calendar__months {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+.calendar__month {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.calendar__month caption {
+  height: 44px;
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  line-height: 44px;
+  text-transform: capitalize;
+}
+
+.calendar__month th {
+  padding: 4px 0;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.calendar__month td {
+  padding: 1px;
+}
+
+.cal-day {
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: var(--lime);
+  color: var(--ink);
+  font: inherit;
+  line-height: 40px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.cal-day:hover:not([aria-disabled="true"]) {
+  border-color: var(--aegean);
+}
+
+.cal-day:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.cal-day[aria-disabled="true"] {
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: default;
+}
+
+.cal-day--taken {
+  background: var(--line);
+  color: var(--ink-soft);
+  text-decoration: line-through;
+}
+
+.cal-day--taken[aria-disabled="false"] {
+  background: var(--lime);
+  border-color: var(--line);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.cal-day--taken[aria-disabled="true"] {
+  background: var(--line);
+}
+
+.cal-day--range {
+  background: #cfe0ee;
+  color: var(--ink);
+}
+
+.cal-day--start,
+.cal-day--end {
+  background: var(--aegean);
+  color: var(--on-dark);
+  text-decoration: none;
+}
+
+.calendar__foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.calendar__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.calendar__legend li {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.swatch {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--line);
+}
+
+.swatch--free {
+  background: var(--lime);
+}
+
+.swatch--taken {
+  background: var(--line);
+}
+
+.swatch--selected {
+  background: var(--aegean);
+}
+
+.link-button {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--aegean);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.stay-guests {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.stay-guests legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-weight: 500;
+}
+
+.guest-select select {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--ink-soft);
+  border-radius: 2px;
+  background: var(--lime);
+  color: var(--ink);
+  font: inherit;
+}
+
+.stay-summary {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--lime);
+}
+
+.book-section .stay-summary {
+  background: var(--lime);
+}
+
+.stay-summary h2 {
+  margin: 0;
+  font-size: var(--heading-sm);
+}
+
+.stay-summary p {
+  margin: 0;
+}
+
+.stay-continue {
+  width: 100%;
+}
+
+.price-nights {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.price-lines {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+
+.price-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.price-line dt {
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.price-line dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.price-line--total {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.price-line--total dt,
+.price-line--total dd,
+.price-line--now dt,
+.price-line--now dd {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.booking-closed {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: var(--text-sm);
+}
+
+.booking-closed h3 {
+  margin: 0 0 4px;
+  font-size: var(--text-lg);
+}
+
+.checkout-form h2:focus {
+  outline: none;
+}
+
+.promo-note {
+  min-height: 1.4em;
+  margin: 0;
+  color: var(--olive);
+  font-size: var(--text-sm);
+}
+
+.checkout-rules {
+  padding-left: 20px;
+  border-left: 2px solid var(--olive);
+  font-size: var(--text-sm);
+}
+
+.checkout-rules h3 {
+  margin: 0 0 4px;
+  font-size: var(--text-lg);
+}
+
+.checkout-rules p {
+  margin: 0 0 6px;
+}
+
+.checkout-note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.booking-note {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  max-width: var(--measure);
+}
+
+.booking-note h2 {
+  font-size: var(--heading-sm);
+}
+
+.booking-note p {
+  margin: 0;
+}
+
+.guest-booking {
+  display: grid;
+  gap: 32px;
+  max-width: 760px;
+}
+
+.guest-booking .book-intro {
+  margin-bottom: 0;
+}
+
+.guest-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+
+.guest-panel h2 {
+  margin: 0;
+  font-size: var(--heading-sm);
+}
+
+.guest-panel p {
+  margin: 0;
+}
+
+.guest-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
+}
+
+@media (min-width: 560px) {
+  .guest-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.guest-facts dt {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.guest-facts dd {
+  margin: 0;
+  font-weight: 500;
+}
+
+.guest-panel .btn-outline-primary {
+  background: transparent;
+}
+
+.guest-panel .btn-outline-primary:hover {
+  background: var(--aegean);
+}
+
+.guest-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}

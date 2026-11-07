@@ -44,6 +44,7 @@ const NOT_OURS = [
   "code",
   ".eml-recipient",
   ".cms-section > summary",
+  '[data-testid="admin-users"] li > :first-child',
   // The names of buttons on Airbnb and Booking.com.
   ".steps",
 ].join(",");
@@ -58,8 +59,8 @@ async function englishLeft(page: Page): Promise<string[]> {
   const ours = text
     .replace(/Booking\.com|Airbnb και Booking/g, "")
     .replace(/\S+@\S+|https?:\/\/\S+/g, "")
-    // Payments left by the invoice specs in the shared database.
-    .replace(/Test Guest/g, "");
+    // Names left by the invoice specs in the shared database.
+    .replace(/Test Guest|On the invoice|A guest with quite a long name indeed/g, "");
   return [...ours.matchAll(ENGLISH)].map((match) =>
     ours.slice(Math.max(match.index - 25, 0), match.index + 25),
   );
@@ -293,6 +294,7 @@ test.describe("Greek screens", () => {
     ["booking-settings", "/admin/booking"],
     ["rules", "/admin/rules"],
     ["account", "/admin/account"],
+    ["users", "/admin/users"],
     ["invoices", "/admin/invoices"],
     ["invoices-issue", "/admin/invoices/issue"],
     ["invoices-export", "/admin/invoices/export"],
