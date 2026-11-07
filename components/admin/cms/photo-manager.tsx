@@ -205,7 +205,7 @@ export function PhotoManager({
     } else if (added) {
       setNotice({
         ok: true,
-        text: replaceMediaId || def.single ? p.replaced : p.uploadDone(added),
+        text: replaceMediaId ? p.replaced : p.uploadDone(added),
       });
     }
   };
