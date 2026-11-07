@@ -925,6 +925,9 @@ isOneToOne: false
 "transition_booking":
 { Args: { "p_actor"?: string,"p_booking_id": string,"p_status": Database["public"]['Enums']["booking_status"] }; Returns: undefined
                            },
+"update_booking_notes":
+{ Args: { "p_actor"?: string,"p_booking_id": string,"p_notes": string }; Returns: undefined
+                           },
 "update_external_event_details":
 { Args: { "p_actor"?: string,"p_amount_cents": number,"p_event_id": string,"p_guest_email": string,"p_guest_name": string,"p_guest_notes": string,"p_guest_phone": string }; Returns: undefined
                            },

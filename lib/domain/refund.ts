@@ -30,7 +30,7 @@ function applicableTier(
  *
  * Tiers are a percentage of the booking (D6). What the house keeps is the
  * charge, total minus that percentage. Anything paid above the charge goes
- * back, and anything short of it is still owed.
+ * back. Any shortfall is calculated but never collected or shown (D24).
  *
  * `paidCents` is net of earlier refunds, which makes this repeatable: once the
  * refund is made, paid equals the charge and a second run refunds nothing.

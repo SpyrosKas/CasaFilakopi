@@ -821,3 +821,50 @@ describe("details added to imported bookings (D19)", () => {
     ).rejects.toThrow(/permission denied/);
   });
 });
+
+describe("booking notes and price history", () => {
+  it("saves notes through the server only, and audits the actor without the text", async () => {
+    const owner = await createAdmin("owner");
+    const id = await createHold({ roomId, ...JUNE });
+    await db.query(
+      `select public.update_booking_notes($1, ' Late arrival ', $2)`,
+      [id, owner.id],
+    );
+    const { rows } = await db.query(
+      `select internal_notes from public.bookings where id = $1`,
+      [id],
+    );
+    expect(rows[0].internal_notes).toBe("Late arrival");
+
+    const audit = await db.query(
+      `select actor_id, after from public.audit_log
+       where entity = 'bookings' and entity_id = $1 order by id desc limit 1`,
+      [id],
+    );
+    expect(audit.rows[0].actor_id).toBe(owner.id);
+    expect(JSON.stringify(audit.rows[0].after)).not.toContain("Late arrival");
+
+    await expect(
+      db.query(`select public.update_booking_notes($1, 'x')`, [randomUUID()]),
+    ).rejects.toThrow("booking_not_found");
+    await expect(
+      admin(owner.id, "aal2", (c) =>
+        c.query(`select public.update_booking_notes($1, 'x')`, [id]),
+      ),
+    ).rejects.toThrow(/permission denied/);
+  });
+
+  it("records which night's price changed", async () => {
+    await db.query(
+      `insert into public.rate_overrides (room_id, night, nightly_cents)
+       values ($1, '2032-11-01', 15000)`,
+      [roomId],
+    );
+    const { rows } = await db.query(
+      `select action from public.audit_log
+       where entity = 'rate_overrides' and entity_id = $1`,
+      [`${roomId}:2032-11-01`],
+    );
+    expect(rows).toEqual([{ action: "insert" }]);
+  });
+});
