@@ -1,0 +1,782 @@
+/*
+ * Everything the legacy site did not have: self-hosted fonts, the React
+ * replacements for AOS and Bootstrap JS, the mobile fixes (PLAN F11) and the
+ * new pages. Loaded after bootstrap.css, style.css and directions.css.
+ */
+
+/* Fonts. Self-hosted so no visitor data goes to Google before consent. */
+@font-face {
+  font-family: "Roboto";
+  font-style: normal;
+  font-weight: 100;
+  font-display: swap;
+  src: url("/fonts/roboto-latin-100-normal.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Roboto";
+  font-style: normal;
+  font-weight: 100;
+  font-display: swap;
+  src: url("/fonts/roboto-greek-100-normal.woff2") format("woff2");
+  unicode-range: U+0370-03FF;
+}
+
+@font-face {
+  font-family: "Mukta Mahee";
+  font-style: normal;
+  font-weight: 200;
+  font-display: swap;
+  src: url("/fonts/mukta-mahee-latin-200-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Mukta Mahee";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("/fonts/mukta-mahee-latin-300-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Mukta Mahee";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/mukta-mahee-latin-400-normal.woff2") format("woff2");
+}
+
+/*
+ * Scroll reveal: same offsets and timing as the old AOS setup.
+ *
+ * Failsafe: if the scripts never run, this animation shows the element anyway.
+ * RevealObserver cancels it (data-reveal-active) as soon as it takes over, well
+ * before the delay on a normal load, so normal visitors see no flash.
+ */
+[data-reveal] {
+  opacity: 0;
+  transition:
+    opacity 1s ease,
+    transform 1s ease;
+  animation: reveal-failsafe 1ms linear 2.5s forwards;
+}
+
+html[data-reveal-active] [data-reveal] {
+  animation: none;
+}
+
+@keyframes reveal-failsafe {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * First-view content (header, hero) plays on load from CSS alone: it needs
+ * neither JavaScript nor scrolling, whatever the screen height.
+ */
+[data-reveal-load] {
+  animation: reveal-in-fade 1s ease both;
+}
+
+[data-reveal-load="fade-up"] {
+  animation-name: reveal-in-up;
+}
+
+[data-reveal-load-delay="100"] {
+  animation-delay: 0.1s;
+}
+
+@keyframes reveal-in-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes reveal-in-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 100px, 0);
+  }
+}
+
+[data-reveal="fade-up"] {
+  transform: translate3d(0, 100px, 0);
+}
+
+[data-reveal="fade-down"] {
+  transform: translate3d(0, -100px, 0);
+}
+
+[data-reveal="fade-left"] {
+  transform: translate3d(100px, 0, 0);
+}
+
+[data-reveal="fade-right"] {
+  transform: translate3d(-100px, 0, 0);
+}
+
+[data-reveal][data-revealed] {
+  opacity: 1;
+  transform: none;
+}
+
+[data-reveal-delay="100"] {
+  transition-delay: 0.1s;
+}
+
+[data-reveal-delay="200"] {
+  transition-delay: 0.2s;
+}
+
+[data-reveal-delay="400"] {
+  transition-delay: 0.4s;
+}
+
+[data-reveal-delay="500"] {
+  transition-delay: 0.5s;
+}
+
+[data-reveal-delay="1000"] {
+  transition-delay: 1s;
+}
+
+/*
+ * The cause of the sideways scrolling on phones: not-yet-revealed fade-left
+ * elements sat 100 px to the right of the screen, so a 375 px page was 475 px
+ * wide until you scrolled past them. Below 992 px they rise instead.
+ */
+@media (max-width: 991.98px) {
+  [data-reveal="fade-left"],
+  [data-reveal="fade-right"] {
+    transform: translate3d(0, 40px, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (scripting: none) {
+  [data-reveal],
+  [data-reveal-load],
+  html[data-reveal-active] [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-hero .scroll-down .chevron,
+  .site-hero .scroll-down .text {
+    animation: none;
+    opacity: 1;
+  }
+
+  .site-hero .scroll-down .chevron {
+    transform: translateY(30px);
+  }
+
+  .site-menu-toggle,
+  .site-menu-toggle span,
+  .site-navbar {
+    transition: none;
+  }
+}
+
+/* The desktop parts of a section may still start off-screen. Clip, never scroll. */
+.section,
+.site-hero {
+  overflow-x: clip;
+}
+
+/* Keyboard focus. Legacy removed every outline. */
+a:focus-visible,
+button:focus-visible,
+.btn:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #ffba5a;
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  z-index: 1100;
+  padding: 8px 16px;
+  background: #fff;
+  color: #212529;
+}
+
+.skip-link:focus {
+  top: 8px;
+}
+
+/* Long Greek labels must wrap inside a button on a narrow phone. */
+@media (max-width: 575.98px) {
+  .btn {
+    white-space: normal;
+  }
+}
+
+/* Header and fullscreen menu */
+.site-menu-toggle {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.site-navbar {
+  display: block;
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 0.4s,
+    visibility 0s 0.4s;
+}
+
+/* Visible at once when opening: a hidden link cannot take focus. */
+.menu-open .site-navbar {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.4s;
+}
+
+/* Legacy `a { transition: all }` would delay the inherited visibility too. */
+.site-navbar a {
+  transition-property: color;
+}
+
+.site-navbar .extra-info iframe,
+.site-navbar .extra-info .map-placeholder {
+  max-width: 100%;
+}
+
+.site-navbar .full-height {
+  height: auto;
+  min-height: max(100vh, 700px);
+  padding-top: 120px;
+  padding-bottom: 40px;
+}
+
+.site-navbar nav .menu li a {
+  display: inline-block;
+}
+
+@media (max-width: 767.98px) {
+  .site-navbar nav .menu li a {
+    font-size: 32px;
+  }
+}
+
+/* The side-by-side columns are too narrow for the menu below 992 px. */
+@media (max-width: 991.98px) {
+  .site-navbar .col-md-3,
+  .site-navbar .col-md-9 {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+}
+
+/* Greek menu words are longer than the column at 40 px. */
+html[lang="el"] .site-navbar nav .menu li a {
+  font-size: 30px;
+}
+
+/* Inline SVG icons replace the Font Awesome CDN */
+.icon {
+  display: inline-block;
+  vertical-align: -0.125em;
+  fill: currentColor;
+}
+
+.timeline-badge .icon {
+  vertical-align: baseline;
+}
+
+/* Heroes */
+/* Legacy left this out, so "Scroll down" was placed from the screen bottom. */
+.site-hero {
+  position: relative;
+}
+
+.site-hero .heading h1 {
+  margin-bottom: 0;
+}
+
+.site-hero .heading .welcome,
+.site-hero .heading .main {
+  display: block;
+  margin-bottom: 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.site-hero .btn.uppercase {
+  white-space: normal;
+}
+
+@media (max-width: 991.98px) {
+  .site-logo a {
+    white-space: nowrap;
+  }
+
+  .site-hero {
+    background-position: center;
+  }
+
+  /* Bright photos sit behind the title on phones. */
+  .site-hero-inner .heading .welcome,
+  .site-hero-inner .heading .main {
+    color: #fff;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+  }
+
+  .site-hero-inner .heading .main {
+    font-size: clamp(44px, 14vw, 70px);
+  }
+}
+
+/*
+ * Short screens (phone in landscape, small phones). The legacy 700 px minimum
+ * pushed the title and button below the fold, so the hero fits the screen.
+ */
+@media (max-height: 699.98px) {
+  .site-header {
+    padding: 20px 0;
+  }
+
+  .site-hero:not(.page-hero),
+  .site-hero:not(.page-hero) .site-hero-inner {
+    height: 100vh;
+    height: 100svh;
+    min-height: 340px;
+  }
+
+  .site-hero:not(.page-hero) .site-hero-inner {
+    padding-top: 70px;
+  }
+
+  .site-hero:not(.page-hero).overlay:before {
+    height: 100%;
+    min-height: 0;
+  }
+}
+
+@media (max-height: 500px) {
+  /* No room for it beside the title, and the page visibly continues. */
+  .site-hero .scroll-down {
+    display: none;
+  }
+
+  .site-hero-inner .heading .main {
+    font-size: 44px;
+  }
+
+  .site-hero-inner .heading + br {
+    display: none;
+  }
+
+  .site-hero p {
+    margin-top: 8px;
+    margin-bottom: 0;
+  }
+}
+
+/* Smaller hero for the new pages */
+.site-hero.page-hero {
+  position: relative;
+  height: auto;
+  min-height: 420px;
+}
+
+.site-hero.page-hero.overlay:before {
+  height: 100%;
+  min-height: 0;
+}
+
+.site-hero.page-hero .site-hero-inner {
+  height: auto;
+  min-height: 420px;
+  padding-top: 120px;
+  padding-bottom: 40px;
+}
+
+/* F11: the round photo. Each block keeps it off the text at its own width. */
+/* Below 992 px it rests on the corner of the main photo, inside that photo. */
+@media (max-width: 991.98px) {
+  .house-media {
+    margin-bottom: 3rem;
+  }
+
+  .img-absolute {
+    right: 27px;
+    bottom: 20px;
+    margin: 0;
+  }
+
+  .img-absolute img {
+    max-width: clamp(90px, 26vw, 160px);
+    border-width: 6px;
+  }
+}
+
+/* 992 to 1199 px: the text column starts sooner than the old offset assumed. */
+@media (min-width: 992px) and (max-width: 1199.98px) {
+  .img-absolute {
+    right: -16px;
+  }
+}
+
+/* 1200 px up: on the right-hand photos, stop at the screen edge. */
+@media (min-width: 1200px) {
+  .ml-auto > .img-absolute {
+    right: max(-100px, calc((1140px - 100vw) / 2 + 8px));
+  }
+}
+
+/* Dialogs: the native element gives us focus trapping, Esc and the backdrop. */
+.site-dialog {
+  width: calc(100% - 1rem);
+  max-width: 500px;
+  max-height: calc(100dvh - 1rem);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 0;
+  background: transparent;
+}
+
+.site-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.site-dialog .modal-content {
+  position: relative;
+}
+
+.site-dialog .modal-body {
+  /* The gutter keeps the sticky Close button off the text. */
+  padding: 2.5rem 52px 1.25rem 1.25rem;
+}
+
+.site-dialog .quote {
+  font-size: 20px;
+  color: #17a2b8;
+}
+
+/* Zero height, so it scrolls with the dialog without taking any space. */
+.site-dialog__bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: 0;
+}
+
+.site-dialog__close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: #212529;
+  font-size: 24px;
+  line-height: 1;
+}
+
+/* Carousels */
+.carousel-control-prev,
+.carousel-control-next {
+  border: 0;
+  background: none;
+}
+
+.carousel-indicators li {
+  position: relative;
+}
+
+.carousel-indicators button {
+  position: absolute;
+  inset: -10px 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.carousel-item img {
+  height: auto;
+}
+
+.carousel-item.active img {
+  animation: photo-in 0.6s ease;
+}
+
+@keyframes photo-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .carousel-item.active img {
+    animation: none;
+  }
+}
+
+.carousel-toggle {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 16;
+  padding: 2px 10px;
+  border: 0;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 13px;
+}
+
+/* Accordion on Directions */
+.accordion .btn-link {
+  white-space: normal;
+  text-align: left;
+}
+
+.directions .page-header h3 {
+  font-size: 2.5rem;
+}
+
+.timeline::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+
+.timeline-footer > span {
+  cursor: default;
+}
+
+/* Buttons that keep the look of the links they replaced */
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Footer additions */
+.footer-section .footer-extra {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-size: 14px;
+}
+
+.footer-section .footer-extra button {
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+}
+
+.footer-section .footer-extra button:hover {
+  color: #fff;
+}
+
+/* Fingers need a 44 px target; desktop keeps the legacy footer spacing. */
+@media (max-width: 991.98px), (pointer: coarse) {
+  .footer-section .link a,
+  .footer-section .footer-extra a,
+  .footer-section .footer-extra button,
+  .site-navbar .extra-info a,
+  .page-content a:not(.btn),
+  .map-placeholder a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .footer-section .link li {
+    margin-bottom: 0;
+  }
+
+  .footer-section .footer-extra {
+    gap: 0 20px;
+  }
+
+  .footer-section .social a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+}
+
+/* Map stand-in shown until consent */
+.map-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px;
+  width: 600px;
+  max-width: 100%;
+  min-height: 300px;
+  padding: 24px;
+  background: #eef1f4;
+  color: #212529;
+}
+
+.map-frame {
+  display: block;
+  width: 600px;
+  max-width: 100%;
+  height: 450px;
+  border: 0;
+}
+
+/* Cookie banner */
+.cookie-banner {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1060;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 16px;
+  background: #fff;
+  color: #212529;
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.2);
+}
+
+.cookie-banner__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  max-width: 1140px;
+  margin: 0 auto;
+}
+
+.cookie-banner__text {
+  flex: 1 1 320px;
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.cookie-banner__text a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.cookie-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cookie-banner__actions .btn {
+  flex: 1 1 120px;
+  min-width: 120px;
+}
+
+/* New page content */
+.page-content {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.placeholder-notice {
+  margin: 0 0 2rem;
+  padding: 20px 24px;
+  border: 2px dashed #e09a2b;
+  background: #fff8ec;
+  color: #5d4037;
+}
+
+.placeholder-notice h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 400;
+  color: inherit;
+}
+
+.placeholder-notice p {
+  margin: 0;
+}
+
+.contact-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 24px;
+  margin: 0 0 2rem;
+  overflow-wrap: anywhere;
+}
+
+.contact-list dt {
+  font-weight: 400;
+}
+
+.contact-list dd {
+  margin: 0;
+}
+
+@media (max-width: 479.98px) {
+  .contact-list {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-list dd {
+    margin-bottom: 12px;
+  }
+}
+
+.gallery-group {
+  margin-bottom: 3rem;
+}
+
+.gallery-group h2 {
+  margin-bottom: 1rem;
+  font-size: 28px;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.gallery-thumb {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.gallery-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
