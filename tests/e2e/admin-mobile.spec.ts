@@ -2,11 +2,21 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import {
   authAdmin,
   createTestUser,
+  db,
   deleteCreatedUsers,
   enrolOwner,
   signInWithPassword,
   type TestUser,
 } from "./admin-helpers";
+import {
+  addBooking,
+  addExternal,
+  addMessage,
+  addPayment,
+  createFixtureRoom,
+  HOUSE,
+  removeFixtures,
+} from "./admin-ops-fixtures";
 
 // T3.20c: every admin screen at phone and tablet widths.
 
@@ -52,7 +62,10 @@ function findLayoutProblems(minTap: number): LayoutProblem[] {
     })
     .filter(
       ({ el, box }) =>
-        box.width > 0 && getComputedStyle(el).visibility !== "hidden",
+        box.width > 0 &&
+        getComputedStyle(el).visibility !== "hidden" &&
+        // A closed <details> keeps its layout box but shows nothing.
+        (!el.closest("details:not([open])") || el.closest("summary") !== null),
     );
 
   for (const { el, box } of targets) {
@@ -64,10 +77,15 @@ function findLayoutProblems(minTap: number): LayoutProblem[] {
     }
   }
 
+  const isPinned = (el: Element) => el.closest("[data-pinned]") !== null;
+
   for (let i = 0; i < targets.length; i += 1) {
     for (let j = i + 1; j < targets.length; j += 1) {
       const [a, b] = [targets[i], targets[j]];
       if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
+      // The bottom bar floats over the page by design. That the page can
+      // always scroll clear of it is checked below instead.
+      if (isPinned(a.el) !== isPinned(b.el)) continue;
       const overlaps =
         a.box.left < b.box.right - 1 &&
         b.box.left < a.box.right - 1 &&
@@ -80,6 +98,22 @@ function findLayoutProblems(minTap: number): LayoutProblem[] {
         });
       }
     }
+  }
+
+  // At the very bottom of the page, nothing may be left behind the bar. The
+  // bar only sits at the bottom on a phone: on a computer it is the side list.
+  const bar = document.querySelector("[data-pinned]");
+  if (bar && bar.getBoundingClientRect().top > 0) {
+    const row = bar.querySelector(".tabbar-row") ?? bar;
+    const start = window.scrollY;
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    const barTop = row.getBoundingClientRect().top;
+    for (const { el } of targets) {
+      if (!isPinned(el) && el.getBoundingClientRect().bottom > barTop + 0.5) {
+        problems.push({ kind: "behind the bottom bar", detail: name(el) });
+      }
+    }
+    window.scrollTo(0, start);
   }
   return problems;
 }
@@ -125,6 +159,7 @@ for (const width of WIDTHS) {
 
     test.afterAll(async () => {
       await page.context().close();
+      await removeFixtures();
       await deleteCreatedUsers();
     });
 
@@ -192,6 +227,64 @@ for (const width of WIDTHS) {
       await checkWithMenu(page, "booking");
       await page.goto("/admin/account");
       await checkWithMenu(page, "account");
+    });
+
+    test("bookings, calendar, prices, guests, messages and reports", async () => {
+      test.setTimeout(240_000);
+      const room = await createFixtureRoom();
+      const stay = await addBooking({
+        roomId: room.id,
+        checkIn: "2041-03-10",
+        checkOut: "2041-03-14",
+        name: "A guest with quite a long name indeed",
+        email: "a.long.address.for.a.guest@example.test",
+        notes: "Private note",
+        totalCents: 123400,
+      });
+      await addPayment(stay, 23400);
+      await db.query(
+        `insert into public.seasons (room_id, name, start_date, end_date, nightly_cents)
+         values ($1, 'Mobile test', '2041-11-01', '2041-11-30', 20000)`,
+        [HOUSE],
+      );
+      const event = await addExternal(room.airbnb, "2041-03-20", "2041-03-23");
+      const message = await addMessage({
+        name: "Someone",
+        email: "someone@example.test",
+        message: "A question about the house.",
+      });
+
+      for (const [label, path] of [
+        ["bookings", "/admin/bookings"],
+        ["bookings-past", "/admin/bookings?tab=past"],
+        ["new-booking", "/admin/bookings/new"],
+        ["booking", `/admin/bookings/${stay}`],
+        ["change-dates", `/admin/bookings/${stay}/change`],
+        ["cancel", `/admin/bookings/${stay}/cancel`],
+        ["imported", `/admin/bookings/external/${event}`],
+        ["calendar", "/admin/calendar?month=2041-03"],
+        ["rates", "/admin/rates?month=2041-03"],
+        ["seasons", "/admin/rates/seasons"],
+        ["restrictions", "/admin/rates/restrictions"],
+        ["fees", "/admin/rates/fees"],
+        ["promos", "/admin/rates/promos"],
+        ["guests", "/admin/guests"],
+        ["messages", "/admin/messages"],
+        ["message", `/admin/messages/${message}`],
+        ["reports", "/admin/reports?year=2041&month=3"],
+        ["reports-year", "/admin/reports?year=2041&month=all"],
+      ]) {
+        await page.goto(path);
+        await check(page, label);
+        // Filters and edit boxes must fit once they are open as well.
+        if (width === 320) {
+          const closed = page.locator("details:not([open]) > summary");
+          while ((await closed.count()) > 0) await closed.first().click();
+          await check(page, `${label}-open`);
+        }
+      }
+      await db.query(`delete from public.seasons where name = 'Mobile test'`);
+      await removeFixtures();
     });
 
     test("rules screen in every state", async () => {

@@ -196,7 +196,7 @@ test("saving rules changes the settings but never an existing booking", async ({
     "If you have paid only the deposit (\u20ac255)",
   );
   await expect(preview).toContainText(
-    "7 to 29 days before you arrive: we keep the \u20ac255 and you still owe \u20ac245.",
+    "7 to 29 days before you arrive: we keep the \u20ac255 and you owe nothing more.",
   );
 
   await page.getByRole("button", { name: "Save", exact: true }).click();
