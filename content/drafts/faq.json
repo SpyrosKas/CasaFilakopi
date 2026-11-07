@@ -1,0 +1,112 @@
+[
+  {
+    "question": {
+      "en": "What are the check-in and check-out times?",
+      "el": "Ποιες είναι οι ώρες άφιξης και αναχώρησης;"
+    },
+    "answer": {
+      "en": "Check-in: [TO FILL IN: check-in time]\nCheck-out: [TO FILL IN: check-out time]\n\nHow you receive the house: [TO FILL IN: how guests receive the keys or access]\n\n[TO FILL IN: early check-in and late check-out: possible, and on what terms?]",
+      "el": "Άφιξη: [ΝΑ ΣΥΜΠΛΗΡΩΘΕΙ: ώρα άφιξης]\nΑναχώρηση: [ΝΑ ΣΥΜΠΛΗΡΩΘΕΙ: ώρα αναχώρησης]\n\nΠαραλαβή του σπιτιού: [ΝΑ ΣΥΜΠΛΗΡΩΘΕΙ: πώς παραλαμβάνουν οι επισκέπτες τα κλειδιά ή πώς αποκτούν πρόσβαση]\n\n[ΝΑ ΣΥΜΠΛΗΡΩΘΕΙ: νωρίς άφιξη και αργή αναχώρηση: είναι δυνατές και με ποιους όρους;]"
+    }
+  },
+  {
+    "question": {
+      "en": "Where is Casa Filakopi and how do I get there?",
+      "el": "Πού βρίσκεται το Casa Filakopi και πώς θα έρθω;"
+    },
+    "answer": {
+      "en": "Casa Filakopi is a traditional Cycladic farmhouse near Pollonia on Milos, about 2.5 km from Apollonia. The address is Epar.Od.Triovasalou-Apollonion, Filakopi, Potamia, 84800, Greece.\n\nFrom the centre of Adamas, take the road that runs parallel to the sea, follow the signs to Pollonia, and carry on past Papafragas beach until you reach the arrow street signs, where you turn right onto the country road. From the airport, follow the road to Adamas; after a couple of kilometres you will see the sign to Pollonia. Step-by-step directions with photos are on the [Directions](https://miloscasa.com/en/directions) page.",
+      "el": "Το Casa Filakopi είναι ένα παραδοσιακό κυκλαδίτικο αγροτόσπιτο κοντά στην Πολλώνια της Μήλου, περίπου 2,5 χλμ. από την Απολλωνία. Η διεύθυνση είναι Επαρ. Οδός Τριοβασάλου-Απολλωνίων, Φυλακωπή, Ποταμιά, 84800.\n\nΑπό το κέντρο της Αδάμαντα ακολουθήστε τον δρόμο που εκτείνεται παράλληλα με τη θάλασσα, κατευθυνθείτε προς την Πολλώνια και συνεχίστε πέρα από την παραλία του Παπαφράγκα, μέχρι τις πινακίδες με τα βέλη, όπου στρίβετε δεξιά στον χωματόδρομο. Από το αεροδρόμιο ακολουθήστε τον δρόμο προς την Αδάμαντα· μετά από δύο περίπου χιλιόμετρα θα δείτε την πινακίδα για την Πολλώνια. Οδηγίες βήμα προς βήμα με φωτογραφίες θα βρείτε στη σελίδα [Οδηγίες](https://miloscasa.com/el/directions)."
+    }
+  },
+  {
+    "question": {
+      "en": "Do you rent single rooms, or only the whole house?",
+      "el": "Νοικιάζετε μεμονωμένα δωμάτια ή μόνο ολόκληρο το σπίτι;"
+    },
+    "answer": {
+      "en": "We rent the whole house only. It has two bedrooms that can be isolated from each other, an interior bathroom, an exterior bathroom and an exterior kitchen, all around a courtyard of about 70 square metres.",
+      "el": "Νοικιάζουμε μόνο ολόκληρο το σπίτι. Διαθέτει δύο υπνοδωμάτια που μπορούν να απομονωθούν μεταξύ τους, εσωτερικό μπάνιο, εξωτερικό μπάνιο και εξωτερική κουζίνα, γύρω από μια αυλή περίπου 70 τετραγωνικών μέτρων."
+    }
+  },
+  {
+    "question": {
+      "en": "How many guests can stay?",
+      "el": "Πόσα άτομα μπορούν να μείνουν;"
+    },
+    "answer": {
+      "en": "The master bedroom has a queen bed or two single beds, depending on your needs, and it can also serve as a living room with two sofas. The second bedroom has a queen bed.\n\nMaximum number of guests: [TO FILL IN: maximum number of guests]",
+      "el": "Το κύριο υπνοδωμάτιο έχει διπλό κρεβάτι ή δύο μονά, ανάλογα με τις ανάγκες σας, και μπορεί επίσης να λειτουργήσει ως καθιστικό με δύο καναπέδες. Το δεύτερο υπνοδωμάτιο έχει διπλό κρεβάτι.\n\nΜέγιστος αριθμός επισκεπτών: [ΝΑ ΣΥΜΠΛΗΡΩΘΕΙ: μέγιστος αριθμός επισκεπτών]"
+    }
+  },
+  {
+    "question": {
+      "en": "What is included?",
+      "el": "Τι περιλαμβάνεται;"
+    },
+    "answer": {
+      "en": "The house has a hammock, exterior shower, gas BBQ, air conditioning, Wi-Fi, TV, hair dryer, yoga mattress, snorkelling equipment and beach towels. The kitchen is fully equipped.\n\n[TO FILL IN: bed linen and bath towels: are they provided?]\n\n[TO FILL IN: cleaning: is it included in the price, and is there cleaning during the stay?]",
+      "el": "Στο σπίτι θα βρείτε αιώρα, εξωτερικό ντους, ψησταριά υγραερίου, κλιματισμό, Wi-Fi, τηλεόραση, πιστολάκι μαλλιών, στρώμα γιόγκα, εξοπλισμό κολύμβησης με αναπνευστήρα και πετσέτες θαλάσσης. Η κουζίνα είναι πλήρως εξοπλισμένη.\n\n[ΝΑ ΣΥΜΠΛΗΡΩΘΕΙ: σεντόνια και πετσέτες μπάνιου: παρέχονται;]\n\n[ΝΑ ΣΥΜΠΛΗΡΩΘΕΙ: καθαριότητα: περιλαμβάνεται στην τιμή και γίνεται καθαρισμός κατά τη διαμονή;]"
+    }
+  },
+  {
+    "question": {
+      "en": "Can I cook at the house?",
+      "el": "Μπορώ να μαγειρέψω στο σπίτι;"
+    },
+    "answer": {
+      "en": "Yes. The exterior kitchen is a restored traditional oven house, now a fully equipped kitchen with its own yard, next to the main rooms. It has a wooden outdoor table with a built-in seat for six, shaded from the sun, so it is a pleasant place for breakfast, lunch or dinner. There is also a gas BBQ in the courtyard.",
+      "el": "Ναι. Η εξωτερική κουζίνα είναι ένας παραδοσιακός φούρνος που έχει αναπαλαιωθεί και λειτουργεί πλέον ως πλήρως εξοπλισμένη κουζίνα με δική της αυλή, δίπλα στα κύρια δωμάτια. Διαθέτει ξύλινο εξωτερικό τραπέζι με ενσωματωμένο κάθισμα για έξι άτομα, προστατευμένο από τον ήλιο, ιδανικό για πρωινό, μεσημεριανό ή βραδινό. Στην αυλή υπάρχει επίσης ψησταριά υγραερίου."
+    }
+  },
+  {
+    "question": {
+      "en": "Is there parking?",
+      "el": "Υπάρχει χώρος στάθμευσης;"
+    },
+    "answer": {
+      "en": "[TO FILL IN: parking: is there parking at the house, and where?]",
+      "el": "[ΝΑ ΣΥΜΠΛΗΡΩΘΕΙ: στάθμευση: υπάρχει χώρος στάθμευσης στο σπίτι και πού;]"
+    }
+  },
+  {
+    "question": {
+      "en": "Are children and pets welcome?",
+      "el": "Είναι ευπρόσδεκτα τα παιδιά και τα κατοικίδια;"
+    },
+    "answer": {
+      "en": "[TO FILL IN: children: are children welcome, and any rules or equipment such as a cot?]\n\n[TO FILL IN: pets: allowed or not, and under what conditions?]",
+      "el": "[ΝΑ ΣΥΜΠΛΗΡΩΘΕΙ: παιδιά: είναι ευπρόσδεκτα και ισχύουν κάποιοι κανόνες ή υπάρχει εξοπλισμός, π.χ. παιδικό κρεβάτι;]\n\n[ΝΑ ΣΥΜΠΛΗΡΩΘΕΙ: κατοικίδια: επιτρέπονται ή όχι και υπό ποιες προϋποθέσεις;]"
+    }
+  },
+  {
+    "question": {
+      "en": "How do I pay?",
+      "el": "Πώς πληρώνω;"
+    },
+    "answer": {
+      "en": "Payment is made online when you book, in euros, through Stripe. By default you pay the full amount at the time of booking. Where the host offers a deposit, the booking page shows how much to pay now and when the balance is due, before you confirm. Your card details go to Stripe and are not stored on this website.",
+      "el": "Η πληρωμή γίνεται online κατά την κράτηση, σε ευρώ, μέσω της Stripe. Από προεπιλογή πληρώνετε ολόκληρο το ποσό κατά την κράτηση. Όταν ο οικοδεσπότης προσφέρει προκαταβολή, η σελίδα κράτησης εμφανίζει πόσα πληρώνετε τώρα και πότε οφείλεται το υπόλοιπο, πριν επιβεβαιώσετε. Τα στοιχεία της κάρτας σας διαβιβάζονται στη Stripe και δεν αποθηκεύονται σε αυτόν τον ιστότοπο."
+    }
+  },
+  {
+    "question": {
+      "en": "What happens if I need to cancel?",
+      "el": "Τι γίνεται αν χρειαστεί να ακυρώσω;"
+    },
+    "answer": {
+      "en": "The cancellation and refund rules for your booking are shown on the booking page before you pay, and those are the rules that apply to you. Please read them before you confirm. You can also read the general [Cancellation Policy](https://miloscasa.com/en/cancellation). If you have a question, write to [host@miloscasa.com](mailto:host@miloscasa.com).",
+      "el": "Οι κανόνες ακύρωσης και επιστροφής χρημάτων για την κράτησή σας εμφανίζονται στη σελίδα κράτησης πριν από την πληρωμή και είναι αυτοί που ισχύουν για εσάς. Παρακαλούμε διαβάστε τους πριν επιβεβαιώσετε. Μπορείτε επίσης να διαβάσετε τη γενική [Πολιτική ακύρωσης](https://miloscasa.com/el/cancellation). Για οποιαδήποτε απορία, γράψτε μας στο [host@miloscasa.com](mailto:host@miloscasa.com)."
+    }
+  },
+  {
+    "question": {
+      "en": "How can I contact the host?",
+      "el": "Πώς μπορώ να επικοινωνήσω με τον οικοδεσπότη;"
+    },
+    "answer": {
+      "en": "Write to [host@miloscasa.com](mailto:host@miloscasa.com), message the host on WhatsApp at 00306934707765, or call (+30) 693-470-7765. You can also use the contact form on the [Contact](https://miloscasa.com/en/contact) page.",
+      "el": "Γράψτε στο [host@miloscasa.com](mailto:host@miloscasa.com), στείλτε μήνυμα στον οικοδεσπότη στο WhatsApp στο 00306934707765 ή καλέστε στο (+30) 693-470-7765. Μπορείτε επίσης να χρησιμοποιήσετε τη φόρμα στη σελίδα [Επικοινωνία](https://miloscasa.com/el/contact)."
+    }
+  }
+]
