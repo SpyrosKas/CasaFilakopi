@@ -1511,6 +1511,17 @@ describe("reconciliation", () => {
     );
   });
 
+  it("leaves a payment that is already recorded alone", async () => {
+    const started = await confirmed();
+    age(started.session);
+    await reconcilePayments(testDeps(fake, roomId));
+    expect(
+      (await emailsFor(started.bookingId)).filter((row) =>
+        /never reached/.test(String(row.payload.reason)),
+      ),
+    ).toHaveLength(0);
+  });
+
   it("skips anything unpaid or not ours", async () => {
     const unpaid = await start();
     age(fake.pay(unpaid.session.id, { status: "unpaid" }));
@@ -1528,14 +1539,20 @@ describe("reconciliation", () => {
        values ($1, 'charge.refunded', '{}', now() - interval '2 hours', 'boom')`,
       [eventId],
     );
-    const deps = testDeps(fake, roomId);
-    await reconcilePayments(deps);
-    await reconcilePayments(deps);
-    const { rows } = await db.query(
-      `select count(*)::int as n from public.email_logs where payload->>'reason' like $1`,
-      [`%${eventId}%`],
-    );
-    expect(rows[0].n).toBe(1);
+    try {
+      const deps = testDeps(fake, roomId);
+      await reconcilePayments(deps);
+      await reconcilePayments(deps);
+      const { rows } = await db.query(
+        `select count(*)::int as n from public.email_logs where payload->>'reason' like $1`,
+        [`%${eventId}%`],
+      );
+      expect(rows[0].n).toBe(1);
+    } finally {
+      await db.query(`delete from public.stripe_events where id = $1`, [
+        eventId,
+      ]);
+    }
   });
 });
 
@@ -1632,12 +1649,11 @@ describe("an email that cannot be stored", () => {
                     }),
                   };
                 }
-                return (inner as never as {
-                  upsert: (a: unknown, b: never) => unknown;
-                }).upsert(
-                  rows,
-                  options,
-                );
+                return (
+                  inner as never as {
+                    upsert: (a: unknown, b: never) => unknown;
+                  }
+                ).upsert(rows, options);
               };
             },
           });

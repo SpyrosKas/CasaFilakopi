@@ -22,7 +22,8 @@ export default defineConfig({
   timeout: 90_000,
   workers: 1,
   globalSetup: "./global-setup.ts",
-  use: { baseURL: site },
+  retries: 1,
+  use: { baseURL: site, screenshot: "only-on-failure" },
   webServer: [
     {
       command: "pnpm exec tsx tests/support/fake-stripe-server.ts",

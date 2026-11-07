@@ -202,6 +202,7 @@ test("Staff do not get card refunds", async ({ browser, request, baseURL }) => {
   });
   const page = await context.newPage();
   await signInWithPassword(page, staff);
+  await expect(page).toHaveURL(/\/admin$/);
   await page.goto(`/admin/bookings/${booking.id}`);
   await expect(page.getByRole("heading", { name: "Payments" })).toBeVisible();
   await expect(page.getByText("Refund to the card")).toHaveCount(0);
