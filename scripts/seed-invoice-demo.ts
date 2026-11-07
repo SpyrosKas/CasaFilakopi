@@ -174,11 +174,19 @@ async function main() {
     return data;
   }
 
-  const { data: setting } = await db
+  const { data: setting, error: settingError } = await db
     .from("settings")
     .select("value")
     .eq("key", "invoicing")
     .maybeSingle();
+  if (settingError) {
+    stop(
+      `Could not read settings: ${settingError.message}. Check you used the secret key, not the publishable one.`,
+    );
+  }
+  if (key.startsWith("sb_publishable_")) {
+    stop("That is the publishable key. Use the secret key.");
+  }
   const settings = invoicingSettingsSchema.parse(setting?.value ?? {});
   const unsafe = setupRefusal({
     isStored: setting !== null,
