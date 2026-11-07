@@ -70,6 +70,18 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 
 ---
 
+### Decided during the autonomous block (D28, 2026-11-07)
+
+| Topic | Decision |
+|---|---|
+| Partial refund on a live or finished booking | Goodwill. It never creates a debt, and it reduces income |
+| Money to give back | Shows on Yorgos's Home page |
+| New exports | Real Excel files, as D21 |
+| ADR | What the guest pays for the house, after promo |
+| Staff powers | As built; no Staff at launch |
+| Exporting checkout holds to channels | Off until real feeds are checked, because a hold could return as a false conflict and trigger a wrong refund (D16) |
+| Contact details | Public details come from Text and photos. Property keeps legal details and the internal notification address, relabelled so the two cannot be confused |
+
 ### Working defaults (D27, 2026-11-07)
 
 Used for the autonomous block. Each can change later; YOU or HOST confirm them before launch. Anything Yorgos edits in Admin is only a starting value.
