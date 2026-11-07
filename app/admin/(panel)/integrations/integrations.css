@@ -1,0 +1,59 @@
+/* Channel sync screen. */
+
+.channel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.channel-help summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--brand);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.channel-help[open] .steps {
+  margin-top: 8px;
+}
+
+.channel-link {
+  display: block;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--back);
+  font-size: 0.95rem;
+}
+
+.channel-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.channel-log li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.channel-log li:first-child {
+  border-top: 0;
+}
+
+.channel-log-bad {
+  color: var(--bad-ink);
+  font-weight: 600;
+}
