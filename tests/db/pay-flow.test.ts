@@ -1527,7 +1527,8 @@ describe("reconciliation", () => {
     age(fake.pay(unpaid.session.id, { status: "unpaid" }));
     const other = await start();
     age(fake.pay(other.session.id)).metadata = {};
-    await reconcilePayments(testDeps(fake, roomId));
+    const result = await reconcilePayments(testDeps(fake, roomId));
+    expect(result.recovered).toBe(0);
     expect(await paymentsFor(unpaid.bookingId)).toHaveLength(0);
     expect(await paymentsFor(other.bookingId)).toHaveLength(0);
   });

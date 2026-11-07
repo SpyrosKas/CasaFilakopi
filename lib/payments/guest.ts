@@ -13,7 +13,12 @@ import { sumCents } from "@/lib/domain/money";
 import { alertHost } from "./alerts";
 import { loadBookingMoney, settleBalanceSessions } from "./balance";
 import { queue, rpc, type PaymentDeps } from "./deps";
-import { cancelRoute, planCardRefund, type CancelRoute } from "./policy";
+import {
+  cancelRoute,
+  isRefundDelayed,
+  planCardRefund,
+  type CancelRoute,
+} from "./policy";
 import { refundShares } from "./refunds";
 import { guestTokenSchema } from "./schemas";
 
@@ -163,8 +168,7 @@ export async function cancelForGuest(
       const run = await refundShares(deps, booking.id, shares, {
         reason: "Guest cancelled within the free period",
       });
-      refundDelayed =
-        shortCents > 0 || run.failedCents > 0 || run.unknownCents > 0;
+      refundDelayed = isRefundDelayed(shortCents, run);
     } catch (error) {
       console.error(`guest refund on ${booking.id}: ${String(error)}`);
       refundDelayed = true;

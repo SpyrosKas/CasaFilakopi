@@ -71,6 +71,12 @@ export function cancelRoute(input: {
   return outcome.retainedCents === 0 ? "direct" : "host";
 }
 
+/** Anything short of the whole promised refund going out counts as delayed. */
+export const isRefundDelayed = (
+  shortCents: Cents,
+  run: { failedCents: Cents; unknownCents: Cents },
+) => shortCents > 0 || run.failedCents > 0 || run.unknownCents > 0;
+
 export interface CardPayment {
   id: string;
   method: string;

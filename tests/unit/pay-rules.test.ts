@@ -14,6 +14,7 @@ import { readStripeSettings, turnstileReady } from "@/lib/payments/env";
 import {
   balanceSlot,
   cancelRoute,
+  isRefundDelayed,
   planCardRefund,
   sessionExpiresAt,
 } from "@/lib/payments/policy";
@@ -230,6 +231,17 @@ describe("splitting a card refund", () => {
       [],
     );
     expect(shares).toEqual([]);
+  });
+});
+
+describe("a guest's refund", () => {
+  const run = { failedCents: 0, unknownCents: 0 };
+
+  it("is on time only when all of it went out", () => {
+    expect(isRefundDelayed(0, run)).toBe(false);
+    expect(isRefundDelayed(1, run)).toBe(true);
+    expect(isRefundDelayed(0, { ...run, failedCents: 1 })).toBe(true);
+    expect(isRefundDelayed(0, { ...run, unknownCents: 1 })).toBe(true);
   });
 });
 
