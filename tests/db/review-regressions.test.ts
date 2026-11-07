@@ -738,3 +738,86 @@ describe("admin hardening (ADMIN security review)", () => {
     expect(rows[0].after).not.toBeNull();
   });
 });
+
+describe("details added to imported bookings (D19)", () => {
+  const importEvent = async () => {
+    const calendar = await addCalendar();
+    const { rows } = await db.query(
+      `select public.upsert_external_event($1, $2, '2032-10-01', '2032-10-05') as r`,
+      [calendar, randomUUID()],
+    );
+    return { calendar, eventId: rows[0].r.event_id as string };
+  };
+
+  const save = (
+    id: string,
+    amount: number | null,
+    actor: string | null = null,
+  ) =>
+    db.query(
+      `select public.update_external_event_details($1, ' Maria ', 'm@example.test', '', 'Late', $2, $3)`,
+      [id, amount, actor],
+    );
+
+  it("stores contacts and amount, and audits who changed them without the contacts", async () => {
+    const owner = await createAdmin("owner");
+    const { eventId } = await importEvent();
+    await save(eventId, 42000, owner.id);
+
+    const { rows } = await db.query(
+      `select guest_name, guest_email, guest_phone, amount_cents
+       from public.external_events where id = $1`,
+      [eventId],
+    );
+    expect(rows[0]).toEqual({
+      guest_name: "Maria",
+      guest_email: "m@example.test",
+      guest_phone: null,
+      amount_cents: 42000,
+    });
+
+    const audit = await db.query(
+      `select actor_id, after from public.audit_log
+       where entity = 'external_events' and entity_id = $1`,
+      [eventId],
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(audit.rows[0].actor_id).toBe(owner.id);
+    expect(JSON.stringify(audit.rows)).not.toContain("example.test");
+  });
+
+  it("a later sync keeps what Yorgos entered", async () => {
+    const { calendar, eventId } = await importEvent();
+    await save(eventId, 42000);
+    const { rows: before } = await db.query(
+      `select uid from public.external_events where id = $1`,
+      [eventId],
+    );
+    await db.query(
+      `select public.upsert_external_event($1, $2, '2032-10-02', '2032-10-06', 'Reserved')`,
+      [calendar, before[0].uid],
+    );
+    const { rows } = await db.query(
+      `select guest_name, amount_cents, start_date from public.external_events where id = $1`,
+      [eventId],
+    );
+    expect(rows[0]).toEqual({
+      guest_name: "Maria",
+      amount_cents: 42000,
+      start_date: "2032-10-02",
+    });
+  });
+
+  it("refuses a negative amount, an unknown event, and direct access", async () => {
+    const { eventId } = await importEvent();
+    await expect(save(eventId, -1)).rejects.toThrow();
+    await expect(save(randomUUID(), 1)).rejects.toThrow("event_not_found");
+
+    const staff = await createAdmin("staff");
+    await expect(
+      admin(staff.id, "aal1", (c) =>
+        c.query(`update public.external_events set amount_cents = 1`),
+      ),
+    ).rejects.toThrow(/permission denied/);
+  });
+});
