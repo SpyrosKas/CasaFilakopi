@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, dev-booking]
+    branches: [master, dev-booking, integration]
   pull_request:
 
 jobs:

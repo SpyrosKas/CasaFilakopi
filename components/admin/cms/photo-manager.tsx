@@ -362,7 +362,12 @@ export function PhotoManager({
               className="cms-photo"
               data-dragging={dragged === item.mediaId || undefined}
               draggable={total > 1}
-              onDragStart={() => setDragged(item.mediaId)}
+              onDragStart={(event) => {
+                // Firefox starts a drag only when it carries some data.
+                event.dataTransfer.setData("text/plain", item.mediaId);
+                event.dataTransfer.effectAllowed = "move";
+                setDragged(item.mediaId);
+              }}
               onDragEnd={() => setDragged(null)}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => onDrop(event, item.mediaId)}

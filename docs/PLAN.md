@@ -353,7 +353,7 @@ Security and tooling:
 - [x] T4.29 Export feed, token, no loops (`CHN-10` to `CHN-12`)
 - [x] T4.30 Conflicts, sync logs, alerts, limitation notice (`CHN-13` to `CHN-16`)
 - [ ] T4.31 Fixture-feed tests, then A9 real-feed test (`QA-04`). Fixture tests done; real feeds outstanding, and they decide whether exporting holds can ever be on
-- [ ] T4.32 Schedule the jobs: `pg_cron` with `pg_net` every 5 minutes calling `/api/cron/*`, secrets in Vault per environment, `CRON_SECRET` in Vercel. Launch blocker: without it nothing syncs (D9 decided)
+- [ ] T4.32 Schedule the jobs: `pg_cron` with `pg_net` every 5 minutes calling `/api/cron/*`, secrets in Vault per environment, `CRON_SECRET` in Vercel. Migration 14 done; site jobs wait for Vault secrets and `CRON_SECRET` per environment (D9 decided)
 
 **Gate 4:** full test-card booking on staging, blocked dates show on the public site, an Airbnb test block arrives in our calendar and ours arrives in Airbnb.
 

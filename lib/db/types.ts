@@ -269,14 +269,14 @@ isOneToOne: false
                   ]
                 },"external_events": {
                   Row: {
-                    "amount_cents": number | null,"calendar_id": string,"created_at": string,"details_updated_at": string | null,"end_date": string,"guest_email": string | null,"guest_name": string | null,"guest_notes": string | null,"guest_phone": string | null,"id": string,"start_date": string,"summary": string | null,"uid": string,"updated_at": string
+                    "amount_cents": number | null,"anonymized_at": string | null,"calendar_id": string,"created_at": string,"details_updated_at": string | null,"end_date": string,"guest_email": string | null,"guest_name": string | null,"guest_notes": string | null,"guest_phone": string | null,"id": string,"start_date": string,"summary": string | null,"uid": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount_cents"?: number | null,"calendar_id": string,"created_at"?: string,"details_updated_at"?: string | null,"end_date": string,"guest_email"?: string | null,"guest_name"?: string | null,"guest_notes"?: string | null,"guest_phone"?: string | null,"id"?: string,"start_date": string,"summary"?: string | null,"uid": string,"updated_at"?: string
+                    "amount_cents"?: number | null,"anonymized_at"?: string | null,"calendar_id": string,"created_at"?: string,"details_updated_at"?: string | null,"end_date": string,"guest_email"?: string | null,"guest_name"?: string | null,"guest_notes"?: string | null,"guest_phone"?: string | null,"id"?: string,"start_date": string,"summary"?: string | null,"uid": string,"updated_at"?: string
                   }
                   Update: {
-                    "amount_cents"?: number | null,"calendar_id"?: string,"created_at"?: string,"details_updated_at"?: string | null,"end_date"?: string,"guest_email"?: string | null,"guest_name"?: string | null,"guest_notes"?: string | null,"guest_phone"?: string | null,"id"?: string,"start_date"?: string,"summary"?: string | null,"uid"?: string,"updated_at"?: string
+                    "amount_cents"?: number | null,"anonymized_at"?: string | null,"calendar_id"?: string,"created_at"?: string,"details_updated_at"?: string | null,"end_date"?: string,"guest_email"?: string | null,"guest_name"?: string | null,"guest_notes"?: string | null,"guest_phone"?: string | null,"id"?: string,"start_date"?: string,"summary"?: string | null,"uid"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -803,7 +803,22 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "assert_room_sellable":
+            "add_admin":
+{ Args: { "p_actor": string,"p_display_name": string,"p_role": Database["public"]['Enums']["admin_role"],"p_user_id": string }; Returns: undefined
+                           },
+"anonymise_external_guest":
+{ Args: { "p_actor"?: string,"p_event_id": string }; Returns: Json
+                           },
+"anonymise_guest":
+{ Args: { "p_actor"?: string,"p_guest_id": string }; Returns: Json
+                           },
+"apply_retention":
+{ Args: { "p_dry_run"?: boolean }; Returns: Json
+                           },
+"assert_owner_actor":
+{ Args: { "p_actor": string }; Returns: undefined
+                           },
+"assert_room_sellable":
 { Args: { "p_room_id": string,"p_stay": unknown }; Returns: undefined
                            },
 "attach_checkout_session":
@@ -815,8 +830,17 @@ isOneToOne: false
 "booking_for_token":
 { Args: { "p_token": string }; Returns: Json
                            },
+"call_cron_route":
+{ Args: { "p_path": string }; Returns: number
+                           },
 "cancel_booking":
 { Args: { "p_actor"?: string,"p_booking_id": string,"p_reason"?: string }; Returns: Json
+                           },
+"change_admin_role":
+{ Args: { "p_actor": string,"p_role": Database["public"]['Enums']["admin_role"],"p_user_id": string }; Returns: undefined
+                           },
+"close_dispute":
+{ Args: { "p_amount_cents": number,"p_dispute_id": string,"p_payment_intent_id": string,"p_won": boolean }; Returns: Json
                            },
 "complete_finished_bookings":
 { Args: Record<PropertyKey, never>; Returns: number
@@ -851,6 +875,12 @@ isOneToOne: false
 "finish_invoice":
 { Args: { "p_actor": string,"p_doc_type": Database["public"]['Enums']["invoice_doc_type"],"p_invoice_id": string }; Returns: Json
                            },
+"house_today":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"identity_needles":
+{ Args: { "p_emails": (string)[],"p_names": (string)[],"p_phones": (string)[] }; Returns: (string)[]
+                           },
 "is_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
@@ -869,6 +899,33 @@ isOneToOne: false
 "mark_invoices_exported":
 { Args: { "p_actor"?: string,"p_invoice_ids": (string)[] }; Returns: number
                            },
+"matching_external_events":
+{ Args: { "p_emails": (string)[],"p_names": (string)[],"p_phones": (string)[] }; Returns: {
+              "amount_cents": number | null,
+"anonymized_at": string | null,
+"calendar_id": string,
+"created_at": string,
+"details_updated_at": string | null,
+"end_date": string,
+"guest_email": string | null,
+"guest_name": string | null,
+"guest_notes": string | null,
+"guest_phone": string | null,
+"id": string,
+"start_date": string,
+"summary": string | null,
+"uid": string,
+"updated_at": string
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "external_events"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
+"mentions":
+{ Args: { "p_needles": (string)[],"p_text": string }; Returns: boolean
+                           },
 "modify_booking":
 { Args: { "p_actor"?: string,"p_booking_id": string,"p_check_in": string,"p_check_out": string,"p_price_breakdown": Json,"p_room_id": string,"p_token_expires_at"?: string,"p_total_cents": number }; Returns: undefined
                            },
@@ -877,6 +934,12 @@ isOneToOne: false
                            },
 "next_invoice_number":
 { Args: { "p_series_id": string }; Returns: number
+                           },
+"only_digits":
+{ Args: { "p_text": string }; Returns: string
+                           },
+"open_dispute":
+{ Args: { "p_payment_intent_id": string }; Returns: Json
                            },
 "public_availability":
 { Args: { "p_from": string,"p_room_id": string,"p_to": string }; Returns: {
@@ -898,6 +961,9 @@ isOneToOne: false
 "release_promo":
 { Args: { "p_code": string }; Returns: undefined
                            },
+"remove_admin":
+{ Args: { "p_actor": string,"p_user_id": string }; Returns: undefined
+                           },
 "remove_block":
 { Args: { "p_actor"?: string,"p_block_id": string }; Returns: undefined
                            },
@@ -907,8 +973,14 @@ isOneToOne: false
 "reserve_refund":
 { Args: { "p_actor"?: string,"p_amount_cents": number,"p_booking_id": string,"p_payment_id": string,"p_reason"?: string }; Returns: string
                            },
+"run_database_job":
+{ Args: { "p_job": string }; Returns: undefined
+                           },
 "save_rules":
 { Args: { "p_actor"?: string,"p_is_non_refundable": boolean,"p_payment": Json,"p_tiers": Json }; Returns: undefined
+                           },
+"scrub_personal_data":
+{ Args: { "p_booking_ids": (string)[],"p_emails": (string)[],"p_event_ids": (string)[],"p_names": (string)[],"p_phones": (string)[] }; Returns: Json
                            },
 "secure_claim":
 { Args: { "p_booking": Omit<Database["public"]['Tables']["bookings"]['Row'], Database["public"]['Tables']["bookings"]['ComputedFields']> }; Returns: boolean

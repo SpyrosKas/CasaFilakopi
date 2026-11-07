@@ -421,6 +421,49 @@ test.describe("Greek screens", () => {
     await page.context().close();
   });
 
+  test("sticky bars sit above the phone navigation at 320 px", async ({
+    browser,
+  }) => {
+    const page = await ownerInGreek(browser, owner, 320);
+    const barTop = () =>
+      page
+        .locator(".tabbar-row")
+        .evaluate((row) => row.getBoundingClientRect().top);
+
+    await page.goto("/admin/invoices");
+    await page.waitForLoadState("networkidle");
+    await page
+      .getByRole("button", { name: "Επιλογή αυτής της σελίδας" })
+      .click();
+    const selection = page.getByTestId("selection-bar");
+    await expect(selection).toBeVisible();
+    // It floats over the list by design, so only its own fit is checked here.
+    expect(
+      await selection.evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true);
+    await page.screenshot({
+      path: test.info().outputPath("320-invoice-bar.png"),
+    });
+    await page.evaluate(() => window.scrollTo(0, 400));
+    const invoiceBar = await selection.boundingBox();
+    expect(invoiceBar!.y + invoiceBar!.height).toBeLessThanOrEqual(
+      await barTop(),
+    );
+
+    // Marked dirty by hand, so no draft is written to shared content.
+    await page.goto("/admin/content/cms-test");
+    await page.waitForLoadState("networkidle");
+    const bar = page.locator(".cms-publish-bar");
+    await bar.evaluate((el) => el.setAttribute("data-dirty", ""));
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(bar).toHaveCSS("position", "sticky");
+    const publishBar = await bar.boundingBox();
+    expect(publishBar!.y + publishBar!.height).toBeLessThanOrEqual(
+      await barTop(),
+    );
+    await page.context().close();
+  });
+
   for (const width of [320, 375]) {
     test(`every screen fits at ${width} px`, async ({ browser }) => {
       test.setTimeout(420_000);

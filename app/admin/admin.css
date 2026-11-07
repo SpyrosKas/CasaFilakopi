@@ -28,6 +28,8 @@
   --radius: 12px;
   --shadow: 0 1px 2px rgba(28, 42, 51, 0.06);
   --tabbar: 64px;
+  /* Sticky bars rest above the phone navigation. */
+  --sticky-bottom: calc(var(--tabbar) + env(safe-area-inset-bottom));
 
   margin: 0;
   background: var(--back);
@@ -315,6 +317,10 @@
     box-shadow: none;
     color: var(--brand);
     font-weight: 650;
+  }
+
+  .admin {
+    --sticky-bottom: 0px;
   }
 
   .menu {
