@@ -1,6 +1,329 @@
 {
+  "Common": {
+    "siteName": "Casa Filakopi",
+    "skipToContent": "Skip to main content",
+    "close": "Close",
+    "previous": "Previous",
+    "next": "Next",
+    "pause": "Pause",
+    "play": "Play",
+    "showPhoto": "Show photo {number}",
+    "openPhoto": "Open photo: {alt}",
+    "photoStatus": "Photo {number} of {total}",
+    "language": "Language",
+    "languageName": "English",
+    "otherLanguageName": "Ελληνικά"
+  },
+  "Nav": {
+    "home": "Home",
+    "reservations": "Reservations",
+    "host": "The Host",
+    "directions": "Directions",
+    "gallery": "Gallery",
+    "contact": "Contact",
+    "faq": "FAQ",
+    "houseRules": "House rules",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "cancellation": "Cancellation",
+    "cookies": "Cookies",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "mainNavigation": "Main navigation",
+    "contactInfo": "Contact Info",
+    "addressLine1": "Epar.Od.Triovasalou-Apollonion,",
+    "addressLine2": "Filakopi, Potamia, 84800, Greece",
+    "whatsappLabel": "Whatsapp: {number}"
+  },
+  "Footer": {
+    "copyright": "Copyright ©{year} miloscasa.com | All rights reserved",
+    "facebook": "Casa Filakopi on Facebook",
+    "whatsapp": "Message the host on WhatsApp",
+    "instagram": "Casa Filakopi on Instagram",
+    "cookieSettings": "Cookie settings",
+    "moreLinks": "More pages"
+  },
+  "Reserve": {
+    "title": "Explore the beauty.<br></br>Reserve Now!",
+    "button": "Reserve Now",
+    "makeReservation": "Make your Reservation"
+  },
+  "Hero": {
+    "scrollDown": "Scroll down",
+    "explore": "Explore The Beauty"
+  },
   "Home": {
-    "title": "Casa Filakopi",
-    "tagline": "New site in progress"
+    "metaTitle": "Casa Filakopi",
+    "welcomeTo": "Welcome to",
+    "sections": {
+      "welcome": {
+        "title": "Welcome!",
+        "body": "Casa Filakopi is a farm house of 3.5 acres of cultivated fields and about 0.5 acre of house facilities. Its history begins back in 1920 and during the last 2 years has been totally renovated, retaining its unique traditional old style features combined with modern amenities.<br></br>The facility has a very playful feel and it consists of two main rooms which can be isolated from each other, a W.C., an exterior kitchen and an exterior bathroom.",
+        "alt": "Courtyard of Casa Filakopi with a white shade sail",
+        "roundAlt": "Detail of the courtyard"
+      },
+      "masterBedroom": {
+        "title": "Master Bedroom",
+        "body": "The first room of the house is the master bedroom featured with a queen bed or two single beds (depending on the needs of guests), air conditioning, and its own bathroom. It can also be turned into a living room with two relaxed sofas.",
+        "alt": "Master bedroom with the bed and a green door",
+        "roundAlt": "Detail of the master bedroom"
+      },
+      "secondBedroom": {
+        "title": "Second Bedroom",
+        "body": "A very cozy and relaxed bedroom featuring an old style queen bed. Air conditioning unit included.",
+        "alt": "Second bedroom with the old style bed",
+        "roundAlt": "Detail of the second bedroom"
+      },
+      "kitchen": {
+        "title": "Kitchen",
+        "body": "A traditional “rustic” oven, which has been restored to a fully equipped kitchen, is right next to the main rooms with independent yard. The kitchen comes along with a wooden exterior table and a built-in six-person seat. An ideal spot for having breakfast, lunch or dinner, fully protected from sunlight.",
+        "alt": "Kitchen with wooden shelves",
+        "roundAlt": "Detail of the kitchen"
+      },
+      "interiorBathroom": {
+        "title": "Interior Bathroom",
+        "body": "A small but beautifully made interior bathroom with a view to the mountain, perfect for all the basic needs of our visitors.",
+        "alt": "Interior bathroom with a stone basin",
+        "roundAlt": "Detail of the interior bathroom"
+      },
+      "exteriorBathroom": {
+        "title": "Exterior Bathroom",
+        "body": "For those who prefer to enjoy their shower, while gazing at the landscape, there is an exterior bathroom right across the kitchen. An excellent combination of simplicity, elegance and comfort.",
+        "alt": "Exterior bathroom with a round mirror and a green window",
+        "roundAlt": "Detail of the exterior bathroom"
+      },
+      "coolOff": {
+        "title": "Cool off spots",
+        "body": "All the spaces of Casa Filakopi are settled around a 70 sq meter yard. The courtyard of the place provides its guests with a beautiful and peaceful view of the fields, the dry river beneath the house and the sea sight on the horizon.",
+        "alt": "Terrace with loungers under a shade sail, looking out to the fields",
+        "roundAlt": "Detail of the terrace"
+      }
+    },
+    "viewMore": "View more",
+    "overallTitle": "Overall",
+    "overallBody": "The facility has a very playful feel and it consists of two main rooms (bedrooms) which can be isolated from each other, an interior bathroom, an exterior kitchen and an exterior bathroom. The house has retained the traditional character of a typical cycladic farm house of Milos. Casa Filakopi stands alone, almost hidden, totally surrounded by silence and sounds of nature. Your privacy will not be interrupted by anyone and anything.",
+    "amenitiesTitle": "Amenities",
+    "amenitiesBody": "Hammock, Exterior Shower, Gas BBQ, Air Conditioner, Wi-Fi, TV, Hair Dryer, Yoga Mattress, Snorkeling Equipment, Beach Towels",
+    "placesTitle": "Places to visit",
+    "placesBody": "Casa Filakopi is about 2.5 km away from Apollonia, one of the most famous traditional villages of Milos (well known for its restaurants, cafés and easy going atmosphere). You will also find yourself very near to all the northern beaches of Milos, such as Papafragas, Mytakas, Pachena, Sarakiniko, Kastanas."
+  },
+  "Reviews": {
+    "heading": "What guests say",
+    "readMore": "Read more",
+    "reviewBy": "Review by {name}",
+    "starsLabel": "{stars} out of 5 stars",
+    "items": {
+      "alex": {
+        "name": "Alex",
+        "teaser": "If you are considering this property look no further. Our most favorite holiday home ever. Such a great space. Such a beautiful and tranquil location. Perfect for our family of 4! The views are stunning..",
+        "text": "If you are considering this property look no further. Our most favorite holiday home ever. Such a great space. Such a beautiful and tranquil location. Perfect for our family of 4! The views are stunning. The property is so unique & modern yet so reminiscent of old Greek houses with the outdoor kitchen & shower. We loved cooking breakfast every morning & sitting at the outdoor dining table & enjoying the views & the breeze. We had so much space outdoors. The children could run & play & we could relax on the hammock & read in perfect seclusion. Was so relaxing! Our only neighbors were the goats. And even they were friendly! If you want privacy, if you want a romantic & beautiful setting, look no further. Only a few minutes drive from Pollonia with a quaint beach & amazing restaurants. 10 minutes from Adamas & 15 minutes from the beautiful hills of Plaka. The location was perfect. A great spot to tour the island & come back to pure tranquility. George was such a wonderful host leaving us a welcome hamper & dropping off the most delicious figs whilst we were at the beach. His list of restaurants did not disappoint either! Every recommendation was delicious. George also gave plenty of tips for sightseeing & beaches & was always on hand if we needed anything at all. We also spotted him with his band in Plaka rocking the night away!!! Don’t hesitate to book this stunning property. We are left with the most wonderful memories!"
+      },
+      "steven": {
+        "name": "Steven",
+        "teaser": "“Meaningful luxury ” is the best to describe what Giorgios’s place has to offer. The ability to take a late-night outdoor shower in complete privacy; read your book or take an afternoon nap in the hammock..",
+        "text": "“Meaningful luxury ” is the best to describe what Giorgios’s place has to offer. The ability to take a late-night outdoor shower in complete privacy; read your book or take an afternoon nap tucked away in the hammock protected from the elements; watch the sunset with your loved one from the natural lounger; have a candle-lit dinner on the terrace, or just lay in bed with the door open letting the breeze through... no money can buy that. This place is for those of us who hate to go into a room and reach for remotes- if you really want A/C or TV, it’s there but we didn’t use either as there is absolutely no need. We weren’t able to find anything comparable online and we did not come across anything comparable while on the island for 10 days. Giorgios is super friendly, knowledgeable, personable, and responsive. His place is stocked up with all essentials and is spotlessly clean. The question is not whether you should book this place but rather whether you’ll be able to find any availability. We hope to be able to come back to this oasis of a place."
+      },
+      "kristina": {
+        "name": "Kristina",
+        "teaser": "This is the most beautiful and perfect house you could ask for in Milos. It is very peaceful with lots of space and amazing views - it’s also very private with no other properties overlooking it..",
+        "text": "This is the most beautiful and perfect house you could ask for in Milos. It is very peaceful with lots of space and amazing views - it’s also very private with no other properties overlooking it. The design of the home is beautiful, all the little details and have been thought of and its much more stylish than many boutique hotels! It’s perfectly located on the north coast but with easy access to the south beaches and Adamas and Plaka. It has all the amenities you could need and we were also kindly welcomed with some breakfast food. We would love to stay here again and would recommend it to anyone. Giorgos is also an amazing and very responsive host who did everything possible to help us have an enjoyable stay. Don’t hesitate to book and thank you Giorgos!"
+      }
+    }
+  },
+  "Host": {
+    "metaTitle": "The Host",
+    "title": "The Host",
+    "photoAlt": "Yorgos Kavourakis, your host",
+    "letter": "Dear friend,<br></br><br></br>As a full time musician and a part time actor I live in Athens,<br></br> but a very strong bond has been developed throughout my whole life with this really unique, full of surprises and beauty,<br></br> <em>island of Milos.</em><br></br> I have kept lots of strong memories from this house since my early childhood. Sharing the experience of staying in a place of such grace with other people, has been a dream come true.<br></br> I wish for all of my visitors to experience the island and Casa Filakopi in the most meaningful and joyful way.<br></br><br></br>I can’t wait to meet you,<br></br>Yorgos Kavourakis"
+  },
+  "Directions": {
+    "metaTitle": "Directions",
+    "welcome": "How to get to",
+    "adamasTitle": "Starting from the center of Adamas",
+    "airportTitle": "Starting from the Airport",
+    "picture": "Pic {number}",
+    "adamas": {
+      "1": {
+        "text": "At the main crossroad (Grigoris Cafe) go right.",
+        "icon": "Turn Right",
+        "alt": "The main crossroad in Adamas with Grigoris Cafe"
+      },
+      "2": {
+        "text": "And follow the road parallel to the sea.",
+        "icon": "Follow the Road",
+        "alt": "The road running parallel to the sea"
+      },
+      "3": {
+        "text": "When you reach the sign to Pollonia (200 m) turn left.",
+        "icon": "Turn left",
+        "alt": "The road sign to Pollonia, 200 m ahead"
+      },
+      "4": {
+        "text": "As you go on you will pass Alevromilos restaurant on your right.",
+        "icon": "Follow the Road",
+        "alt": "The road passing Alevromilos restaurant on the right"
+      },
+      "5": {
+        "text": "And after a while Eko gas station also on your right.",
+        "icon": "Continue Straight",
+        "alt": "Eko gas station on the right of the road"
+      },
+      "6": {
+        "text": "Next to the gas station there is a roundabout (Pic 6). Turn Right to Pollonia.",
+        "icon": "Turn Right to Pollonia.",
+        "alt": "The roundabout next to the gas station, with the sign to Pollonia"
+      },
+      "7": {
+        "text": "You will pass an Elin gas station on the right.",
+        "icon": "Follow the Road",
+        "alt": "Elin gas station on the right of the road"
+      },
+      "8": {
+        "text": "And after a while a small bridge.",
+        "icon": "Continue Straight",
+        "alt": "The road at the small bridge"
+      },
+      "9": {
+        "text": "Finally you have reached Papafragas beach. (Do NOT make any turn). Continue ahead.",
+        "icon": "Continue Straight Ahead",
+        "alt": "The road at Papafragas beach, with its road sign"
+      },
+      "10": {
+        "text": "Go on for about 200 meters until you reach the arrow street sign.",
+        "icon": "Follow the Road",
+        "alt": "The road ahead towards the arrow street sign"
+      },
+      "11": {
+        "text": "When you finally reach the arrow street signs..<br></br> Turn Right on the country road and follow it.",
+        "icon": "Turn Right On The Country Road",
+        "alt": "The arrow street signs at the turn onto the country road"
+      },
+      "12": {
+        "text": "You are almost there. Just Follow the Road.",
+        "icon": "Go straight On",
+        "alt": "The country road leading on towards the house"
+      },
+      "13": {
+        "text": "You will see Casa Filakopi on your left.<br></br> At the end of the road go left and you are there.",
+        "icon": "Go straight down the road.",
+        "alt": "Casa Filakopi seen on the left from the road"
+      },
+      "14": {
+        "text": "Welcome. Please make yourself at home.",
+        "icon": "Welcome",
+        "alt": "The courtyard of Casa Filakopi on arrival"
+      }
+    },
+    "airport": {
+      "1": {
+        "text": "Follow the road to Adamas. After a couple of kilometers you will come across a sign to Pollonia (Pic 1).<br></br> Go right and follow the upper instructions.<br></br> ",
+        "icon": "Turn Right",
+        "alt": "The sign to Pollonia on the road from the airport"
+      }
+    },
+    "airportLink": "Coming from the center of Adamas."
+  },
+  "Gallery": {
+    "metaTitle": "Gallery",
+    "title": "Gallery"
+  },
+  "Contact": {
+    "metaTitle": "Contact",
+    "title": "Contact",
+    "nameLabel": "Name",
+    "name": "Yorgos Kavourakis",
+    "addressLabel": "Address",
+    "emailLabel": "Email",
+    "phoneLabel": "Phone",
+    "whatsappLabel": "WhatsApp",
+    "mapHeading": "Find us",
+    "formSlotTitle": "Contact form",
+    "formSlotBody": "The contact form will appear here. Until then, please use the email address or WhatsApp number above."
+  },
+  "Placeholder": {
+    "title": "Content coming soon",
+    "body": "This page is a placeholder. The final text must be provided by the host before the site goes live."
+  },
+  "Pages": {
+    "faq": {
+      "title": "Frequently asked questions"
+    },
+    "houseRules": {
+      "title": "House rules"
+    },
+    "privacy": {
+      "title": "Privacy Policy"
+    },
+    "terms": {
+      "title": "Terms and Conditions"
+    },
+    "cancellation": {
+      "title": "Cancellation Policy"
+    },
+    "cookies": {
+      "title": "Cookie Policy"
+    }
+  },
+  "Book": {
+    "metaTitle": "Reservations",
+    "title": "Reservations",
+    "soon": "Online booking is coming soon.",
+    "body": "In case you would like to make a reservation, please contact your host via",
+    "emailLabel": "Email: {email}",
+    "whatsappLabel": "Whatsapp: {number}"
+  },
+  "NotFound": {
+    "metaTitle": "Page not found",
+    "title": "Page not found",
+    "body": "The page you are looking for does not exist or has moved.",
+    "home": "Back to the home page"
+  },
+  "Error": {
+    "title": "Something went wrong",
+    "body": "This page could not be shown. Please try again.",
+    "retry": "Try again",
+    "home": "Back to the home page"
+  },
+  "Consent": {
+    "bannerLabel": "Cookie choices",
+    "text": "This site works without non-essential cookies. Google Maps sets its own cookies, so the map only loads if you accept.",
+    "policy": "Cookie Policy",
+    "accept": "Accept",
+    "decline": "Decline"
+  },
+  "Map": {
+    "title": "Map showing the route to Casa Filakopi",
+    "blocked": "The map is hidden because Google Maps sets cookies.",
+    "allow": "Accept cookies and show the map",
+    "openExternally": "Open in Google Maps"
+  },
+  "Photos": {
+    "_DSC1121": "Bedroom with a green door, a stone floor and folded towels on the bed",
+    "_DSC1118": "Bed with striped cushions under a small green window",
+    "_DSC1137": "Smooth stones fixed to a white wall as hooks",
+    "_DSC1138": "Tall mirror reflecting the bedroom beside a green window",
+    "_DSC1146": "Glass jar with green stems in water on a wooden table",
+    "_DSC1150": "Standing mirror, wooden desk and green shutters",
+    "_DSC1148": "Lit wall niche with books, cups and a patterned cushion",
+    "_DSC1149": "Bed beside built-in shelves with cushions and cups",
+    "_DSC1132": "Bedroom with a brass bed, a wall niche and a small green window",
+    "fridge": "Fridge next to a green wooden door",
+    "_DSC1089": "Stone kitchen sink under a green window, with tomatoes on a board",
+    "_DSC1090": "Wooden wall shelves holding cups and glasses",
+    "kitchen": "Kitchen with wall shelves, oven and hob",
+    "_DSC1167": "Wooden table with fruit and juice, looking out to the sea under a shade sail",
+    "stove": "White oven and hob, coffee maker and stacked plates",
+    "gas-grill": "Stainless steel gas barbecue in front of a reed fence",
+    "sinki": "Stone sink and worktop under a green window",
+    "_DSC1103": "Toilet and woven basket by an open green door with steps outside",
+    "_DSC1105": "White basin on a wooden counter under a round mirror",
+    "_DSC1112": "Green glazed door beside a small shelf of cactus plants",
+    "_DSC1157": "White courtyard with a shade sail and an outdoor table",
+    "_DSC1159": "Courtyard seen from an open green door, with the table beyond",
+    "_DSC1164": "Courtyard with green doors, an olive tree and a shade sail",
+    "_DSC1168": "Outdoor dining table and built-in bench in the courtyard",
+    "_DSC1170": "Outdoor shower on a white wall, with a planter and the fields beyond",
+    "_DSC1175": "The white house seen from a dirt road, against a dry hillside",
+    "_DSC1172": "Rope hammock in the courtyard with a small tree behind it"
   }
 }

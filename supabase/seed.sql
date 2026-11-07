@@ -34,8 +34,8 @@ insert into public.room_amenities (room_id, amenity_id)
 select '00000000-0000-4000-8000-000000000001', id from public.amenities;
 
 insert into public.settings (key, value, is_public) values
-  ('booking', '{"holdMinutes": 35, "checkoutSessionMinutes": 30, "sameDayCutoffHour": 12, "horizonMonths": 18}', false),
-  ('payment', '{"mode": "deposit", "deposit": {"kind": "percent", "percent": 30}, "balanceDaysBefore": 14}', false),
+  ('booking', '{"holdMinutes": 35, "checkoutSessionMinutes": 30, "sameDayCutoffHour": 12, "horizonMonths": 18, "weekendDays": [5, 6], "minLeadDays": 0}', false),
+  ('payment', '{"mode": "full", "deposit": null, "balanceDaysBefore": 14}', false),
   ('languages', '{"enabled": ["en", "el"]}', true),
   ('channel_sync', '{"enabled": true, "intervalMinutes": 15}', false);
 

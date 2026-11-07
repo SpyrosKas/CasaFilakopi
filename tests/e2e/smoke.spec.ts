@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { skipCookieBanner } from "./helpers";
 
 test("root redirects to a locale", async ({ page }) => {
   await page.goto("/");
@@ -6,9 +7,12 @@ test("root redirects to a locale", async ({ page }) => {
 });
 
 test("Greek home page renders in Greek", async ({ page }) => {
+  await skipCookieBanner(page);
   await page.goto("/el");
   await expect(page.locator("html")).toHaveAttribute("lang", "el");
-  await expect(page.getByText("Η νέα ιστοσελίδα ετοιμάζεται")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Καλώς ήρθατε!" }),
+  ).toBeVisible();
 });
 
 test("admin is outside locale routing", async ({ page }) => {

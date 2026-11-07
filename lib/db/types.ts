@@ -429,14 +429,14 @@ isOneToOne: false
                   ]
                 },"invoices": {
                   Row: {
-                    "booking_id": string | null,"created_at": string,"credits_invoice_id": string | null,"customer": NonNullable<Json>,"doc_type": Database["public"]['Enums']["invoice_doc_type"],"exported_at": string | null,"fee_cents": number,"id": string,"is_provisional": boolean,"issued_at": string | null,"issued_by": string | null,"issuer": NonNullable<Json>,"mydata": Json | null,"net_cents": number,"number": number | null,"payment_id": string | null,"payment_method": Database["public"]['Enums']["payment_method"] | null,"pdf_path": string | null,"reason": string | null,"series_id": string | null,"status": Database["public"]['Enums']["invoice_status"],"total_cents": number,"vat_cents": number
+                    "booking_id": string | null,"created_at": string,"credits_invoice_id": string | null,"customer": NonNullable<Json>,"doc_type": Database["public"]['Enums']["invoice_doc_type"],"document_number": string | null,"exported_at": string | null,"fee_cents": number,"id": string,"is_provisional": boolean,"issued_at": string | null,"issued_by": string | null,"issuer": NonNullable<Json>,"mydata": Json | null,"net_cents": number,"number": number | null,"payment_id": string | null,"payment_method": Database["public"]['Enums']["payment_method"] | null,"pdf_path": string | null,"reason": string | null,"series_id": string | null,"status": Database["public"]['Enums']["invoice_status"],"total_cents": number,"vat_cents": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "booking_id"?: string | null,"created_at"?: string,"credits_invoice_id"?: string | null,"customer"?: NonNullable<Json>,"doc_type": Database["public"]['Enums']["invoice_doc_type"],"exported_at"?: string | null,"fee_cents"?: number,"id"?: string,"is_provisional"?: boolean,"issued_at"?: string | null,"issued_by"?: string | null,"issuer"?: NonNullable<Json>,"mydata"?: Json | null,"net_cents"?: number,"number"?: number | null,"payment_id"?: string | null,"payment_method"?: Database["public"]['Enums']["payment_method"] | null,"pdf_path"?: string | null,"reason"?: string | null,"series_id"?: string | null,"status"?: Database["public"]['Enums']["invoice_status"],"total_cents"?: number,"vat_cents"?: number
+                    "booking_id"?: string | null,"created_at"?: string,"credits_invoice_id"?: string | null,"customer"?: NonNullable<Json>,"doc_type": Database["public"]['Enums']["invoice_doc_type"],"document_number"?: string | null,"exported_at"?: string | null,"fee_cents"?: number,"id"?: string,"is_provisional"?: boolean,"issued_at"?: string | null,"issued_by"?: string | null,"issuer"?: NonNullable<Json>,"mydata"?: Json | null,"net_cents"?: number,"number"?: number | null,"payment_id"?: string | null,"payment_method"?: Database["public"]['Enums']["payment_method"] | null,"pdf_path"?: string | null,"reason"?: string | null,"series_id"?: string | null,"status"?: Database["public"]['Enums']["invoice_status"],"total_cents"?: number,"vat_cents"?: number
                   }
                   Update: {
-                    "booking_id"?: string | null,"created_at"?: string,"credits_invoice_id"?: string | null,"customer"?: NonNullable<Json>,"doc_type"?: Database["public"]['Enums']["invoice_doc_type"],"exported_at"?: string | null,"fee_cents"?: number,"id"?: string,"is_provisional"?: boolean,"issued_at"?: string | null,"issued_by"?: string | null,"issuer"?: NonNullable<Json>,"mydata"?: Json | null,"net_cents"?: number,"number"?: number | null,"payment_id"?: string | null,"payment_method"?: Database["public"]['Enums']["payment_method"] | null,"pdf_path"?: string | null,"reason"?: string | null,"series_id"?: string | null,"status"?: Database["public"]['Enums']["invoice_status"],"total_cents"?: number,"vat_cents"?: number
+                    "booking_id"?: string | null,"created_at"?: string,"credits_invoice_id"?: string | null,"customer"?: NonNullable<Json>,"doc_type"?: Database["public"]['Enums']["invoice_doc_type"],"document_number"?: string | null,"exported_at"?: string | null,"fee_cents"?: number,"id"?: string,"is_provisional"?: boolean,"issued_at"?: string | null,"issued_by"?: string | null,"issuer"?: NonNullable<Json>,"mydata"?: Json | null,"net_cents"?: number,"number"?: number | null,"payment_id"?: string | null,"payment_method"?: Database["public"]['Enums']["payment_method"] | null,"pdf_path"?: string | null,"reason"?: string | null,"series_id"?: string | null,"status"?: Database["public"]['Enums']["invoice_status"],"total_cents"?: number,"vat_cents"?: number
                   }
                   Relationships: [
                     {
@@ -810,7 +810,7 @@ isOneToOne: false
 { Args: { "p_booking_id": string,"p_session_id": string }; Returns: undefined
                            },
 "attach_invoice_pdf":
-{ Args: { "p_invoice_id": string,"p_path": string }; Returns: undefined
+{ Args: { "p_actor"?: string,"p_invoice_id": string,"p_path": string }; Returns: undefined
                            },
 "booking_for_token":
 { Args: { "p_token": string }; Returns: Json
@@ -858,7 +858,7 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "issue_credit_note":
-{ Args: { "p_actor"?: string,"p_invoice_id": string,"p_lines": Json,"p_reason": string }; Returns: Json
+{ Args: { "p_actor"?: string,"p_expected_credited_cents": number,"p_invoice_id": string,"p_lines": Json,"p_reason": string }; Returns: Json
                            },
 "issue_invoice":
 { Args: { "p_actor"?: string,"p_booking_id": string,"p_customer": Json,"p_doc_type": Database["public"]['Enums']["invoice_doc_type"],"p_lines": Json,"p_payment_id"?: string,"p_payment_method"?: Database["public"]['Enums']["payment_method"] }; Returns: Json

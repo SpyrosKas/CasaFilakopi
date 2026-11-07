@@ -21,11 +21,10 @@ jobs:
       - run: pnpm format:check
       - run: pnpm test
       - run: pnpm build
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:e2e
 
-  database:
+  integration:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -43,3 +42,21 @@ jobs:
         run: |
           pnpm db:types
           git diff --exit-code lib/db/types.ts
+      - name: Write local environment
+        run: |
+          supabase status -o env > .supabase-env
+          {
+            echo "NEXT_PUBLIC_SITE_URL=http://localhost:3000"
+            grep '^API_URL=' .supabase-env | sed 's/^API_URL=/NEXT_PUBLIC_SUPABASE_URL=/' | tr -d '"'
+            grep '^PUBLISHABLE_KEY=' .supabase-env | sed 's/^PUBLISHABLE_KEY=/NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=/' | tr -d '"'
+            grep '^SECRET_KEY=' .supabase-env | sed 's/^SECRET_KEY=/SUPABASE_SECRET_KEY=/' | tr -d '"'
+          } > .env.local
+          rm .supabase-env
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 3

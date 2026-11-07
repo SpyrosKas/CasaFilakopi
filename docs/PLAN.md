@@ -208,19 +208,19 @@ Security and tooling:
 ### Wave 1 (Phase 3): parallel
 
 **Track WEB** (owns `app/[locale]`, `components/site`, `styles`)
-- [ ] T3.1 Extract tokens and import legacy CSS as global (`MIG-02`, `MIG-04`)
-- [ ] T3.1a Mobile-first layout for house sections: round photo no longer overlaps text at any width (fixes F11)
-- [ ] T3.1b Find and remove the cause of horizontal overflow on phones; check hero title legibility
-- [ ] T3.1c Automated Playwright check at 320, 375, 414, 768 px: no text/image overlap, no horizontal scroll, on every public page, in CI
-- [ ] T3.2 Header, footer, fullscreen menu, cookie-safe map embed (`WEB-10`)
-- [ ] T3.3 Home sections, carousels and modals in React (`MIG-03`)
-- [ ] T3.4 Host page; Directions page with accordions
-- [ ] T3.5 Scroll animations without jQuery
-- [ ] T3.6 New pages in same style: Gallery, Contact, FAQ, House rules, legal, 404 (`MIG-08`, `WEB-02`, `WEB-03`, `WEB-16`)
-- [ ] T3.7 Replace the "book via OTA" modal with the booking entry point
-- [ ] T3.8 301s from `index.html`, `host.html`, `directions.html` (`MIG-06`)
-- [ ] T3.9 Cookie consent, logged (`WEB-12`, `CMP-04`)
-- [ ] T3.10 Visual diff against baselines, reviewed by YOU (`MIG-05`). Desktop should match; mobile differs on purpose (F11)
+- [x] T3.1 Extract tokens and import legacy CSS as global (`MIG-02`, `MIG-04`)
+- [x] T3.1a Mobile-first layout for house sections: round photo no longer overlaps text at any width (fixes F11)
+- [x] T3.1b Find and remove the cause of horizontal overflow on phones; check hero title legibility
+- [x] T3.1c Automated Playwright check at 320, 375, 414, 768 px: no text/image overlap, no horizontal scroll, on every public page, in CI
+- [x] T3.2 Header, footer, fullscreen menu, cookie-safe map embed (`WEB-10`)
+- [x] T3.3 Home sections, carousels and modals in React (`MIG-03`)
+- [x] T3.4 Host page; Directions page with accordions
+- [x] T3.5 Scroll animations without jQuery
+- [x] T3.6 New pages in same style: Gallery, Contact, FAQ, House rules, legal, 404 (`MIG-08`, `WEB-02`, `WEB-03`, `WEB-16`)
+- [x] T3.7 Replace the "book via OTA" modal with the booking entry point
+- [x] T3.8 301s from `index.html`, `host.html`, `directions.html` (`MIG-06`)
+- [x] T3.9 Cookie consent, logged (`WEB-12`, `CMP-04`)
+- [ ] T3.10 Visual diff against baselines, reviewed by YOU (`MIG-05`). Desktop should match; mobile differs on purpose (F11). Screenshots ready; waits for YOU
 
 **Track ENGINE** (owns `lib/domain`)
 - [x] T3.11 Availability calculation (`AVL-01`, `AVL-04`, `AVL-05`)
@@ -304,6 +304,7 @@ Security and tooling:
 - [ ] T5.5 myDATA adapter, retries (`INV-08`, `INV-09`, `JOB-06`)
 - [ ] T5.6 OTA booking invoices (`INV-10`)
 - [ ] T5.7 List, export, settings (`INV-11`, `INV-12`, `ADM-22`, `ADM-26`)
+- [ ] T5.7a Download one document, or select several or all matching a filter, as a PDF or a ZIP plus CSV. Marking as sent stays a separate step
 
 **Track OPS**
 - [ ] T5.8 Editable email templates, remaining emails (`EML-02`, `EML-03`, `EML-06`, `EML-09`, `ADM-27`)

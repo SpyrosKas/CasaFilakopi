@@ -427,6 +427,9 @@ describe("owner", () => {
 
 describe("rules snapshot (D6)", () => {
   it("editing settings leaves an existing booking's rules unchanged", async () => {
+    const original = await db.query(
+      `select value from public.settings where key = 'payment'`,
+    );
     const before = await db.query(
       `select rules_snapshot from public.bookings where id = $1`,
       [bookingId],
@@ -440,7 +443,8 @@ describe("rules snapshot (D6)", () => {
     );
     expect(after.rows[0]).toEqual(before.rows[0]);
     await db.query(
-      `update public.settings set value = '{"mode": "deposit", "deposit": {"kind": "percent", "percent": 30}, "balanceDaysBefore": 14}' where key = 'payment'`,
+      `update public.settings set value = $1 where key = 'payment'`,
+      [JSON.stringify(original.rows[0].value)],
     );
   });
 });
