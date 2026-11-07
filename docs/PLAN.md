@@ -152,8 +152,8 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 | A1 | Set up `host@miloscasa.com` | Phase 2 end | YOU | [x] |
 | A2 | Supabase staging project | Phase 2 end | YOU | [x] |
 | A3 | Vercel project | Phase 2 end | YOU | [x] |
-| A4 | Domain and DNS access | Wave 1 | YOU/HOST | [ ] |
-| A5 | Resend | Wave 1 | YOU | [ ] |
+| A4 | Domain and DNS access | Wave 1 | YOU/HOST | [x] |
+| A5 | Resend | Wave 1 | YOU | [x] |
 | A6 | Stripe test mode | Wave 2 | YOU | [x] |
 | A7 | Cloudflare Turnstile | Wave 2 | YOU | [ ] |
 | A8 | Sentry | Phase 6 | YOU | [ ] |
@@ -307,7 +307,7 @@ Security and tooling:
 - [x] T3.20c Admin works on a phone, since Yorgos will likely manage it from one
 
 **Track MAIL** (owns `emails`, `lib/email`)
-- [ ] T3.21 A4, A5: domain verified with SPF, DKIM, DMARC (`EML-01`, `PLT-08`)
+- [x] T3.21 A4, A5: domain verified with SPF, DKIM, DMARC (`EML-01`, `PLT-08`) (2026-11-08: DKIM, send/rsend CNAMEs and `_dmarc p=none` resolve; the 4 queued staging emails went out from bookings@mail.miloscasa.com and arrived. Resend delivery webhook `RESEND_WEBHOOK_SECRET` not set yet)
 - [x] T3.22 Queue, retries, logging, Resend webhooks (`EML-07`, `EML-08`, `JOB-05`)
 - [x] T3.23 Branded base layout, per-language (`EML-04`, `EML-05`)
 - [x] T3.24 Contact flow: save, notify, reply-to, auto-reply, Turnstile, rate limit (`CNT-01` to `CNT-04`, `CNT-07`)
