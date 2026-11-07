@@ -237,9 +237,35 @@
     "emailLabel": "Email",
     "phoneLabel": "Phone",
     "whatsappLabel": "WhatsApp",
-    "mapHeading": "Find us",
-    "formSlotTitle": "Contact form",
-    "formSlotBody": "The contact form will appear here. Until then, please use the email address or WhatsApp number above."
+    "mapHeading": "Find us"
+  },
+  "ContactForm": {
+    "title": "Send us a message",
+    "name": "Your name",
+    "email": "Your email",
+    "phone": "Phone (optional)",
+    "dates": "Dates you have in mind (optional)",
+    "message": "Your message",
+    "consent": "I agree that my details are used to answer this message, as described in the <link>privacy policy</link>.",
+    "send": "Send message",
+    "sending": "Sending...",
+    "sentTitle": "Thank you",
+    "sentBody": "We received your message and will answer soon. We have also sent you a short confirmation by email.",
+    "checkNotice": "To stop spam, this form uses a security check from Cloudflare, which sends your address and browser details to Cloudflare. You can allow it for this form, or use the email or phone number above.",
+    "checkAllow": "Allow the security check",
+    "errors": {
+      "form": "Please check the marked fields.",
+      "name": "Please type your name, without links.",
+      "email": "Please type a valid email address.",
+      "phone": "Please use only numbers and + ( ) - in the phone number.",
+      "dates": "Please keep this to one short line.",
+      "message": "Please type your message.",
+      "consent": "Please tick this box so we can answer you.",
+      "rateLimited": "You have sent several messages already. Please try again later, or use the email or phone number above.",
+      "verification": "The security check did not pass. Please try again.",
+      "checkBlocked": "The security check could not load. Please use the email or phone number above.",
+      "unavailable": "Your message could not be sent. Please try again, or use the email or phone number above."
+    }
   },
   "Placeholder": {
     "title": "Content coming soon",

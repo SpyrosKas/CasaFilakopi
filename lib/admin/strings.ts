@@ -1,6 +1,7 @@
 // Every word the admin panel shows, in one place, so Greek can be added by
 // turning this object into one per language.
 
+import { emailStrings } from "@/lib/admin/email-strings";
 import { invoiceStrings } from "@/lib/admin/invoice-strings";
 
 const dayWord = (days: number) => (days === 1 ? "1 day" : `${days} days`);
@@ -26,6 +27,7 @@ export const t = {
     booking: "Booking settings",
     rules: "Payment and cancellation",
     invoices: "Invoices and receipts",
+    email: "Emails",
     account: "My account",
     signOut: "Sign out",
   },
@@ -253,6 +255,7 @@ export const t = {
     },
   },
   invoices: invoiceStrings,
+  email: emailStrings,
   validation: {
     required: "Please fill this in.",
     tooLong: "This is too long.",
