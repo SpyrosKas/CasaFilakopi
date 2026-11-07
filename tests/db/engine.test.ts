@@ -111,7 +111,24 @@ const usesOf = async (code: string) =>
     )
   ).rows[0].used_count as number;
 
+// Full payment is the seeded default (D6). These tests exercise the deposit
+// path, so they switch it on for this file and restore it afterwards.
+const DEPOSIT_RULES = {
+  mode: "deposit",
+  deposit: { kind: "percent", percent: 30 },
+  balanceDaysBefore: 14,
+};
+let seededPayment: unknown;
+
 beforeAll(async () => {
+  const seeded = await db.query(
+    `select value from public.settings where key = 'payment'`,
+  );
+  seededPayment = seeded.rows[0].value;
+  await db.query(
+    `update public.settings set value = $1 where key = 'payment'`,
+    [JSON.stringify(DEPOSIT_RULES)],
+  );
   roomId = randomUUID();
   plainRoomId = randomUUID();
   promoCode = `ENGINE-${randomUUID()}`;
@@ -143,6 +160,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await db.query(
+    `update public.settings set value = $1 where key = 'payment'`,
+    [JSON.stringify(seededPayment)],
+  );
   await db.query(`delete from public.promo_codes where code = $1`, [promoCode]);
   // Claims and holds cascade. The hold also made a guest, which must go too.
   const { rows } = await db.query(
@@ -193,6 +214,10 @@ function heldStay() {
 }
 
 describe("settings", () => {
+  it("defaults to full payment", () => {
+    expect(parsePaymentRules(seededPayment).mode).toBe("full");
+  });
+
   it("parses the seeded rows", async () => {
     const { data } = await admin
       .from("settings")

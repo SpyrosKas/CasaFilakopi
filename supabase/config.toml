@@ -429,3 +429,14 @@ content_path = "./supabase/templates/recovery.html"
 [auth.email.template.invite]
 subject = "Your Casa Filakopi admin invitation"
 content_path = "./supabase/templates/invite.html"
+
+# Staging overrides, applied by `supabase config push`.
+[remotes.staging]
+project_id = "iecsohriashrdbqcelkl"
+
+[remotes.staging.auth]
+site_url = "https://casa-filakopi.vercel.app"
+additional_redirect_urls = ["https://casa-filakopi.vercel.app/admin/auth/confirm"]
+
+[remotes.staging.auth.rate_limit]
+sign_in_sign_ups = 15
