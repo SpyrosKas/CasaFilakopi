@@ -1044,14 +1044,14 @@ describe("the export feed", () => {
     await confirm(bookingId);
     await db.query(
       `update public.bookings
-       set guest_phone = '+30 699 111 2222', special_requests = 'Secret note'
+       set guest_phone = '+30 699 PHONEMARK', special_requests = 'Secret note'
        where id = $1`,
       [bookingId],
     );
 
     const feed = await newFeed(roomId);
     const { rows } = await db.query(
-      `select public.upsert_external_event($1, 'stay', $2, $3, 'Maria P. +30 2222') as r`,
+      `select public.upsert_external_event($1, 'stay', $2, $3, 'Maria P. +30 PHONEMARK') as r`,
       [feed.id, JULY.start, JULY.end],
     );
     await db.query(
@@ -1065,7 +1065,7 @@ describe("the export feed", () => {
       name,
       email,
       "private.example",
-      "2222",
+      "PHONEMARK",
       "Secret note",
       "Maria",
       "A note",

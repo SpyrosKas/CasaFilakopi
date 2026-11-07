@@ -7,6 +7,7 @@ Files: `faq.json`, `house-rules.json`, `privacy.json`, `terms.json`, `cancellati
 ## A. Yorgos answers (26)
 
 The house
+
 1. Check-in time (FAQ, house rules, terms).
 2. Check-out time (FAQ, house rules, terms).
 3. How guests receive the keys or get in (FAQ).
@@ -18,27 +19,11 @@ The house
 9. Children: welcome or not, rules, cot or other equipment (FAQ).
 10. Pets: allowed or not, conditions (FAQ, house rules).
 
-House rules
-11. Visitors who are not staying: allowed or not.
-12. Quiet hours, if any.
-13. Smoking: allowed or not, and where.
-14. Parties and events: allowed or not.
-15. Gas BBQ and fire safety rules, including summer fire restrictions.
-16. Any request about water, air conditioning or energy use.
-17. Please read the whole house rules and add or remove rules. Only a few general lines about looking after the house and telling you about damage were written from what the site implies; delete them if you do not want them.
+House rules 11. Visitors who are not staying: allowed or not. 12. Quiet hours, if any. 13. Smoking: allowed or not, and where. 14. Parties and events: allowed or not. 15. Gas BBQ and fire safety rules, including summer fire restrictions. 16. Any request about water, air conditioning or energy use. 17. Please read the whole house rules and add or remove rules. Only a few general lines about looking after the house and telling you about damage were written from what the site implies; delete them if you do not want them.
 
-Booking and money
-18. Damage and security deposit: do you take one, and how is damage handled (terms).
-19. Force majeure, or the house cannot be used: what do you offer the guest (terms).
-20. If you have to cancel a booking: refund, other dates, something else (cancellation).
-21. Early departure and no-show: what happens (cancellation).
-22. How long a refund takes to reach the guest (cancellation).
-23. What the price includes and what is charged separately, for example cleaning, taxes, extra guests (terms).
+Booking and money 18. Damage and security deposit: do you take one, and how is damage handled (terms). 19. Force majeure, or the house cannot be used: what do you offer the guest (terms). 20. If you have to cancel a booking: refund, other dates, something else (cancellation). 21. Early departure and no-show: what happens (cancellation). 22. How long a refund takes to reach the guest (cancellation). 23. What the price includes and what is charged separately, for example cleaning, taxes, extra guests (terms).
 
-The business
-24. Legal name, address and tax number of the person or company that rents the house. Appears as `[LEGAL NAME, ADDRESS, TAX NUMBER]` in privacy, terms and cookies.
-25. The AMA number (short-term rental registry). Appears as `[AMA NUMBER]` in privacy and terms. Nothing has been stated about it.
-26. Whether a data protection officer is appointed, and whether you will ever send marketing emails (privacy). The plan names no marketing at launch, so this is your decision.
+The business 24. Legal name, address and tax number of the person or company that rents the house. Appears as `[LEGAL NAME, ADDRESS, TAX NUMBER]` in privacy, terms and cookies. 25. The AMA number (short-term rental registry). Appears as `[AMA NUMBER]` in privacy and terms. Nothing has been stated about it. 26. Whether a data protection officer is appointed, and whether you will ever send marketing emails (privacy). The plan names no marketing at launch, so this is your decision.
 
 ## B. Accountant answers (4)
 
