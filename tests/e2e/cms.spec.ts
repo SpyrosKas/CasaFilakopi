@@ -199,6 +199,70 @@ test.describe("photos", () => {
     await expect
       .poll(countUploads, { timeout: 15_000 })
       .toEqual({ rows: before.rows + 1, files: before.files + 1 });
+
+    // The one that lost is told why, in plain words, and the winner is not.
+    const refused = [page, second].map((tab) =>
+      tab.locator(".notice-bad").filter({ hasText: "added first" }),
+    );
+    await expect
+      .poll(async () => (await refused[0].count()) + (await refused[1].count()))
+      .toBe(1);
+    await second.context().close();
+    await cleanTestContent();
+    await seedTestPage(baseBlocks(mark));
+  });
+
+  test("the database lets only one photo into a one-photo place", async () => {
+    // What the race comes down to, with no timing left to luck: ten inserts
+    // on their own connections, all claiming the place at once.
+    const { rows: photos } = await db.query<{ id: string }>(
+      `select id from public.media where path like 'site/%' limit 10`,
+    );
+    const attempts = await Promise.allSettled(
+      photos.map(({ id }) =>
+        db.query(
+          `insert into public.media_placements
+             (collection, media_id, sort_order, is_cover)
+           values ($1, $2, 0, true)`,
+          [SHARE_COLLECTION, id],
+        ),
+      ),
+    );
+    const lost = attempts.filter(
+      (attempt): attempt is PromiseRejectedResult =>
+        attempt.status === "rejected",
+    );
+    expect(lost).toHaveLength(photos.length - 1);
+    expect(lost.every((attempt) => attempt.reason.code === "23505")).toBe(true);
+    expect(await mediaInSection(SHARE_COLLECTION)).toHaveLength(1);
+    await cleanTestContent();
+    await seedTestPage(baseBlocks(mark));
+  });
+
+  test("Add cannot quietly replace a place filled in another tab", async ({
+    browser,
+  }) => {
+    const path = `/admin/photos/${SHARE_COLLECTION}`;
+    await page.goto(path);
+    const second = await secondSession(browser, path);
+
+    await page
+      .getByLabel("Add a photo")
+      .setInputFiles(
+        filePayload("first.jpg", await photoWithGps({ r: 9, g: 99, b: 9 })),
+      );
+    await expectNotice("Photo added");
+    const [winner] = await mediaInSection(SHARE_COLLECTION);
+
+    await second
+      .getByLabel("Add a photo")
+      .setInputFiles(
+        filePayload("late.jpg", await photoWithGps({ r: 99, g: 9, b: 9 })),
+      );
+    await expect(second.locator(".notice-bad")).toContainText("added first");
+    expect(
+      (await mediaInSection(SHARE_COLLECTION)).map((row) => row.id),
+    ).toEqual([winner.id]);
     await second.context().close();
     await cleanTestContent();
     await seedTestPage(baseBlocks(mark));
@@ -361,7 +425,9 @@ test.describe("photos", () => {
   test("drag and drop reorders on a desktop", async ({ browser }) => {
     const desktop = await browser.newContext({
       storageState: await page.context().storageState(),
-      viewport: { width: 1280, height: 900 },
+      // Tall enough to show both cards: the test tool scrolls to the target
+      // before moving the mouse, which stops a drag from starting at all.
+      viewport: { width: 1280, height: 2400 },
       extraHTTPHeaders: { "x-forwarded-for": testAddress() },
     });
     const desktopPage = await desktop.newPage();

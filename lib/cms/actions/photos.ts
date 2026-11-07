@@ -34,6 +34,7 @@ import { createAdminClient } from "@/lib/db/admin";
 
 const TEMP_BUCKET = "uploads-private";
 const CACHE_SECONDS = "31536000";
+const UNIQUE_VIOLATION = "23505";
 
 export type PhotoResult =
   | { ok: true; items: PhotoItem[]; message?: string }
@@ -201,16 +202,21 @@ export async function finishUpload(input: unknown): Promise<PhotoResult> {
       }
 
       const order = await currentOrder(admin, collection);
-      const replaced =
-        replaceMediaId ?? (def.single && order.length ? order[0] : undefined);
+      const replaced = replaceMediaId;
       if (replaced && !order.includes(replaced)) {
         return failed(t.common.pageChanged);
+      }
+      // Only Replace may change a filled one-photo place. An Add from a page
+      // opened before it was filled must not quietly throw that photo away.
+      if (!replaced && def.single && order.length) {
+        return failed(t.photos.takenFirst);
       }
 
       const outcome = await runUpload(
         uploadSteps(admin, collection, photo, replaced),
       );
       if (outcome.status === "stale") return failed(t.common.pageChanged);
+      if (outcome.status === "taken") return failed(t.photos.takenFirst);
       if (outcome.status === "failed") return failed();
 
       refreshPublicPages(pagesOf([collection]));
@@ -277,11 +283,28 @@ function uploadSteps(
           .eq("media_id", replaced)
           .select("id");
         if (error) throw error;
-        return data.length === 1;
+        return data.length === 1 ? "placed" : "stale";
       }
 
-      // The cover flag waits for tidyUp: two uploads into an empty section
-      // would otherwise both claim it, and one would fail on the unique index.
+      // A one-photo place claims the cover flag in the insert itself. The
+      // media_placements_one_cover index then lets exactly one through, however
+      // the two uploads interleave. Reading the section back cannot decide
+      // this: created_at is when a transaction began, not when it committed,
+      // so the second to commit can look first, and each sees itself winning.
+      if (def.single) {
+        const { error } = await admin.supabase.from("media_placements").insert({
+          collection,
+          media_id: mediaId,
+          sort_order: 0,
+          is_cover: true,
+        });
+        if (error?.code === UNIQUE_VIOLATION) return "taken";
+        if (error) throw error;
+        return "placed";
+      }
+
+      // A section of many waits for tidyUp to set its cover: two uploads into
+      // an empty one are both welcome, and must not fight over the flag.
       const { count, error: countError } = await admin.supabase
         .from("media_placements")
         .select("id", { count: "exact", head: true })
@@ -293,18 +316,7 @@ function uploadSteps(
         sort_order: count ?? 0,
       });
       if (error) throw error;
-      if (!def.single) return true;
-
-      // Two photos raced for a place that holds one: the first one stays.
-      const order = await currentOrder(admin, collection);
-      if (order[0] === mediaId) return true;
-      const { error: undoError } = await admin.supabase
-        .from("media_placements")
-        .delete()
-        .eq("collection", collection)
-        .eq("media_id", mediaId);
-      if (undoError) throw undoError;
-      return false;
+      return "placed";
     },
     async deleteRow(mediaId) {
       const { error } = await admin.supabase
@@ -318,11 +330,15 @@ function uploadSteps(
       if (error) throw error;
     },
     async tidyUp() {
-      await writeOrder(
-        admin,
-        collection,
-        await currentOrder(admin, collection),
-      );
+      // Never in a one-photo place: writeOrder clears the cover flag for a
+      // moment, and that flag is what keeps a second photo out.
+      if (!def.single) {
+        await writeOrder(
+          admin,
+          collection,
+          await currentOrder(admin, collection),
+        );
+      }
       if (replaced) await dropIfUnused(admin, replaced);
     },
   };
@@ -410,14 +426,22 @@ export async function addExistingPhoto(input: unknown): Promise<PhotoResult> {
   try {
     const order = await currentOrder(admin, collection);
     if (order.includes(mediaId)) return failed(t.photos.alreadyThere);
-    if (def.single && order.length) return failed(t.photos.needsOne);
+    if (def.single && order.length) return failed(t.photos.takenFirst);
     const { error } = await admin.supabase.from("media_placements").insert({
       collection,
       media_id: mediaId,
       sort_order: order.length,
-      is_cover: order.length === 0,
+      is_cover: Boolean(def.single),
     });
+    if (error?.code === UNIQUE_VIOLATION) return failed(t.photos.takenFirst);
     if (error) throw error;
+    if (!def.single) {
+      await writeOrder(
+        admin,
+        collection,
+        await currentOrder(admin, collection),
+      );
+    }
     refreshPublicPages(pagesOf([collection]));
     refreshAdmin();
     return {

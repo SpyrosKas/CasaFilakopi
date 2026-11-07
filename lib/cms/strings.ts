@@ -230,6 +230,8 @@ const en = {
     cannotRead: (name: string) =>
       `${name} could not be read. If it is a HEIC photo on a computer, open it on your phone or save it as JPEG first.`,
     savedReload: "The photo is saved. Please reload this page to see it.",
+    takenFirst:
+      "Another photo was added first. Please reload this page to see it.",
     uploadFailed: (name: string) =>
       `${name} did not upload. Your connection may have dropped. Please try again.`,
     cover: "Cover",

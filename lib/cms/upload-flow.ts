@@ -10,14 +10,16 @@ export type UploadOutcome =
   | { status: "placed"; mediaId: string }
   /** The section changed while uploading. The new photo was taken back out. */
   | { status: "stale" }
+  /** A one-photo place was filled first. The new photo was taken back out. */
+  | { status: "taken" }
   /** It failed before reaching the site, and nothing was left behind. */
   | { status: "failed" };
 
 export interface UploadSteps {
   storeFile(): Promise<string>;
   insertRow(path: string): Promise<string>;
-  /** Adds or swaps the placement. False means the section moved on. */
-  place(mediaId: string): Promise<boolean>;
+  /** Adds or swaps the placement. */
+  place(mediaId: string): Promise<"placed" | "stale" | "taken">;
   deleteRow(mediaId: string): Promise<void>;
   deleteFile(path: string): Promise<void>;
   /** Cover flag and removal of the old photo. Failure here is harmless. */
@@ -44,9 +46,10 @@ export async function runUpload(steps: UploadSteps): Promise<UploadOutcome> {
   try {
     path = await steps.storeFile();
     mediaId = await steps.insertRow(path);
-    if (!(await steps.place(mediaId))) {
+    const placement = await steps.place(mediaId);
+    if (placement !== "placed") {
       await rollBack();
-      return { status: "stale" };
+      return { status: placement };
     }
   } catch {
     await rollBack();

@@ -467,7 +467,7 @@ describe("an upload failing part way", () => {
     const all: UploadSteps = {
       storeFile: async () => "new.webp",
       insertRow: async () => "new-id",
-      place: async () => true,
+      place: async () => "placed",
       deleteRow: async (id) => void log.push(`delete row ${id}`),
       deleteFile: async (path) => void log.push(`delete file ${path}`),
       tidyUp: async () => void log.push("tidy"),
@@ -498,8 +498,14 @@ describe("an upload failing part way", () => {
   });
 
   it("removes row and file when the section moved on", async () => {
-    const { all, log } = steps({ place: async () => false });
+    const { all, log } = steps({ place: async () => "stale" });
     expect(await runUpload(all)).toEqual({ status: "stale" });
+    expect(log).toEqual(["delete row new-id", "delete file new.webp"]);
+  });
+
+  it("removes row and file when another photo took the place first", async () => {
+    const { all, log } = steps({ place: async () => "taken" });
+    expect(await runUpload(all)).toEqual({ status: "taken" });
     expect(log).toEqual(["delete row new-id", "delete file new.webp"]);
   });
 
