@@ -14,26 +14,24 @@ export type HouseSectionKey =
 
 export type HouseSection = {
   key: HouseSectionKey;
-  /** Side the main photo sits on at desktop width. */
-  photoSide: "left" | "right";
   photo: string;
-  round: string;
   slides: string[];
+  /**
+   * Home opens these wide galleries on a sharp photo: the main one is only
+   * 635 px across, too small to lead at that size.
+   */
+  mainPhotoLast?: boolean;
 };
 
 export const houseSections: HouseSection[] = [
   {
     key: "welcome",
-    photoSide: "right",
     photo: photo("_DSC1169.jpg"),
-    round: photo("_DSC1173_rounded.jpg"),
     slides: [],
   },
   {
     key: "masterBedroom",
-    photoSide: "left",
     photo: photo("_DSC1119-min_tinified_Croped.jpg"),
-    round: photo("_DSC1118_rounded.jpg"),
     slides: [
       photo("_DSC1121.jpg"),
       photo("_DSC1118.jpg"),
@@ -45,9 +43,7 @@ export const houseSections: HouseSection[] = [
   },
   {
     key: "secondBedroom",
-    photoSide: "right",
     photo: photo("krevat2.jpg"),
-    round: photo("_DSC1134_rounded.jpg"),
     slides: [
       photo("_DSC1148.jpg"),
       photo("_DSC1149.jpg"),
@@ -56,32 +52,27 @@ export const houseSections: HouseSection[] = [
   },
   {
     key: "kitchen",
-    photoSide: "left",
     photo: photo("_DSC1081.jpg"),
-    round: photo("_DSC1093_rounded.jpg"),
+    mainPhotoLast: true,
     slides: [
-      photo("fridge.jpeg"),
-      photo("_DSC1089.jpg"),
-      photo("_DSC1090.jpg"),
-      photo("kitchen.jpeg"),
       photo("_DSC1167.jpg"),
+      photo("_DSC1089.jpg"),
+      photo("kitchen.jpeg"),
       photo("stove.jpeg"),
-      photo("gas-grill.jpeg"),
       photo("sinki.jpeg"),
+      photo("gas-grill.jpeg"),
+      photo("_DSC1090.jpg"),
+      photo("fridge.jpeg"),
     ],
   },
   {
     key: "interiorBathroom",
-    photoSide: "right",
     photo: photo("_DSC1126.jpg"),
-    round: photo("_DSC1142_rounded.jpg"),
     slides: [],
   },
   {
     key: "exteriorBathroom",
-    photoSide: "left",
     photo: photo("_DSC1095.jpg"),
-    round: photo("_DSC1108_rounded.jpg"),
     slides: [
       photo("_DSC1103.jpg"),
       photo("_DSC1105.jpg"),
@@ -90,17 +81,16 @@ export const houseSections: HouseSection[] = [
   },
   {
     key: "coolOff",
-    photoSide: "right",
     photo: photo("_DSC1163.jpg"),
-    round: photo("_DSC1166_rounded.jpg"),
+    mainPhotoLast: true,
     slides: [
-      photo("_DSC1157.jpg"),
-      photo("_DSC1159.jpg"),
-      photo("_DSC1164.jpg"),
-      photo("_DSC1168.jpg"),
       photo("_DSC1170.jpg"),
-      photo("_DSC1175.jpg"),
       photo("_DSC1172.jpg"),
+      photo("_DSC1159.jpg"),
+      photo("_DSC1168.jpg"),
+      photo("_DSC1157.jpg"),
+      photo("_DSC1164.jpg"),
+      photo("_DSC1175.jpg"),
     ],
   },
 ];
@@ -120,15 +110,13 @@ export const heroImages = {
 
 export const hostPhoto = "/img/thehost02.jpg";
 
+/** The full-width picture of the house in its landscape on Home. */
+export const landscapePhoto = photo("_DSC1175.jpg");
+
 export type ReviewKey = "alex" | "steven" | "kristina";
 
-export const reviews: {
-  key: ReviewKey;
-  stars: number;
-  reveal: "fade-left" | "fade-up" | "fade-right";
-  delay: "400" | "500";
-}[] = [
-  { key: "alex", stars: 5, reveal: "fade-left", delay: "400" },
-  { key: "steven", stars: 5, reveal: "fade-up", delay: "500" },
-  { key: "kristina", stars: 4.5, reveal: "fade-right", delay: "400" },
+export const reviews: { key: ReviewKey; stars: number }[] = [
+  { key: "alex", stars: 5 },
+  { key: "steven", stars: 5 },
+  { key: "kristina", stars: 4.5 },
 ];

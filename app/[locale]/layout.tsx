@@ -1,6 +1,3 @@
-import "@/styles/bootstrap.css";
-import "@/styles/style.css";
-import "@/styles/directions.css";
 import "@/styles/site.css";
 
 import type { Metadata, Viewport } from "next";
@@ -12,6 +9,8 @@ import {
 } from "next-intl/server";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { preload } from "react-dom";
+import { BookBar } from "@/components/site/book-bar";
 import { CookieBanner } from "@/components/site/cookie-banner";
 import { RevealObserver } from "@/components/site/reveal-observer";
 import { SiteFooter } from "@/components/site/site-footer";
@@ -20,6 +19,12 @@ import { routing } from "@/i18n/routing";
 
 // Only the strings the browser needs: the page text stays on the server.
 const clientNamespaces = ["Common", "Nav", "Consent", "Map", "Error"] as const;
+
+// The two files each language shows first; unicode-range fetches the rest.
+const firstFonts = {
+  en: ["noto-serif-display-latin", "commissioner-latin"],
+  el: ["noto-serif-display-greek", "commissioner-greek"],
+} as const;
 
 export const metadata: Metadata = {
   title: { default: "Casa Filakopi", template: "%s | Casa Filakopi" },
@@ -46,6 +51,14 @@ export default async function LocaleLayout({
   if (!hasLocale(routing.locales, locale)) notFound();
   setRequestLocale(locale);
 
+  for (const font of firstFonts[locale]) {
+    preload(`/fonts/${font}-wght-normal.woff2`, {
+      as: "font",
+      type: "font/woff2",
+      crossOrigin: "anonymous",
+    });
+  }
+
   const messages = await getMessages();
   const clientMessages = Object.fromEntries(
     clientNamespaces.map((namespace) => [namespace, messages[namespace]]),
@@ -64,6 +77,7 @@ export default async function LocaleLayout({
             {children}
           </main>
           <SiteFooter />
+          <BookBar />
           <CookieBanner />
           <RevealObserver />
         </NextIntlClientProvider>

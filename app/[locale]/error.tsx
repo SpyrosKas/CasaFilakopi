@@ -20,14 +20,10 @@ export default function ErrorPage({
 
   return (
     <ErrorScreen title={t("title")} body={t("body")}>
-      <button
-        type="button"
-        className="btn btn-primary text-white mr-2 mb-2"
-        onClick={reset}
-      >
+      <button type="button" className="btn btn-primary" onClick={reset}>
         {t("retry")}
       </button>
-      <Link href="/" className="btn btn-outline-primary mb-2">
+      <Link href="/" className="btn btn-outline-primary">
         {t("home")}
       </Link>
     </ErrorScreen>

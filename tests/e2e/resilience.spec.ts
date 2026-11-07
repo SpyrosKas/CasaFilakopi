@@ -39,6 +39,16 @@ test.describe("JavaScript fails to load", () => {
   });
 });
 
+test("the header turns solid when the scripts never run", async ({ page }) => {
+  await page.route("**/_next/static/**/*.js", (route) => route.abort());
+  await page.goto("/en");
+  const header = page.locator(".site-header");
+  await expect(header).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(header).toHaveCSS("background-color", "rgb(251, 250, 246)", {
+    timeout: 4000,
+  });
+});
+
 test.describe("normal load", () => {
   test("reveals wait for scrolling, with no flash from the failsafe", async ({
     page,
