@@ -49,7 +49,7 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | D6 | Payment mode and cancellation rules | **Decided** | Yorgos edits these any time in Admin. Two modes: **Full payment (default)** or **Deposit**, where he sets the percentage and days before arrival the rest is due; 0 days means pay on arrival. Booking on or after the due date pays in full. Refund tiers are a percentage of the booking: charge = total minus refund percent, refund = paid minus charge, floored at 0, and any shortfall shows as still owed. Changes apply to new bookings only; each booking keeps a snapshot |
 | D7 | Languages at launch | Proposed | Greek + English |
 | D8 | Styling (spec open decision 1) | Proposed | Keep existing `bootstrap.css` and `style.css` as global CSS; replace jQuery, Bootstrap JS and AOS behaviour with small React components |
-| D9 | Scheduler (open decision 2) | Proposed | `pg_cron` calling SQL or secured Next.js routes. Vercel Hobby cron is too limited |
+| D9 | Scheduler (open decision 2) | **Decided** | `pg_cron` calling SQL or secured Next.js routes. Vercel Hobby cron is too limited |
 | D10 | Hosting (open decision 3) | **Decided** | Vercel (Pro at launch). Database on managed Supabase: Pro for production (Free has no backups and pauses), Free for staging |
 | D11 | Stripe surface (PAY-01) | Proposed | Hosted Checkout Sessions |
 | D12 | Repo layout | Proposed | Next.js at repo root; static site moved to `legacy/` on `dev-booking` as the visual baseline, deleted after cutover |
@@ -79,6 +79,9 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | New exports | Real Excel files, as D21 |
 | ADR | What the guest pays for the house, after promo |
 | Staff powers | As built; no Staff at launch |
+| Empty channel feed | Releases only after 6 hours and two or more empty reads, with an alert. Any release of a future stay alerts Yorgos |
+| Stale sync alert | 3 hours June to September, 6 hours otherwise |
+| Closures made only on Airbnb | Do not copy to Booking.com; Yorgos blocks dates in Admin |
 | Exporting checkout holds to channels | Off until real feeds are checked, because a hold could return as a false conflict and trigger a wrong refund (D16) |
 | Contact details | Public details come from Text and photos. Property keeps legal details and the internal notification address, relabelled so the two cannot be confused |
 
@@ -333,6 +336,7 @@ Security and tooling:
 - [ ] T4.29 Export feed, token, no loops (`CHN-10` to `CHN-12`)
 - [ ] T4.30 Conflicts, sync logs, alerts, limitation notice (`CHN-13` to `CHN-16`)
 - [ ] T4.31 Fixture-feed tests, then A9 real-feed test (`QA-04`)
+- [ ] T4.32 Schedule the jobs: `pg_cron` with `pg_net` every 5 minutes calling `/api/cron/*`, secrets in Vault per environment, `CRON_SECRET` in Vercel. Launch blocker: without it nothing syncs (D9 decided)
 
 **Gate 4:** full test-card booking on staging, blocked dates show on the public site, an Airbnb test block arrives in our calendar and ours arrives in Airbnb.
 
