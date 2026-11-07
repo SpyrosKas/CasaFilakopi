@@ -134,12 +134,13 @@ export const t = {
   },
   property: {
     title: "Property details",
-    intro: "These details appear on the website and on guest emails.",
+    intro:
+      "Legal details and where alerts are sent. Guests see the phone and email under Text and photos, not these.",
     name: "Public name",
     legalName: "Legal name",
     address: "Address",
-    phone: "Phone",
-    email: "Email",
+    phone: "Phone for legal details",
+    email: "Email where alerts are sent",
     registration: "Registration number",
     checkIn: "Check-in time",
     checkOut: "Check-out time",

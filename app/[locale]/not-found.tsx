@@ -1,17 +1,11 @@
-import { getLocale, getTranslations } from "next-intl/server";
+import { useTranslations } from "next-intl";
 import { ErrorScreen } from "@/components/site/error-screen";
 import { Link } from "@/i18n/navigation";
-import { loadPage } from "@/lib/cms/public";
 
-export default async function NotFound() {
-  const t = await getTranslations("NotFound");
-  const page = await loadPage("contact", await getLocale());
+export default function NotFound() {
+  const t = useTranslations("NotFound");
   return (
-    <ErrorScreen
-      image={page.photo("page.hero")?.src}
-      title={t("title")}
-      body={t("body")}
-    >
+    <ErrorScreen title={t("title")} body={t("body")}>
       <Link href="/" className="btn btn-primary">
         {t("home")}
       </Link>

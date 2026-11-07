@@ -1,6 +1,6 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import { loadContact } from "@/lib/cms/public";
+import { loadContactForLayout } from "@/lib/cms/public";
 import { CookieSettingsButton } from "./cookie-banner";
 import { Icon } from "./icon";
 
@@ -26,7 +26,7 @@ export async function SiteFooter() {
   const t = await getTranslations("Footer");
   const tNav = await getTranslations("Nav");
   const tCommon = await getTranslations("Common");
-  const contact = await loadContact(await getLocale());
+  const contact = await loadContactForLayout(await getLocale());
 
   return (
     <footer id="site-footer" className="footer-section">

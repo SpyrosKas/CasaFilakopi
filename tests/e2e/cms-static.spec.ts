@@ -22,10 +22,14 @@ import {
   uniqueMark,
 } from "./cms-helpers";
 
-// WEB-08 needs a production build, because `next dev` caches nothing. Run with:
-//   CMS_TEST_PAGE=1 pnpm build
-//   CMS_TEST_PAGE=1 pnpm start -p 3006
-//   CMS_STATIC_CHECK=1 PORT=3006 pnpm test:e2e tests/e2e/cms-static.spec.ts
+// WEB-08 and the outage rules need a production build, because `next dev`
+// caches nothing. Run with `pnpm test:static`: playwright.static.config.ts
+// builds, starts the server behind tests/e2e/supabase-proxy.mjs, and runs this.
+
+const CONTROL = "http://127.0.0.1:54398";
+const PUBLIC_SUPABASE = "http://127.0.0.1:54399";
+
+const database = (state: "up" | "down") => fetch(`${CONTROL}/${state}`);
 
 test.skip(!process.env.CMS_STATIC_CHECK, "Needs a production server");
 test.describe.configure({ mode: "serial" });
@@ -152,7 +156,7 @@ test("every photo on every public page comes from Supabase and loads", async ({
   expect(readdirSync("public/img")).toEqual(["casa-icon-1.png"]);
   expect(existsSync("public/img/tinified")).toBe(false);
 
-  const storage = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/`;
+  const storage = `${PUBLIC_SUPABASE}/storage/v1/object/public/media/`;
   await skipCookieBanner(visitor);
   let checked = 0;
   for (const locale of locales) {
@@ -173,7 +177,9 @@ test("every photo on every public page comes from Supabase and loads", async ({
       );
       expect(sources.length, `${locale}${path}`).toBeGreaterThan(0);
       expect(
-        originals.filter((src) => !src.startsWith(storage)),
+        originals.filter(
+          (src) => !src.startsWith(storage) && src !== "/error-hero.webp",
+        ),
         `${locale}${path}`,
       ).toEqual([]);
       checked += originals.length;
@@ -187,4 +193,43 @@ test("the content photos are gone from public/ on this server", async ({
 }) => {
   expect((await request.get("/img/tinified/_DSC1169.jpg")).status()).toBe(404);
   expect((await request.get("/img/casa-icon-1.png")).status()).toBe(200);
+});
+
+test("in an outage, built pages stay, a purged page is not blank, and it recovers", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  await cacheState(browser, "/en/host");
+  await publish(`Third ${mark}`);
+
+  await database("down");
+  try {
+    // Built and cached: the real page, with no database at all.
+    const host = await cacheState(browser, "/en/host");
+    expect(host.text).toContain("Dear friend");
+
+    // Purged by the publish a moment ago, so there is no earlier page.
+    const context = await browser.newContext();
+    const visitor = await context.newPage();
+    await visitor.goto(PUBLIC_EN);
+    await expect(visitor.locator("h1")).toHaveText("Something went wrong");
+    await expect(visitor.locator(".footer-section")).toContainText(
+      "Casa Filakopi",
+    );
+    await context.close();
+  } finally {
+    await database("up");
+  }
+
+  await expect
+    .poll(async () => (await cacheState(browser, PUBLIC_EN)).text, {
+      timeout: 15_000,
+    })
+    .toContain(`Third ${mark}`);
+});
+
+test("a public page's Cron cleanup still answers on a production build", async ({
+  request,
+}) => {
+  expect((await request.get("/api/cron/cms")).status()).toBe(401);
 });

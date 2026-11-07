@@ -41,6 +41,8 @@ export interface FieldDef {
   shared?: boolean;
   /** Never borrows the other language: an empty field stays empty. */
   strict?: boolean;
+  /** A blank here would leave a hole on the page, so publishing refuses it. */
+  required?: boolean;
 }
 
 export interface ChoiceDef {

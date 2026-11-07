@@ -19,7 +19,10 @@ const line = (name: string, label: string, hint?: string): FieldDef => ({
   label,
   kind: "line",
   hint,
+  required: name === "title",
 });
+
+const must = (field: FieldDef): FieldDef => ({ ...field, required: true });
 
 const rich = (name: string, label: string, hint?: string): FieldDef => ({
   name,
@@ -89,7 +92,7 @@ const stepList = (idPrefix: string): ListDef => ({
   itemPhotos: true,
   choice: STEP_ICONS,
   fields: [
-    rich("text", l.whatToDo),
+    must(rich("text", l.whatToDo)),
     line("iconLabel", l.arrowInWords, l.readAloudByScreenReadersFor),
   ],
 });
@@ -171,7 +174,7 @@ const PAGES: PageDef[] = [
           addLabel: l.addAnAmenity,
           idPrefix: "amenity",
           choice: AMENITY_ICONS,
-          fields: [line("label", l.name)],
+          fields: [must(line("label", l.name))],
         },
       },
       {
@@ -264,7 +267,7 @@ const PAGES: PageDef[] = [
         key: "details",
         label: l.contactDetails,
         fields: [
-          line("name", l.name),
+          must(line("name", l.name)),
           line("mapHeading", l.headingAboveTheMap),
         ],
       },
@@ -327,12 +330,19 @@ const PAGES: PageDef[] = [
         key: "contact",
         label: l.contactDetails,
         fields: [
-          { name: "email", label: l.email, kind: "email", shared: true },
+          {
+            name: "email",
+            label: l.email,
+            kind: "email",
+            shared: true,
+            required: true,
+          },
           {
             name: "phone",
             label: l.phone,
             kind: "line",
             shared: true,
+            required: true,
             hint: l.keepTheCountryCodeForExample,
           },
           {
@@ -340,6 +350,7 @@ const PAGES: PageDef[] = [
             label: l.whatsappNumber,
             kind: "line",
             shared: true,
+            required: true,
             hint: l.digitsOnlyStartingWith0030,
           },
           {
@@ -347,25 +358,30 @@ const PAGES: PageDef[] = [
             label: l.facebookLink,
             kind: "url",
             shared: true,
+            required: true,
           },
           {
             name: "instagram",
             label: l.instagramLink,
             kind: "url",
             shared: true,
+            required: true,
           },
         ],
       },
       {
         key: "address",
         label: l.address,
-        fields: [line("line1", l.firstLine), line("line2", l.secondLine)],
+        fields: [
+          must(line("line1", l.firstLine)),
+          must(line("line2", l.secondLine)),
+        ],
       },
       {
         key: "reserve",
         label: l.bandAboveTheFooter,
         photos: "reserve.band",
-        fields: [rich("title", l.bigText)],
+        fields: [must(rich("title", l.bigText))],
       },
     ],
   },

@@ -29,6 +29,7 @@ import {
   recordActions,
   ROOM_COLLECTION,
   seedTestPage,
+  SHARE_COLLECTION,
   storage,
   TEST_SLUG,
   uniqueMark,
@@ -53,6 +54,7 @@ let page: Page;
 let visitor: BrowserContext;
 let staffContext: BrowserContext;
 let ownerAal1Context: BrowserContext;
+let removedAdminContext: BrowserContext;
 const actions = new Map<string, RecordedAction>();
 const mark = uniqueMark();
 
@@ -102,6 +104,17 @@ test.beforeAll(async ({ browser }) => {
   const aal1Page = await ownerAal1Context.newPage();
   await signInWithPassword(aal1Page, owner);
   await expect(aal1Page).toHaveURL(/\/admin\/mfa$/);
+
+  // Signed in, then taken off the team: proxy.ts still lets the session
+  // through, so only each action's own check can stop it.
+  const removed = await createTestUser("staff");
+  removedAdminContext = await newContext(browser);
+  const removedPage = await removedAdminContext.newPage();
+  await signInWithPassword(removedPage, removed);
+  await expect(removedPage).toHaveURL(/\/admin$/);
+  await db.query(`delete from public.admin_profiles where id = $1`, [
+    removed.id,
+  ]);
 });
 
 test.afterAll(async () => {
@@ -109,7 +122,88 @@ test.afterAll(async () => {
   await deleteCreatedUsers();
 });
 
+const countUploads = async () => {
+  const { rows } = await db.query(
+    `select count(*)::int as n from public.media where path like 'uploads/%'`,
+  );
+  const { data } = await storage.from("media").list("uploads", { limit: 1000 });
+  return { rows: rows[0].n as number, files: data!.length };
+};
+
+const secondSession = async (browser: Browser, path: string) => {
+  const context = await browser.newContext({
+    storageState: await page.context().storageState(),
+    viewport: PHONE,
+    extraHTTPHeaders: { "x-forwarded-for": testAddress() },
+  });
+  const second = await context.newPage();
+  await second.goto(path);
+  return second;
+};
+
 test.describe("photos", () => {
+  test("two uploads into an empty section both land, with one cover", async ({
+    browser,
+  }) => {
+    await page.goto(ROOM_PHOTOS);
+    const second = await secondSession(browser, ROOM_PHOTOS);
+    const file = async (name: string, r: number) =>
+      filePayload(name, await photoWithGps({ r, g: 10, b: 10 }));
+    const [one, two] = [await file("one.jpg", 20), await file("two.jpg", 240)];
+
+    await Promise.all([
+      upload(one),
+      second.getByLabel("Add photos").setInputFiles(two),
+    ]);
+    await expect
+      .poll(async () => (await mediaInSection()).length, { timeout: 30_000 })
+      .toBe(2);
+    await expect
+      .poll(
+        async () =>
+          (await mediaInSection()).filter((row) => row.is_cover).length,
+      )
+      .toBe(1);
+    await expect(page.locator(".notice-bad")).toHaveCount(0);
+    await expect(second.locator(".notice-bad")).toHaveCount(0);
+    await second.context().close();
+
+    await cleanTestContent();
+    await seedTestPage(baseBlocks(mark));
+  });
+
+  test("two photos racing for a one-photo place leave one, and no stray file", async ({
+    browser,
+  }) => {
+    const path = `/admin/photos/${SHARE_COLLECTION}`;
+    const before = await countUploads();
+    await page.goto(path);
+    const second = await secondSession(browser, path);
+    await Promise.all([
+      page
+        .getByLabel("Add a photo")
+        .setInputFiles(
+          filePayload("a.jpg", await photoWithGps({ r: 1, g: 200, b: 1 })),
+        ),
+      second
+        .getByLabel("Add a photo")
+        .setInputFiles(
+          filePayload("b.jpg", await photoWithGps({ r: 200, g: 1, b: 1 })),
+        ),
+    ]);
+    await expect
+      .poll(async () => (await mediaInSection(SHARE_COLLECTION)).length, {
+        timeout: 30_000,
+      })
+      .toBe(1);
+    await expect
+      .poll(countUploads, { timeout: 15_000 })
+      .toEqual({ rows: before.rows + 1, files: before.files + 1 });
+    await second.context().close();
+    await cleanTestContent();
+    await seedTestPage(baseBlocks(mark));
+  });
+
   test("upload from the admin screen shows on the public page", async () => {
     await page.goto(ROOM_PHOTOS);
     await expect(page.getByText("every change here appears")).toBeVisible();
@@ -353,6 +447,46 @@ test.describe("photos", () => {
     );
   });
 
+  test("replacing a photo someone else just removed changes nothing", async () => {
+    await page.goto(ROOM_PHOTOS);
+    const stored = await mediaInSection();
+    const before = await countUploads();
+
+    // A second tab removes photo 2 while this one still shows it.
+    await db.query(
+      `delete from public.media_placements where collection = $1 and media_id = $2`,
+      [ROOM_COLLECTION, stored[1].id],
+    );
+
+    const chooser = page.waitForEvent("filechooser");
+    await page
+      .getByRole("button", { name: `Replace: Photo 2 of ${stored.length}` })
+      .click();
+    await (
+      await chooser
+    ).setFiles(
+      filePayload("late.jpg", await photoWithGps({ r: 7, g: 7, b: 7 })),
+    );
+    await expect(page.locator(".notice-bad")).toContainText("changed");
+
+    // Nothing new is left, and the section did not lose a photo to it.
+    expect(await countUploads()).toEqual(before);
+    expect((await mediaInSection()).map((row) => row.id)).toEqual([
+      stored[0].id,
+      ...stored.slice(2).map((row) => row.id),
+    ]);
+    const { data: temp } = await storage
+      .from("uploads-private")
+      .list(`cms/${owner.id}`);
+    expect(temp).toEqual([]);
+
+    await db.query(
+      `insert into public.media_placements (collection, media_id, sort_order)
+       values ($1, $2, 99)`,
+      [ROOM_COLLECTION, stored[1].id],
+    );
+  });
+
   test("delete warns when used elsewhere, and can remove from one section", async () => {
     const [target] = await mediaInSection();
     await db.query(
@@ -583,24 +717,7 @@ test.describe("text", () => {
     expect((await publishedField("room", "en", "title")).draft).toBe(draftEn);
   });
 
-  test("leaving one language empty warns before publishing", async () => {
-    await openRoom();
-    await page.getByLabel("Test room: title (Greek)").fill("");
-    await expect(
-      page.getByText("Test room: title (Greek) is empty"),
-    ).toBeVisible();
-    await expect(page.getByText("Draft saved")).toBeVisible({
-      timeout: 15_000,
-    });
-    await page.getByRole("button", { name: "Publish", exact: true }).click();
-
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toContainText("Test room: title (Greek is empty)");
-    expect((await publishedField("room", "el", "title")).published).toBe(
-      draftEl,
-    );
-    await dialog.getByRole("button", { name: "Cancel" }).click();
-
+  const discardAll = async () => {
     await page.getByRole("button", { name: "Discard changes" }).click();
     await page
       .getByRole("dialog")
@@ -610,6 +727,131 @@ test.describe("text", () => {
       "Everything here is published.",
       { timeout: 15_000 },
     );
+  };
+
+  test("leaving one language empty warns before publishing", async () => {
+    await openRoom();
+    await page.getByLabel("Test room: description (Greek)").fill("");
+    await expect(
+      page.getByText("Test room: description (Greek) is empty"),
+    ).toBeVisible();
+    await expect(page.getByText("Draft saved")).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText(
+      "Test room: description (Greek is empty)",
+    );
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await discardAll();
+  });
+
+  test("a blank title cannot be published, and the page says which", async () => {
+    await openRoom();
+    await page.getByLabel("Test room: title (Greek)").fill("   ");
+    await expect(page.getByText("Draft saved")).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+
+    const notice = page.locator(".notice-bad").first();
+    await expect(notice).toContainText("must be filled in");
+    await expect(
+      page.locator(".notice-bad").getByText("Test room: title (Greek)"),
+    ).toBeVisible();
+    expect((await publishedField("room", "el", "title")).published).toBe(
+      draftEl,
+    );
+    await discardAll();
+  });
+
+  test("two sessions cannot overwrite each other's draft", async ({
+    browser,
+  }) => {
+    await openRoom();
+    const other = await secondSession(browser, editorUrl);
+    await other.getByText("Test room", { exact: true }).click();
+
+    await page.getByLabel("Test room: title (Greek)").fill("Από την πρώτη");
+    await expect(page.getByText("Draft saved")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await other.getByLabel("Test room: title (Greek)").fill("Από τη δεύτερη");
+    await expect(other.locator(".notice-bad")).toContainText("changed", {
+      timeout: 15_000,
+    });
+    expect((await publishedField("room", "el", "title")).draft).toBe(
+      "Από την πρώτη",
+    );
+
+    // It stops: more typing saves nothing, and it cannot publish.
+    await other.getByLabel("Test room: title (Greek)").fill("Και κάτι ακόμα");
+    await other.waitForTimeout(2000);
+    expect((await publishedField("room", "el", "title")).draft).toBe(
+      "Από την πρώτη",
+    );
+    await expect(
+      other.getByRole("button", { name: "Publish", exact: true }),
+    ).toBeDisabled();
+    await other.context().close();
+
+    await page.goto(editorUrl);
+    await discardAll();
+  });
+
+  test("a save just after publishing still works, and a stale publish is honest", async () => {
+    await openRoom();
+    await page.getByLabel("Test room: title (Greek)").fill(draftEl + "!");
+    await expect(page.getByText("Draft saved")).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await expectNotice("Published");
+    await page.getByLabel("Test room: title (Greek)").fill(draftEl);
+    await expect(page.getByTestId("publish-state")).toHaveText(
+      "You have unpublished changes.",
+    );
+    await expect(page.locator(".notice-bad")).toHaveCount(0);
+    await expect
+      .poll(async () => (await publishedField("room", "el", "title")).draft)
+      .toBe(draftEl);
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await expectNotice("Published");
+  });
+
+  test("the previous version comes back as a draft to publish", async () => {
+    await page.goto(editorUrl);
+    await page
+      .getByRole("button", { name: "Go back to the previous version" })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Go back to the previous version" })
+      .click();
+    await expect(page.getByTestId("publish-state")).toHaveText(
+      "You have unpublished changes.",
+      { timeout: 15_000 },
+    );
+    const field = await publishedField("room", "el", "title");
+    expect(field.draft).toBe(draftEl + "!");
+    expect(field.published).toBe(draftEl);
+    expect(await visitorText(PUBLIC_EL)).toContain(draftEl);
+    await discardAll();
+  });
+
+  test("a bad address in the link box is refused out loud", async () => {
+    await openRoom();
+    page.once("dialog", (dialog) => dialog.accept("javascript:alert(1)"));
+    await page.getByRole("button", { name: "Link" }).first().click();
+    await expect(
+      page.getByRole("alert").filter({ hasText: "web address" }),
+    ).toBeVisible();
+    await expect(
+      page.getByLabel("Test room: description (Greek)"),
+    ).not.toHaveValue(/javascript/);
   });
 
   test("HTML from the form never reaches a page, but simple formatting does", async () => {
@@ -784,10 +1026,11 @@ test.describe("lists", () => {
 });
 
 test.describe("who may use all this", () => {
-  test("every recorded action is refused for Staff and an aal1 Owner", async () => {
+  test("every recorded action is refused for Staff, an aal1 Owner and a removed admin", async () => {
     // saveDraft, publish, discard; start and finish upload, reorder, alt,
-    // remove, delete, add existing; save, status, delete and reorder a list.
-    expect(actions.size).toBeGreaterThanOrEqual(14);
+    // remove, delete, add existing; save, status, delete and reorder a list;
+    // restore.
+    expect(actions.size).toBeGreaterThanOrEqual(15);
     const snapshot = async () => {
       const { rows } = await db.query(`
         select
@@ -825,8 +1068,25 @@ test.describe("who may use all this", () => {
 
       const asAal1 = await send(ownerAal1Context, action);
       expect(target(asAal1), action.url).toContain("/admin/mfa");
+
+      const asRemoved = await send(removedAdminContext, action);
+      expect(target(asRemoved), action.url).toContain("/admin/login");
     }
     expect(await snapshot()).toEqual(before);
+  });
+
+  test("the upload cleanup needs its secret", async ({ request }) => {
+    const anyone = await request.get("/api/cron/cms");
+    expect(anyone.status()).toBe(401);
+    const wrong = await request.get("/api/cron/cms", {
+      headers: { authorization: "Bearer wrong" },
+    });
+    expect(wrong.status()).toBe(401);
+    const scheduler = await request.get("/api/cron/cms", {
+      headers: { authorization: "Bearer cms-e2e-cron" },
+    });
+    expect(scheduler.status()).toBe(200);
+    expect(await scheduler.json()).toEqual({ removed: 0 });
   });
 
   test("Staff cannot open the screens", async () => {

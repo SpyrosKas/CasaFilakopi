@@ -2,11 +2,14 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { writeAudit } from "@/lib/admin/audit";
 import { requireOwner, type AdminContext } from "@/lib/admin/session";
 import { loadCollection, loadUnused, type PhotoItem } from "@/lib/cms/data";
-import { processPhoto, UnreadablePhotoError } from "@/lib/cms/image-process";
-import { MEDIA_BUCKET } from "@/lib/cms/media-url";
+import {
+  processPhoto,
+  UnreadablePhotoError,
+  type ProcessedPhoto,
+} from "@/lib/cms/image-process";
+import { MEDIA_BUCKET, SITE_PREFIX } from "@/lib/cms/media-url";
 import { collectionName, findCollection } from "@/lib/cms/registry";
 import { refreshPublicPages } from "@/lib/cms/refresh";
 import {
@@ -18,6 +21,7 @@ import {
   startUploadSchema,
 } from "@/lib/cms/schemas";
 import { t } from "@/lib/cms/strings";
+import { runUpload, type UploadSteps } from "@/lib/cms/upload-flow";
 import { createAdminClient } from "@/lib/db/admin";
 
 // Photo changes go live when saved: media has no draft, so each action refreshes
@@ -140,7 +144,9 @@ async function currentOrder(admin: AdminContext, collection: string) {
     .from("media_placements")
     .select("media_id")
     .eq("collection", collection)
-    .order("sort_order");
+    .order("sort_order")
+    .order("created_at")
+    .order("id");
   if (error) throw error;
   return data.map((row) => row.media_id);
 }
@@ -178,88 +184,166 @@ export async function finishUpload(input: unknown): Promise<PhotoResult> {
   if (!tempPath.startsWith(`cms/${admin.userId}/`)) return failed();
   const def = findCollection(collection)!;
 
-  let storedPath: string | null = null;
   try {
     const temp = await secretStorage(admin);
-    const { data: file, error: readError } = await temp.download(tempPath);
-    if (readError) throw readError;
-
-    let photo;
     try {
-      photo = await processPhoto(Buffer.from(await file.arrayBuffer()));
-    } catch (error) {
-      if (error instanceof UnreadablePhotoError) {
-        await temp.remove([tempPath]);
-        return failed(t.photos.cannotRead(t.photos.thisPhoto));
-      }
-      throw error;
-    }
+      const { data: file, error: readError } = await temp.download(tempPath);
+      if (readError) throw readError;
 
-    const path = `uploads/${randomUUID()}.webp`;
-    const { error: uploadError } = await admin.supabase.storage
-      .from(MEDIA_BUCKET)
-      .upload(path, photo.data, {
+      let photo;
+      try {
+        photo = await processPhoto(Buffer.from(await file.arrayBuffer()));
+      } catch (error) {
+        if (error instanceof UnreadablePhotoError) {
+          return failed(t.photos.cannotRead(t.photos.thisPhoto));
+        }
+        throw error;
+      }
+
+      const order = await currentOrder(admin, collection);
+      const replaced =
+        replaceMediaId ?? (def.single && order.length ? order[0] : undefined);
+      if (replaced && !order.includes(replaced)) {
+        return failed(t.common.pageChanged);
+      }
+
+      const outcome = await runUpload(
+        uploadSteps(admin, collection, photo, replaced),
+      );
+      if (outcome.status === "stale") return failed(t.common.pageChanged);
+      if (outcome.status === "failed") return failed();
+
+      refreshPublicPages(pagesOf([collection]));
+      refreshAdmin();
+      return await sectionResult(
+        admin,
+        collection,
+        replaced ? t.photos.replaced : undefined,
+      ).catch(() => failed(t.photos.savedReload));
+    } finally {
+      await temp.remove([tempPath]).then(
+        () => undefined,
+        () => undefined,
+      );
+    }
+  } catch {
+    return failed();
+  }
+}
+
+function uploadSteps(
+  admin: AdminContext,
+  collection: string,
+  photo: ProcessedPhoto,
+  replaced: string | undefined,
+): UploadSteps {
+  const media = admin.supabase.storage.from(MEDIA_BUCKET);
+  const def = findCollection(collection)!;
+  return {
+    async storeFile() {
+      const path = `uploads/${randomUUID()}.webp`;
+      const { error } = await media.upload(path, photo.data, {
         contentType: photo.mimeType,
         cacheControl: CACHE_SECONDS,
         upsert: false,
       });
-    if (uploadError) throw uploadError;
-    storedPath = path;
-
-    const { data: media, error: mediaError } = await admin.supabase
-      .from("media")
-      .insert({
-        path,
-        mime_type: photo.mimeType,
-        width: photo.width,
-        height: photo.height,
-        size_bytes: photo.data.length,
-        created_by: admin.userId,
-      })
-      .select("id")
-      .single();
-    if (mediaError) throw mediaError;
-
-    const order = await currentOrder(admin, collection);
-    const replaced =
-      replaceMediaId ?? (def.single && order.length ? order[0] : undefined);
-    if (replaced) {
-      if (!order.includes(replaced)) throw new Error("not_in_section");
-      // One update, so the section is never without its photo. Only this
-      // section changes: anywhere else the old photo is used, it stays.
-      const { error } = await admin.supabase
-        .from("media_placements")
-        .update({ media_id: media.id })
-        .eq("collection", collection)
-        .eq("media_id", replaced);
       if (error) throw error;
-      const stillUsed =
-        (await collectionsOf(admin, replaced)).length > 0 ||
-        (await placesUsing(admin, replaced)).length > 0;
-      if (!stillUsed) await removeFileAndRow(admin, replaced);
-    } else {
+      return path;
+    },
+    async insertRow(path) {
+      const { data, error } = await admin.supabase
+        .from("media")
+        .insert({
+          path,
+          mime_type: photo.mimeType,
+          width: photo.width,
+          height: photo.height,
+          size_bytes: photo.data.length,
+          created_by: admin.userId,
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+      return data.id;
+    },
+    async place(mediaId) {
+      if (replaced) {
+        // One update, so the section is never without its photo. Only this
+        // section changes: anywhere else the old photo is used, it stays.
+        const { data, error } = await admin.supabase
+          .from("media_placements")
+          .update({ media_id: mediaId })
+          .eq("collection", collection)
+          .eq("media_id", replaced)
+          .select("id");
+        if (error) throw error;
+        return data.length === 1;
+      }
+
+      // The cover flag waits for tidyUp: two uploads into an empty section
+      // would otherwise both claim it, and one would fail on the unique index.
+      const { count, error: countError } = await admin.supabase
+        .from("media_placements")
+        .select("id", { count: "exact", head: true })
+        .eq("collection", collection);
+      if (countError) throw countError;
       const { error } = await admin.supabase.from("media_placements").insert({
         collection,
-        media_id: media.id,
-        sort_order: order.length,
-        is_cover: order.length === 0,
+        media_id: mediaId,
+        sort_order: count ?? 0,
       });
       if (error) throw error;
-    }
+      if (!def.single) return true;
 
-    await temp.remove([tempPath]);
-    refreshPublicPages(pagesOf([collection]));
-    refreshAdmin();
-    return sectionResult(
-      admin,
-      collection,
-      replaced ? t.photos.replaced : undefined,
-    );
-  } catch {
-    if (storedPath) {
-      await admin.supabase.storage.from(MEDIA_BUCKET).remove([storedPath]);
-    }
-    return failed();
+      // Two photos raced for a place that holds one: the first one stays.
+      const order = await currentOrder(admin, collection);
+      if (order[0] === mediaId) return true;
+      const { error: undoError } = await admin.supabase
+        .from("media_placements")
+        .delete()
+        .eq("collection", collection)
+        .eq("media_id", mediaId);
+      if (undoError) throw undoError;
+      return false;
+    },
+    async deleteRow(mediaId) {
+      const { error } = await admin.supabase
+        .from("media")
+        .delete()
+        .eq("id", mediaId);
+      if (error) throw error;
+    },
+    async deleteFile(path) {
+      const { error } = await media.remove([path]);
+      if (error) throw error;
+    },
+    async tidyUp() {
+      await writeOrder(
+        admin,
+        collection,
+        await currentOrder(admin, collection),
+      );
+      if (replaced) await dropIfUnused(admin, replaced);
+    },
+  };
+}
+
+/**
+ * Imported files stay: the built-in fallback pages point at them, and a site
+ * with a database outage must still find its photos.
+ */
+async function dropIfUnused(admin: AdminContext, mediaId: string) {
+  const inUse =
+    (await collectionsOf(admin, mediaId)).length > 0 ||
+    (await placesUsing(admin, mediaId)).length > 0;
+  if (inUse) return;
+  const { data } = await admin.supabase
+    .from("media")
+    .select("path")
+    .eq("id", mediaId)
+    .maybeSingle();
+  if (data && !data.path.startsWith(SITE_PREFIX)) {
+    await removeFileAndRow(admin, mediaId);
   }
 }
 
@@ -430,11 +514,6 @@ export async function deleteEverywhere(input: unknown): Promise<PhotoResult> {
     const gone = await removeFileAndRow(admin, mediaId);
     refreshAdmin();
     if (!gone) return failed(t.photos.deleteFileFailed);
-    await writeAudit(admin, {
-      action: "delete",
-      entity: "media",
-      entityId: mediaId,
-    });
     return {
       ok: true,
       items: await loadUnused(admin),

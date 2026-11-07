@@ -25,6 +25,9 @@ const toBlock = (value: unknown): BlockData | null => {
 export interface EditorData {
   blocks: Record<string, BlockData>;
   dirty: boolean;
+  /** updated_at per block, sent back with each save. */
+  versions: Record<string, string>;
+  hasPrevious: boolean;
 }
 
 export async function loadEditor(
@@ -33,7 +36,7 @@ export async function loadEditor(
 ): Promise<EditorData> {
   const { data, error } = await admin.supabase
     .from("content_blocks")
-    .select("key, draft, published, pages!inner(slug)")
+    .select("id, key, draft, published, updated_at, pages!inner(slug)")
     .eq("pages.slug", page.slug);
   if (error) throw error;
 
@@ -45,7 +48,19 @@ export async function loadEditor(
       defaults[section.key] ?? { en: {}, el: {} };
   }
   const dirty = data.some((row) => !sameJson(row.draft, row.published));
-  return { blocks, dirty };
+  const versions = Object.fromEntries(
+    data.map((row) => [row.key, row.updated_at]),
+  );
+
+  const { count } = await admin.supabase
+    .from("audit_log")
+    .select("id", { count: "exact", head: true })
+    .eq("entity", "content_blocks")
+    .in(
+      "entity_id",
+      data.map((row) => row.id),
+    );
+  return { blocks, dirty, versions, hasPrevious: Boolean(count) };
 }
 
 /** Slugs of the pages with text waiting to be published. */

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/admin/cms/confirm-dialog";
+import { useUnsavedWarning } from "@/components/admin/cms/use-unsaved-warning";
 import {
   deleteListEntry,
   reorderList,
@@ -183,6 +184,12 @@ function EntryForm({
   const [mediaId, setMediaId] = useState(initialMediaId);
   const [saving, setSaving] = useState(false);
   const formId = id ?? "new";
+  useUnsavedWarning(
+    mediaId !== initialMediaId ||
+      Object.keys({ ...initial, ...values }).some(
+        (key) => (values[key] ?? "") !== (initial[key] ?? ""),
+      ),
+  );
 
   const set = (name: string, value: string) =>
     setValues((current) => ({ ...current, [name]: value }));

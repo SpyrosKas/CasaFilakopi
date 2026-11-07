@@ -32,16 +32,17 @@ test.beforeAll(async () => {
     stdio: "ignore",
     detached: true,
   });
+  // Any answer will do: with no database, /en is an error page by design.
   await expect
     .poll(
       () =>
         fetch(`${BASE}/en`).then(
-          (response) => response.status,
-          () => 0,
+          () => true,
+          () => false,
         ),
       { timeout: 150_000, intervals: [1000] },
     )
-    .toBe(200);
+    .toBe(true);
 });
 
 test.afterAll(async () => {
@@ -54,23 +55,41 @@ test.afterAll(async () => {
   if (envFile !== null) writeFileSync(SHARED_ENV_FILE, envFile);
 });
 
-for (const [path, text] of [
-  ["/en", "Master Bedroom"],
-  ["/el", "Κύρια κρεβατοκάμαρα"],
-  ["/en/host", "Dear friend"],
-  ["/en/directions", "Grigoris Cafe"],
-  ["/en/gallery", "Kitchen"],
-  ["/en/contact", "gkavourakis@yahoo.com"],
-  ["/en/terms", "must be provided"],
-  ["/en/faq", "must be provided"],
-] as const) {
-  test(`${path} still shows its text`, async ({ page }) => {
+// On a running site a failed read throws, so that Next keeps the last good page
+// (proved in cms-static.spec.ts). This server has no earlier page to keep, which
+// is the worst case: the error screen, inside the normal header and footer.
+for (const path of ["/en", "/el", "/en/host", "/en/gallery", "/en/terms"]) {
+  test(`${path} is never blank`, async ({ page }) => {
     test.setTimeout(120_000);
     await skipCookieBanner(page);
-    const response = await page.goto(`${BASE}${path}`);
-    expect(response?.status()).toBe(200);
+    await page.goto(`${BASE}${path}`);
     await expect(page.locator("h1")).toBeVisible();
-    await expect(page.locator("body")).toContainText(text);
-    await expect(page.locator(".footer-section")).toBeVisible();
+    await expect(page.locator("#main")).not.toBeEmpty();
+    await expect(page.locator(".footer-section")).toContainText(
+      "Casa Filakopi",
+    );
+    await expect(page.locator(".site-header")).toBeVisible();
   });
 }
+
+test("the error screen offers a way on, in the right language", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await skipCookieBanner(page);
+  await page.goto(`${BASE}/en`);
+  await expect(page.locator("h1")).toHaveText("Something went wrong");
+  await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+});
+
+test("a 404 needs no database", async ({ page }) => {
+  test.setTimeout(120_000);
+  await skipCookieBanner(page);
+  const response = await page.goto(`${BASE}/en/no-such-page`);
+  expect(response?.status()).toBe(404);
+  await expect(page.locator("h1")).toHaveText("Page not found");
+  await expect(page.locator(".site-hero img")).toHaveAttribute(
+    "src",
+    /error-hero/,
+  );
+});

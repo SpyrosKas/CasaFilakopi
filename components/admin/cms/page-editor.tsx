@@ -13,8 +13,10 @@ import { ConfirmDialog } from "@/components/admin/cms/confirm-dialog";
 import {
   discardDraft,
   publishPage,
+  restorePrevious,
   saveDraft,
 } from "@/lib/cms/actions/content";
+import type { ContentResult } from "@/lib/cms/actions/content";
 import { emptyLanguage } from "@/lib/cms/checks";
 import { safeHref } from "@/lib/cms/rich";
 import { t } from "@/lib/cms/strings";
@@ -73,6 +75,7 @@ function TextField({
   onChange: (value: string) => void;
 }) {
   const box = useRef<HTMLTextAreaElement>(null);
+  const [badLink, setBadLink] = useState(false);
   const multiline = field.kind === "rich" || field.kind === "text";
   const change = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     onChange(event.target.value);
@@ -82,7 +85,10 @@ function TextField({
   };
   const addLink = () => {
     const address = window.prompt(e.linkPrompt, "https://");
-    if (address && safeHref(address)) format("[", `](${address.trim()})`);
+    if (!address) return;
+    const valid = safeHref(address);
+    setBadLink(!valid);
+    if (valid) format("[", `](${address.trim()})`);
   };
 
   return (
@@ -120,6 +126,11 @@ function TextField({
         />
       )}
       {field.kind === "rich" && <p className="hint">{e.formatHint}</p>}
+      {badLink && (
+        <p className="cms-missing" role="alert">
+          {e.badLink}
+        </p>
+      )}
       {missing && <p className="cms-missing">{e.missing(label)}</p>}
     </div>
   );
@@ -370,12 +381,16 @@ export function PageEditor({
   page,
   initialBlocks,
   initialDirty,
+  initialVersions,
+  hasPrevious,
   sectionPhotos,
   stepPhotos,
 }: {
   page: PageDef;
   initialBlocks: Record<string, BlockData>;
   initialDirty: boolean;
+  initialVersions: Record<string, string>;
+  hasPrevious: boolean;
   sectionPhotos: Record<string, EditorPhoto>;
   stepPhotos: Record<string, EditorPhoto>;
 }) {
@@ -386,13 +401,19 @@ export function PageEditor({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [emptyFields, setEmptyFields] = useState<string[] | null>(null);
+  const [missingFields, setMissingFields] = useState<string[]>([]);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [confirmRestore, setConfirmRestore] = useState(false);
+  const [stopped, setStopped] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const latest = useRef(blocks);
   const unsaved = useRef(new Set<string>());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const running = useRef<Promise<boolean>>(Promise.resolve(true));
+  const versions = useRef(initialVersions);
+  /** Another tab saved this page: nothing more may be written from here. */
+  const halted = useRef(false);
 
   useEffect(() => {
     // A link from the photo screen lands on its section, opened.
@@ -408,6 +429,7 @@ export function PageEditor({
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
     running.current = running.current.then(async () => {
+      if (halted.current) return false;
       if (unsaved.current.size === 0) return true;
       const keys = [...unsaved.current];
       unsaved.current.clear();
@@ -418,9 +440,17 @@ export function PageEditor({
       const result = await saveDraft({
         slug: page.slug,
         blocks: changed,
+        versions: versions.current,
       }).catch(() => null);
+      if (result?.versions) {
+        versions.current = { ...versions.current, ...result.versions };
+      }
       if (!result?.ok) {
         keys.forEach((key) => unsaved.current.add(key));
+        if (result?.stale) {
+          halted.current = true;
+          setStopped(true);
+        }
         setSaveState("failed");
         setError(result?.message ?? e.draftFailed);
         return false;
@@ -438,6 +468,7 @@ export function PageEditor({
     unsaved.current.add(key);
     setDirty(true);
     setMessage(null);
+    if (halted.current) return;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => void flush(), AUTOSAVE_MS);
   };
@@ -460,6 +491,7 @@ export function PageEditor({
 
   const publish = async (confirmedEmpty: boolean) => {
     setEmptyFields(null);
+    setMissingFields([]);
     setBusy(true);
     setMessage(null);
     const saved = await flush();
@@ -469,11 +501,19 @@ export function PageEditor({
     setBusy(false);
     if (!saved) return;
     if (result?.ok) {
-      setDirty(false);
+      versions.current = { ...versions.current, ...result.versions };
+      // Typing during the publish is not in what went out.
+      const typedSince = unsaved.current.size > 0;
+      setDirty(result.dirty || typedSince);
       setError(null);
-      setMessage(result.message ?? e.published);
+      setMessage(
+        typedSince ? e.publishedNewer : (result.message ?? e.published),
+      );
     } else if (result?.emptyFields) {
       setEmptyFields(result.emptyFields);
+    } else if (result?.missingFields) {
+      setError(result.message);
+      setMissingFields(result.missingFields);
     } else {
       setError(result?.message ?? t.common.somethingWrong);
     }
@@ -481,12 +521,26 @@ export function PageEditor({
 
   const discard = async () => {
     setConfirmDiscard(false);
+    await replaceDraft(discardDraft);
+  };
+
+  const restore = async () => {
+    setConfirmRestore(false);
+    await replaceDraft(restorePrevious);
+  };
+
+  /** Both throw away what is on screen, so nothing is saved first. */
+  const replaceDraft = async (
+    action: (input: unknown) => Promise<ContentResult>,
+  ) => {
+    if (timer.current) clearTimeout(timer.current);
+    unsaved.current.clear();
     setBusy(true);
-    await flush();
-    const result = await discardDraft({ slug: page.slug }).catch(() => null);
+    await running.current;
+    const result = await action({ slug: page.slug }).catch(() => null);
     setBusy(false);
     if (result?.ok) {
-      // The server sends the published text back through the page's props.
+      // The page loads the new draft, with fresh versions.
       window.location.reload();
     } else {
       setError(result?.message ?? t.common.somethingWrong);
@@ -549,6 +603,16 @@ export function PageEditor({
             {e.discard}
           </button>
         )}
+        {hasPrevious && (
+          <button
+            type="button"
+            className="button button-quiet"
+            disabled={busy}
+            onClick={() => setConfirmRestore(true)}
+          >
+            {e.previous}
+          </button>
+        )}
       </div>
 
       <div className="cms-publish-bar" data-dirty={dirty || undefined}>
@@ -556,6 +620,16 @@ export function PageEditor({
           <p className="notice notice-bad" role="alert">
             {error}
           </p>
+        )}
+        {missingFields.length > 0 && (
+          <div className="notice notice-bad">
+            <p>{e.requiredBody}</p>
+            <ul className="cms-empty-list">
+              {missingFields.map((field) => (
+                <li key={field}>{field}</li>
+              ))}
+            </ul>
+          </div>
         )}
         {message && (
           <p className="notice notice-ok" role="status">
@@ -578,7 +652,7 @@ export function PageEditor({
           <button
             type="button"
             className="button"
-            disabled={busy || !dirty}
+            disabled={busy || !dirty || stopped}
             onClick={() => void publish(false)}
           >
             {busy ? e.publishing : e.publish}
@@ -606,6 +680,23 @@ export function PageEditor({
               <li key={field}>{field}</li>
             ))}
           </ul>
+        </ConfirmDialog>
+      )}
+      {confirmRestore && (
+        <ConfirmDialog
+          title={e.previousTitle}
+          onClose={() => setConfirmRestore(false)}
+          actions={
+            <button
+              type="button"
+              className="button"
+              onClick={() => void restore()}
+            >
+              {e.previous}
+            </button>
+          }
+        >
+          <p>{e.previousBody}</p>
         </ConfirmDialog>
       )}
       {confirmDiscard && (

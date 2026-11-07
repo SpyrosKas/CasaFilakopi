@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { ConfirmDialog } from "@/components/admin/cms/confirm-dialog";
+import { useUnsavedWarning } from "@/components/admin/cms/use-unsaved-warning";
 import {
   deleteEverywhere,
   finishUpload,
@@ -76,6 +77,7 @@ function AltEditor({
   const [el, setEl] = useState(item.alt.el);
   const [saving, setSaving] = useState(false);
   const complete = Boolean(item.alt.en && item.alt.el);
+  useUnsavedWarning(en !== item.alt.en || el !== item.alt.el);
 
   const save = async () => {
     setSaving(true);

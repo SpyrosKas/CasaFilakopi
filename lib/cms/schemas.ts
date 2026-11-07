@@ -55,6 +55,8 @@ const inputBlock = z.object({
 export const saveDraftSchema = z.object({
   slug: slugSchema,
   blocks: z.record(z.string().max(40), inputBlock),
+  /** The updated_at each block was loaded with. New blocks have none. */
+  versions: z.record(z.string().max(40), z.string().max(40)).default({}),
 });
 
 export const publishSchema = z.object({

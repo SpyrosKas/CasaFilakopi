@@ -1,6 +1,7 @@
 import sharp from "sharp";
-import { describe, expect, it } from "vitest";
-import { findEmptyLanguages } from "@/lib/cms/checks";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { findEmptyLanguages, findMissingRequired } from "@/lib/cms/checks";
+import { removeOldUploads, type TempStorage } from "@/lib/cms/cleanup";
 import {
   defaultAlts,
   defaultBlocks,
@@ -25,6 +26,8 @@ import {
   sanitizeText,
 } from "@/lib/cms/rich";
 import { cleanBlock } from "@/lib/cms/schemas";
+import { isBuilding, recover } from "@/lib/cms/runtime";
+import { runUpload, type UploadSteps } from "@/lib/cms/upload-flow";
 import imageSizes from "@/content/image-sizes.json";
 
 describe("sanitising", () => {
@@ -52,6 +55,7 @@ describe("links", () => {
     expect(safeHref("/en/host")).toBe("/en/host");
     expect(safeHref("javascript:alert(1)")).toBeNull();
     expect(safeHref("//evil.test")).toBeNull();
+    expect(safeHref("/\\evil.test")).toBeNull();
     expect(safeHref("data:text/html,x")).toBeNull();
   });
 });
@@ -86,6 +90,20 @@ describe("formatting", () => {
       type: "text",
       value: "a",
     });
+  });
+
+  it("keeps brackets inside a web address", () => {
+    expect(
+      parseRich("[Milos](https://en.wikipedia.org/wiki/Milos_(island))"),
+    ).toEqual([
+      [
+        {
+          type: "link",
+          href: "https://en.wikipedia.org/wiki/Milos_(island)",
+          children: [{ type: "text", value: "Milos" }],
+        },
+      ],
+    ]);
   });
 
   it("leaves a lone star alone", () => {
@@ -265,11 +283,11 @@ describe("empty languages", () => {
     expect(
       findEmptyLanguages(page, {
         kitchen: {
-          en: { title: "Kitchen", body: "" },
-          el: { title: "", body: "" },
+          en: { title: "Kitchen", body: "Text" },
+          el: { title: "Κουζίνα", body: "" },
         },
       }),
-    ).toEqual(["Kitchen: title (Greek is empty)"]);
+    ).toEqual(["Kitchen: description (Greek is empty)"]);
   });
 });
 
@@ -393,5 +411,229 @@ describe("photo processing", () => {
       '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>',
     );
     await expect(processPhoto(svg)).rejects.toThrow(UnreadablePhotoError);
+  });
+});
+
+describe("required fields", () => {
+  it("are all filled in the imported text", () => {
+    for (const page of allPages()) {
+      expect(
+        findMissingRequired(page, defaultBlocks()[page.slug] ?? {}),
+      ).toEqual([]);
+    }
+  });
+
+  it("names a blank title, per language, and blank contact details", () => {
+    const home = findPage("home")!;
+    expect(
+      findMissingRequired(home, {
+        kitchen: { en: { title: "Kitchen" }, el: { title: "  " } },
+      }),
+    ).toEqual(["Kitchen: title (Greek)"]);
+    const site = findPage("site")!;
+    expect(
+      findMissingRequired(site, {
+        contact: { en: {}, el: {}, shared: { phone: "1" } },
+      }),
+    ).toContain("Contact details: email");
+  });
+
+  it("leaves SEO descriptions and legal text optional", () => {
+    const terms = findPage("terms")!;
+    expect(
+      findMissingRequired(terms, {
+        main: { en: { body: "" }, el: { body: "" } },
+        seo: {
+          en: { metaTitle: "", metaDescription: "" },
+          el: { metaTitle: "", metaDescription: "" },
+        },
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not ask twice: a required field is not also a language warning", () => {
+    const home = findPage("home")!;
+    expect(
+      findEmptyLanguages(home, {
+        kitchen: { en: { title: "Kitchen" }, el: { title: "" } },
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe("an upload failing part way", () => {
+  const steps = (changes: Partial<UploadSteps> = {}) => {
+    const log: string[] = [];
+    const all: UploadSteps = {
+      storeFile: async () => "new.webp",
+      insertRow: async () => "new-id",
+      place: async () => true,
+      deleteRow: async (id) => void log.push(`delete row ${id}`),
+      deleteFile: async (path) => void log.push(`delete file ${path}`),
+      tidyUp: async () => void log.push("tidy"),
+      ...changes,
+    };
+    return { all, log };
+  };
+  const boom = async (): Promise<never> => {
+    throw new Error("boom");
+  };
+
+  it("touches nothing when the file cannot be stored", async () => {
+    const { all, log } = steps({ storeFile: boom });
+    expect(await runUpload(all)).toEqual({ status: "failed" });
+    expect(log).toEqual([]);
+  });
+
+  it("removes the file when the row fails", async () => {
+    const { all, log } = steps({ insertRow: boom });
+    expect(await runUpload(all)).toEqual({ status: "failed" });
+    expect(log).toEqual(["delete file new.webp"]);
+  });
+
+  it("removes row and file when the placement fails", async () => {
+    const { all, log } = steps({ place: boom });
+    expect(await runUpload(all)).toEqual({ status: "failed" });
+    expect(log).toEqual(["delete row new-id", "delete file new.webp"]);
+  });
+
+  it("removes row and file when the section moved on", async () => {
+    const { all, log } = steps({ place: async () => false });
+    expect(await runUpload(all)).toEqual({ status: "stale" });
+    expect(log).toEqual(["delete row new-id", "delete file new.webp"]);
+  });
+
+  it("never touches the new photo once it is on the site", async () => {
+    const { all, log } = steps({ tidyUp: boom });
+    expect(await runUpload(all)).toEqual({
+      status: "placed",
+      mediaId: "new-id",
+    });
+    expect(log).toEqual([]);
+  });
+
+  it("still removes the file if removing the row fails", async () => {
+    const { all, log } = steps({ place: boom, deleteRow: boom });
+    expect(await runUpload(all)).toEqual({ status: "failed" });
+    expect(log).toEqual(["delete file new.webp"]);
+  });
+});
+
+describe("failed reads", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("throw on a running site, so the last good page stays", () => {
+    vi.stubEnv("NEXT_PHASE", "");
+    expect(isBuilding()).toBe(false);
+    const error = new Error("down");
+    expect(() => recover("x", error, () => "built-in")).toThrow(error);
+  });
+
+  it("use the built-in copy while building", () => {
+    vi.stubEnv("NEXT_PHASE", "phase-production-build");
+    vi.spyOn(console, "error").mockImplementationOnce(() => {});
+    expect(recover("x", new Error("down"), () => "built-in")).toBe("built-in");
+  });
+});
+
+describe("the daily upload cleanup", () => {
+  const now = Date.parse("2026-11-07T12:00:00Z");
+  const fake = () => {
+    const removed: string[] = [];
+    const tree: Record<
+      string,
+      { name: string; id: string | null; created_at: string | null }[]
+    > = {
+      cms: [{ name: "user-a", id: null, created_at: null }],
+      "cms/user-a": [
+        { name: "old", id: "1", created_at: "2026-11-05T12:00:00Z" },
+        { name: "fresh", id: "2", created_at: "2026-11-07T11:00:00Z" },
+      ],
+    };
+    const storage: TempStorage = {
+      list: async (path) => ({ data: tree[path] ?? [], error: null }),
+      remove: async (paths) => {
+        removed.push(...paths);
+        return { data: null, error: null };
+      },
+    };
+    return { storage, removed };
+  };
+
+  it("removes only what is over a day old", async () => {
+    const { storage, removed } = fake();
+    expect(await removeOldUploads(storage, now)).toBe(1);
+    expect(removed).toEqual(["cms/user-a/old"]);
+  });
+
+  it("reports a storage failure", async () => {
+    const { storage } = fake();
+    storage.list = async () => ({ data: null, error: { message: "no" } });
+    await expect(removeOldUploads(storage, now)).rejects.toThrow("no");
+  });
+});
+
+describe("the production import path", () => {
+  const ref = "abcdefghijklmnopqrst";
+  const url = `https://${ref}.supabase.co`;
+  const local = {
+    NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+    SUPABASE_SECRET_KEY: "local",
+  };
+
+  it("runs with the flag naming the address, both from the shell", () => {
+    expect(
+      resolveTarget(
+        [`--production=${ref}`],
+        {
+          NEXT_PUBLIC_SUPABASE_URL: url,
+          SUPABASE_SECRET_KEY: "shell",
+          VERCEL_ENV: "production",
+        },
+        {},
+      ),
+    ).toEqual({ url, secretKey: "shell" });
+  });
+
+  it("refuses a flag naming another project, or a bare flag", () => {
+    const shell = { NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SECRET_KEY: "k" };
+    expect(
+      resolveTarget(["--production=somethingelsehere"], shell, {}),
+    ).toHaveProperty("refusal");
+    expect(resolveTarget(["--production"], shell, {})).toHaveProperty(
+      "refusal",
+    );
+    expect(resolveTarget(["--production="], shell, {})).toHaveProperty(
+      "refusal",
+    );
+  });
+
+  it("takes neither address nor key from .env.local", () => {
+    expect(resolveTarget([`--production=${ref}`], {}, local)).toHaveProperty(
+      "refusal",
+    );
+    expect(
+      resolveTarget(
+        [`--production=${ref}`],
+        { NEXT_PUBLIC_SUPABASE_URL: url },
+        local,
+      ),
+    ).toHaveProperty("refusal");
+  });
+});
+
+describe("oversized images", () => {
+  it("refuses more pixels than any phone takes", async () => {
+    const huge = await sharp({
+      create: {
+        width: 11000,
+        height: 11000,
+        channels: 3,
+        background: "white",
+      },
+    })
+      .png({ compressionLevel: 1 })
+      .toBuffer();
+    await expect(processPhoto(huge)).rejects.toThrow(UnreadablePhotoError);
   });
 });

@@ -12,6 +12,7 @@ import {
   whatsappLink,
 } from "@/lib/cms/defaults";
 import { publicMediaUrl } from "@/lib/cms/media-url";
+import { recover } from "@/lib/cms/runtime";
 import { findPage } from "@/lib/cms/registry";
 import { blockDataSchema, reviewBodySchema } from "@/lib/cms/stored";
 import type {
@@ -25,10 +26,16 @@ import type { Database } from "@/lib/db/types";
 import { getPublicEnv } from "@/lib/env";
 
 // How public pages read content (WEB-07). Visitors get an anon client with
-// named columns, so RLS and the column grant keep drafts out of reach. If the
-// database cannot be reached the page renders the imported text instead of
-// failing. A page rendered that way heals itself: the [locale] layout sets a
-// one-hour revalidate as the safety net behind on-publish revalidation.
+// named columns, so RLS and the column grant keep drafts out of reach.
+//
+// If the database cannot be reached, lib/cms/runtime.ts decides: a build uses
+// the built-in text, and a running site throws, which keeps the last good page
+// when Next regenerates it in the background. With no earlier page to keep,
+// such as one just purged by a publish, app/[locale]/error.tsx shows inside the
+// layout, which never depends on the database. Nothing is cached in that case,
+// so the next visitor gets the real page once the database is back. The
+// [locale] layout's hourly revalidate replaces anything built with built-in
+// text.
 //
 // Drafts are read only in Draft Mode by a signed-in Owner, through that
 // Owner's own client. The Draft Mode cookie alone unlocks nothing.
@@ -66,13 +73,6 @@ const previewClient = cache(async (): Promise<AnyClient | null> => {
 });
 
 export const isPreviewing = async () => (await previewClient()) !== null;
-
-function logFailure(what: string, error: unknown) {
-  console.error(
-    `Showing built-in content: ${what} could not be read.`,
-    error instanceof Error ? error.message : error,
-  );
-}
 
 async function readBlocks(
   client: AnyClient,
@@ -250,8 +250,7 @@ export const loadPage = cache(
         Boolean(preview),
       );
     } catch (error) {
-      logFailure(`page ${slug}`, error);
-      return defaultView(page, lang);
+      return recover(`page ${slug}`, error, () => defaultView(page, lang));
     }
   },
 );
@@ -288,7 +287,24 @@ export interface SiteContact {
 }
 
 export async function loadContact(locale: string): Promise<SiteContact> {
-  const site = await loadPage("site", locale);
+  return contactFrom(await loadPage("site", locale));
+}
+
+/**
+ * The header and footer must render even when the page inside them fails, or
+ * the error screen itself could not show. So the layout never throws here.
+ */
+export async function loadContactForLayout(
+  locale: string,
+): Promise<SiteContact> {
+  try {
+    return await loadContact(locale);
+  } catch {
+    return contactFrom(defaultView(findPage("site")!, locale as Lang));
+  }
+}
+
+function contactFrom(site: PageView): SiteContact {
   const phone = site.text("contact", "phone");
   const whatsapp = site.text("contact", "whatsapp");
   return {
@@ -342,8 +358,7 @@ export const loadFaq = cache(async (locale: string): Promise<FaqEntry[]> => {
       }))
       .filter((row) => row.question.trim() && row.answer.trim());
   } catch (error) {
-    logFailure("questions", error);
-    return [];
+    return recover("questions", error, () => []);
   }
 });
 
@@ -411,8 +426,7 @@ export const loadReviews = cache(
         ];
       });
     } catch (error) {
-      logFailure("reviews", error);
-      return builtInReviews(lang);
+      return recover("reviews", error, () => builtInReviews(lang));
     }
   },
 );
@@ -455,8 +469,7 @@ export const loadPlaces = cache(
         }))
         .filter((row) => row.name.trim());
     } catch (error) {
-      logFailure("places", error);
-      return [];
+      return recover("places", error, () => []);
     }
   },
 );

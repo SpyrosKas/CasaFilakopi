@@ -17,7 +17,7 @@ import { RevealObserver } from "@/components/site/reveal-observer";
 import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
 import { routing } from "@/i18n/routing";
-import { isPreviewing, loadContact } from "@/lib/cms/public";
+import { isPreviewing, loadContactForLayout } from "@/lib/cms/public";
 
 // Publishing revalidates the pages it changes at once (WEB-08). This is only
 // the safety net, for a page last rendered while the database was unreachable.
@@ -70,7 +70,7 @@ export default async function LocaleLayout({
     clientNamespaces.map((namespace) => [namespace, messages[namespace]]),
   );
   const t = await getTranslations("Common");
-  const contact = await loadContact(locale);
+  const contact = await loadContactForLayout(locale);
   const previewing = await isPreviewing();
 
   return (

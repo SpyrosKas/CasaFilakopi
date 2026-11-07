@@ -16,7 +16,10 @@ export default async function EditContentPage({ params }: Props) {
   const page = findPage(slug);
   if (!page) notFound();
 
-  const { blocks, dirty } = await loadEditor(admin, page);
+  const { blocks, dirty, versions, hasPrevious } = await loadEditor(
+    admin,
+    page,
+  );
 
   const sectionCollections = page.sections.flatMap((section) =>
     section.photos ? [section.photos] : [],
@@ -61,6 +64,8 @@ export default async function EditContentPage({ params }: Props) {
       page={page}
       initialBlocks={blocks}
       initialDirty={dirty}
+      initialVersions={versions}
+      hasPrevious={hasPrevious}
       sectionPhotos={photos}
       stepPhotos={stepPhotos}
     />

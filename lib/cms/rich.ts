@@ -33,12 +33,12 @@ export const sanitizeLine = (value: string) =>
 export function safeHref(href: string): string | null {
   const value = href.trim();
   if (/^(https?:\/\/|mailto:|tel:)\S+$/i.test(value)) return value;
-  if (/^\/(?!\/)\S*$/.test(value)) return value;
+  if (/^\/(?![/\\])\S*$/.test(value)) return value;
   return null;
 }
 
 const INLINE =
-  /\*\*([^\n]+?)\*\*|\*([^\s*](?:[^\n*]*[^\s*])?)\*|\[([^\]\n]+)\]\(([^)\s]+)\)/;
+  /\*\*([^\n]+?)\*\*|\*([^\s*](?:[^\n*]*[^\s*])?)\*|\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/;
 
 function parseLine(text: string): Inline[] {
   const nodes: Inline[] = [];

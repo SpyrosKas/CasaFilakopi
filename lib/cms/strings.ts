@@ -158,6 +158,17 @@ const en = {
     preview: (lang: string) => `Preview ${lang}`,
     previewBanner: "Preview: unpublished text. Only you can see this.",
     previewClose: "Close preview",
+    requiredTitle: "Some fields must be filled in before publishing",
+    requiredBody: "A blank here would leave a hole on the page:",
+    publishedNewer:
+      "Published. Newer changes arrived while publishing: they are saved but not published yet.",
+    previous: "Go back to the previous version",
+    previousTitle: "Go back to the previous version?",
+    previousBody:
+      "The text from before your last Publish comes back as a draft, replacing your current draft. Visitors see nothing until you publish it.",
+    noPrevious: "There is no earlier published version of this page yet.",
+    restored: "The previous version is back as a draft. Publish it when ready.",
+    badLink: "That web address will not work. Start it with https://",
     publish: "Publish",
     publishing: "Publishing...",
     published: "Published. The site is updated.",
@@ -218,6 +229,7 @@ const en = {
       `${name} is not a photo we can use. Please choose a JPEG, PNG, WebP or HEIC photo.`,
     cannotRead: (name: string) =>
       `${name} could not be read. If it is a HEIC photo on a computer, open it on your phone or save it as JPEG first.`,
+    savedReload: "The photo is saved. Please reload this page to see it.",
     uploadFailed: (name: string) =>
       `${name} did not upload. Your connection may have dropped. Please try again.`,
     cover: "Cover",

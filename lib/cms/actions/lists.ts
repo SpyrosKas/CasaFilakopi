@@ -39,11 +39,13 @@ function refresh(kind: ListKind) {
 }
 
 async function nextOrder(admin: AdminContext, kind: ListKind) {
-  const { count, error } = await admin.supabase
+  const { data, error } = await admin.supabase
     .from(kind)
-    .select("id", { count: "exact", head: true });
+    .select("sort_order")
+    .order("sort_order", { ascending: false })
+    .limit(1);
   if (error) throw error;
-  return count ?? 0;
+  return (data[0]?.sort_order ?? -1) + 1;
 }
 
 const result = async (

@@ -9,7 +9,7 @@ export default defineConfig({
   use: { baseURL: `http://localhost:${port}` },
   webServer: {
     command: "pnpm dev",
-    env: { CMS_TEST_PAGE: "1" },
+    env: { CMS_TEST_PAGE: "1", CRON_SECRET: "cms-e2e-cron" },
     url: `http://localhost:${port}/en`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

@@ -10,7 +10,8 @@ import { db } from "./admin-helpers";
 export const TEST_SLUG = "cms-test";
 export const ROOM_COLLECTION = "section.room";
 export const HERO_COLLECTION = "test.hero";
-const COLLECTIONS = [ROOM_COLLECTION, HERO_COLLECTION];
+export const SHARE_COLLECTION = `og.${TEST_SLUG}`;
+const COLLECTIONS = [ROOM_COLLECTION, HERO_COLLECTION, SHARE_COLLECTION];
 
 export const storage = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
