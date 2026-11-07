@@ -14,6 +14,9 @@ const pull = vi.hoisted(() => vi.fn());
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => ({ value: "en" }) }),
+}));
 vi.mock("@/lib/admin/session", () => ({
   requireOwner: async () => owner.context,
 }));
