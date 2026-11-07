@@ -203,7 +203,7 @@ const capitalise = (text: string) =>
 /** Runs the real refund calculation on a sample booking. */
 function exampleLines(rules: CancellationRules, paidCents: number): string[] {
   return refundBands(rules).map(({ when, daysBefore }) => {
-    const { refundCents, retainedCents, stillOwedCents } = calculateRefund({
+    const { refundCents, retainedCents } = calculateRefund({
       rules,
       checkIn: EXAMPLE_CHECK_IN,
       cancelledOn: addDays(EXAMPLE_CHECK_IN, -daysBefore),
@@ -214,10 +214,10 @@ function exampleLines(rules: CancellationRules, paidCents: number): string[] {
     const kept = formatEuros(retainedCents);
 
     let outcome: string;
-    if (stillOwedCents > 0) {
-      outcome = g.keepAndOwe(kept, formatEuros(stillOwedCents));
-    } else if (refundCents === 0) {
-      outcome = g.keep(kept);
+    // D24: a shortfall is not chased, so a guest is never told they owe more.
+    if (refundCents === 0) {
+      outcome =
+        paidCents < EXAMPLE_TOTAL_CENTS ? g.keepNoMore(kept) : g.keep(kept);
     } else {
       outcome = retainedCents === 0 ? g.back(back) : g.backAndKeep(back, kept);
     }

@@ -67,6 +67,17 @@ test.beforeAll(async () => {
     `select value from public.settings where key = 'payment'`,
   );
   savedPayment = payment.rows[0].value;
+  // These tests start from a deposit. The seed itself now says full payment.
+  await db.query(
+    `update public.settings set value = $1::jsonb where key = 'payment'`,
+    [
+      JSON.stringify({
+        mode: "deposit",
+        deposit: { kind: "percent", percent: 30 },
+        balanceDaysBefore: 14,
+      }),
+    ],
+  );
   const policy = await db.query(
     `select id, tiers, is_non_refundable from public.cancellation_policies where is_default`,
   );
@@ -185,7 +196,7 @@ test("saving rules changes the settings but never an existing booking", async ({
     "If you have paid only the deposit (\u20ac255)",
   );
   await expect(preview).toContainText(
-    "7 to 29 days before you arrive: we keep the \u20ac255 and you still owe \u20ac245.",
+    "7 to 29 days before you arrive: we keep the \u20ac255 and you owe nothing more.",
   );
 
   await page.getByRole("button", { name: "Save", exact: true }).click();

@@ -40,30 +40,61 @@ type ActorFunction = {
 }[keyof Functions];
 
 /**
- * Calls a secret-key database function as an admin. The secret key skips the
- * MFA check inside RLS, so the role is checked through the user's own client
- * first. The admin's id goes in as p_actor so the audit log names them.
+ * The secret key skips the MFA check inside RLS, so anything that uses it
+ * asks the database first, through the user's own client.
+ */
+export async function assertAdminRole(admin: AdminContext): Promise<void> {
+  const { data: role, error } = await admin.supabase.rpc("current_admin_role");
+  if (error) throw error;
+  if (!role) throw new Error("not_authorised");
+}
+
+// The generated types cannot follow a generic function name.
+function secretRpc() {
+  return createAdminClient() as unknown as {
+    rpc(
+      name: string,
+      params: unknown,
+    ): PromiseLike<{ data: unknown; error: Error | null }>;
+  };
+}
+
+/**
+ * Calls a secret-key database function as an admin, after the role check. The
+ * admin's id goes in as p_actor so the audit log names them.
  */
 export async function callAdminRpc<K extends ActorFunction>(
   admin: AdminContext,
   fn: K,
   args: Omit<Functions[K]["Args"], "p_actor">,
 ): Promise<Functions[K]["Returns"]> {
-  const { data: role, error: roleError } =
-    await admin.supabase.rpc("current_admin_role");
-  if (roleError) throw roleError;
-  if (!role) throw new Error("not_authorised");
-
-  // The generated types cannot follow a generic function name.
-  const db = createAdminClient() as unknown as {
-    rpc(
-      name: string,
-      params: unknown,
-    ): PromiseLike<{ data: unknown; error: Error | null }>;
-  };
-  const { data, error } = await db.rpc(fn, {
+  await assertAdminRole(admin);
+  const { data, error } = await secretRpc().rpc(fn, {
     ...args,
     p_actor: admin.userId,
+  });
+  if (error) throw error;
+  return data as Functions[K]["Returns"];
+}
+
+/** These three name the admin in a column of their own, not p_actor. */
+const RECORDER_PARAM = {
+  record_payment: "p_recorded_by",
+  record_refund: "p_recorded_by",
+  create_block: "p_created_by",
+} as const;
+
+type RecordingFunction = keyof typeof RECORDER_PARAM;
+
+export async function callRecordingRpc<K extends RecordingFunction>(
+  admin: AdminContext,
+  fn: K,
+  args: Omit<Functions[K]["Args"], (typeof RECORDER_PARAM)[K]>,
+): Promise<Functions[K]["Returns"]> {
+  await assertAdminRole(admin);
+  const { data, error } = await secretRpc().rpc(fn, {
+    ...args,
+    [RECORDER_PARAM[fn]]: admin.userId,
   });
   if (error) throw error;
   return data as Functions[K]["Returns"];

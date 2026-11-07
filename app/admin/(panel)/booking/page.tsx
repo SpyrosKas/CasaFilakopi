@@ -1,9 +1,20 @@
-import { ActionForm, Field } from "@/components/admin/form";
+import { ActionForm, Field, SelectField } from "@/components/admin/form";
+import { PageHead } from "@/components/admin/ui";
 import { saveBookingSettings } from "@/lib/admin/actions/settings";
 import { MIN_HOLD_MINUTES } from "@/lib/admin/config";
 import { requireOwner } from "@/lib/admin/session";
 import { loadBookingSettings } from "@/lib/admin/settings-data";
 import { t } from "@/lib/admin/strings";
+
+/** Stored as an hour from 0 to 24, shown as a time of day. */
+const CUTOFF_OPTIONS = [
+  { value: "24", label: t.booking.cutoffNoLimit },
+  ...Array.from({ length: 23 }, (_, index) => ({
+    value: String(index + 1),
+    label: t.booking.cutoffAt(index + 1),
+  })),
+  { value: "0", label: t.booking.cutoffNever },
+];
 
 export default async function BookingSettingsPage() {
   const admin = await requireOwner();
@@ -12,8 +23,7 @@ export default async function BookingSettingsPage() {
 
   return (
     <div className="stack">
-      <h1>{b.title}</h1>
-      <p>{b.intro}</p>
+      <PageHead title={b.title} intro={b.intro} />
       <ActionForm
         action={saveBookingSettings}
         submitLabel={t.common.save}
@@ -26,12 +36,12 @@ export default async function BookingSettingsPage() {
           hint={b.holdHint(MIN_HOLD_MINUTES)}
           defaultValue={settings.holdMinutes}
         />
-        <Field
+        <SelectField
           label={b.cutoff}
           name="sameDayCutoffHour"
-          inputMode="numeric"
           hint={b.cutoffHint}
-          defaultValue={settings.sameDayCutoffHour}
+          defaultValue={String(settings.sameDayCutoffHour)}
+          options={CUTOFF_OPTIONS}
         />
         <Field
           label={b.horizon}

@@ -14,9 +14,9 @@ export default async function PanelLayout({
 }) {
   const admin = await requireAdmin();
   return (
-    <>
+    <div className="admin-shell">
       <AdminNav isOwner={admin.role === "owner"} />
       <main className="page">{children}</main>
-    </>
+    </div>
   );
 }

@@ -332,8 +332,8 @@ describe("guest preview", () => {
       heading: "If you have paid only the deposit (€300)",
       lines: [
         "30 days or more before you arrive: you get €300 back.",
-        "7 to 29 days before you arrive: we keep the €300 and you still owe €200.",
-        "Less than 7 days before you arrive: we keep the €300 and you still owe €700.",
+        "7 to 29 days before you arrive: we keep the €300 and you owe nothing more.",
+        "Less than 7 days before you arrive: we keep the €300 and you owe nothing more.",
       ],
     });
   });
@@ -348,7 +348,7 @@ describe("guest preview", () => {
   it("uses exact cents for a deposit like 33.33%", () => {
     const { example } = describeRules(deposit(33.33, 14), noRefund);
     expect(example.depositOnly?.lines).toEqual([
-      "Any time before you arrive: we keep the €333.30 and you still owe €666.70.",
+      "Any time before you arrive: we keep the €333.30 and you owe nothing more.",
     ]);
   });
 });
