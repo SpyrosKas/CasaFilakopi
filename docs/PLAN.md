@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** Working alone until the Google Workspace, Resend and Stripe session (D23). Merged: WEB, ENGINE, ADMIN, INV, DESIGN. Running: INV Excel, ADMIN-OPS, CMS, CHN. Next: MAIL, PAY, then Greek admin, drafts, hardening.
+**Status:** Usage limit hit; resume after 05:20. Merged: WEB, ENGINE, ADMIN, INV with Excel, DESIGN. Reviewed, fixes pending on branches: `feat/admin-ops`, `feat/channels`, `feat/cms` (review running), `feat/mail` (review running). Not started: PAY, Greek admin, drafts, T4.32 cron, hardening. Staging needs migrations 10 to 13 after merge. Run full Playwright once on a quiet database.
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
