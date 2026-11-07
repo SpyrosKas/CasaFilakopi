@@ -93,8 +93,10 @@ async function fillDetails(page: Page, locale: "en" | "el") {
   await page
     .getByLabel(t.email, { exact: true })
     .fill(`pay-e2e-${randomUUID()}@example.test`);
+  // Picking the country fills in its dialling code; the guest adds the rest.
+  await page.getByLabel(t.country, { exact: true }).selectOption("GR");
+  await expect(page.getByLabel(t.phone)).toHaveValue("+30 ");
   await page.getByLabel(t.phone).fill("+30 690 000 0000");
-  await page.getByLabel(t.country, { exact: true }).fill("Greece");
   await page.getByLabel(t.accept).check();
 }
 

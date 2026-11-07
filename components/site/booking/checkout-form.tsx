@@ -8,9 +8,17 @@ import {
   useState,
   type FormEvent,
   type ReactNode,
+  type Ref,
 } from "react";
 import { Link } from "@/i18n/navigation";
 import type { QuoteView } from "@/lib/payments/quote";
+import {
+  CALLING_CODES,
+  codeForStoredName,
+  countryOptions,
+  phoneForCountry,
+  storedCountryName,
+} from "@/lib/site-countries";
 import { useConsent } from "../consent-store";
 import { Turnstile } from "../turnstile";
 import type { StayChoice } from "./use-stay";
@@ -53,7 +61,9 @@ function Field({
   invalid,
   errorText,
   defaultValue,
+  inputRef,
 }: {
+  inputRef?: Ref<HTMLInputElement>;
   name: string;
   label: string;
   type?: string;
@@ -79,7 +89,12 @@ function Field({
       {multiline ? (
         <textarea {...shared} rows={4} maxLength={2000} />
       ) : (
-        <input {...shared} type={type} autoComplete={autoComplete} />
+        <input
+          {...shared}
+          ref={inputRef}
+          type={type}
+          autoComplete={autoComplete}
+        />
       )}
       {invalid && (
         <p className="contact-error" id={`${id}-error`}>
@@ -121,6 +136,23 @@ export function CheckoutForm({
   const checkAllowed = consent === "accepted" || allowedHere;
   const waitingForCheck = !!SITE_KEY && !token;
   const heading = useRef<HTMLHeadingElement>(null);
+  const phone = useRef<HTMLInputElement>(null);
+  const [countries] = useState(() => countryOptions(locale));
+  const [countryCode, setCountryCode] = useState(() =>
+    codeForStoredName(draft.country),
+  );
+
+  function pickCountry(next: string) {
+    const input = phone.current;
+    if (input && next) {
+      input.value = phoneForCountry(
+        input.value,
+        CALLING_CODES[countryCode],
+        CALLING_CODES[next] ?? "",
+      );
+    }
+    setCountryCode(next);
+  }
 
   useEffect(() => {
     heading.current?.focus();
@@ -148,7 +180,7 @@ export function CheckoutForm({
       name: text("name"),
       email: text("email"),
       phone: text("phone"),
-      country: text("country"),
+      country: countryCode ? storedCountryName(countryCode) : "",
       arrivalTime: text("arrivalTime"),
       specialRequests: text("specialRequests"),
     };
@@ -236,6 +268,33 @@ export function CheckoutForm({
         invalid={isInvalid("email")}
         errorText={t("errors.email")}
       />
+      <div className="contact-field">
+        <label htmlFor="checkout-country">{t("details.country")}</label>
+        <select
+          id="checkout-country"
+          name="country"
+          required
+          autoComplete="country"
+          value={countryCode}
+          onChange={(event) => pickCountry(event.target.value)}
+          aria-invalid={isInvalid("country") ? true : undefined}
+          aria-describedby={
+            isInvalid("country") ? "checkout-country-error" : undefined
+          }
+        >
+          <option value="">{t("details.countryChoose")}</option>
+          {countries.map((country) => (
+            <option key={country.code} value={country.code}>
+              {country.name} (+{CALLING_CODES[country.code]})
+            </option>
+          ))}
+        </select>
+        {isInvalid("country") && (
+          <p className="contact-error" id="checkout-country-error">
+            {t("errors.country")}
+          </p>
+        )}
+      </div>
       <Field
         name="phone"
         type="tel"
@@ -243,17 +302,9 @@ export function CheckoutForm({
         required
         autoComplete="tel"
         defaultValue={draft.phone}
+        inputRef={phone}
         invalid={isInvalid("phone")}
         errorText={t("errors.phone")}
-      />
-      <Field
-        name="country"
-        label={t("details.country")}
-        required
-        autoComplete="country-name"
-        defaultValue={draft.country}
-        invalid={isInvalid("country")}
-        errorText={t("errors.country")}
       />
       <Field
         name="arrivalTime"

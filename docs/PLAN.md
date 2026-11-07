@@ -154,7 +154,7 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 | A3 | Vercel project | Phase 2 end | YOU | [x] |
 | A4 | Domain and DNS access | Wave 1 | YOU/HOST | [ ] |
 | A5 | Resend | Wave 1 | YOU | [ ] |
-| A6 | Stripe test mode | Wave 2 | YOU | [ ] |
+| A6 | Stripe test mode | Wave 2 | YOU | [x] |
 | A7 | Cloudflare Turnstile | Wave 2 | YOU | [ ] |
 | A8 | Sentry | Phase 6 | YOU | [ ] |
 | A9 | OTA iCal URLs | Wave 2 | HOST | [ ] |
@@ -317,7 +317,7 @@ Security and tooling:
 ### Wave 2 (Phase 4): parallel
 
 **Track PAY + checkout** (owns `app/[locale]/book`, `app/api/stripe`, `lib/payments`)
-- [ ] T4.1 A6: Stripe test mode; webhook forwarding by CLI
+- [x] T4.1 A6: Stripe test mode; webhook forwarding by CLI (2026-11-08: staging keys in Vercel, event destination to /api/stripe/webhook; a 4242 test booking for 16–18 Nov, €284, confirmed from checkout.session.completed)
 - [x] T4.2 Availability search and calendar widget (`WEB-04`, `WEB-05`)
 - [x] T4.3 Checkout flow, server-side reprice, terms stored with version (`BKG-06`, `BKG-07`, `BKG-08`, `CMP-03`)
 - [x] T4.4 Hold 35 min, Checkout Session 30 min (`BKG-09`, `BKG-10`, `PAY-01`)

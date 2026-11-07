@@ -1762,6 +1762,7 @@ html[data-reveal-active] [data-reveal] {
 }
 
 .contact-field input,
+.contact-field select,
 .contact-field textarea {
   width: 100%;
   min-width: 0;
