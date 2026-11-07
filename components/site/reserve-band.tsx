@@ -1,29 +1,35 @@
-import { useTranslations } from "next-intl";
+import { getLocale, getTranslations } from "next-intl/server";
 import Image from "next/image";
-import { heroImages } from "@/content/house";
 import { Link } from "@/i18n/navigation";
-import { richTags } from "./rich-text";
+import { loadPage } from "@/lib/cms/public";
+import { RichInline } from "./rich-text";
 
 /** The closing call to action above the footer. */
-export function ReserveBand() {
-  const t = useTranslations("Reserve");
+export async function ReserveBand() {
+  const t = await getTranslations("Reserve");
+  const site = await loadPage("site", await getLocale());
+  const photo = site.photo("reserve.band");
   return (
     <section className="reserve-band">
       <div className="reserve-band__text">
         <div data-reveal="fade-up">
-          <h2>{t.rich("title", richTags)}</h2>
+          <h2>
+            <RichInline text={site.text("reserve", "title")} />
+          </h2>
           <Link href="/book" className="btn btn-light">
             {t("button")}
           </Link>
         </div>
       </div>
       <div className="reserve-band__photo">
-        <Image
-          src={heroImages.reserve}
-          alt=""
-          fill
-          sizes="(min-width: 900px) 56vw, 100vw"
-        />
+        {photo && (
+          <Image
+            src={photo.src}
+            alt=""
+            fill
+            sizes="(min-width: 900px) 56vw, 100vw"
+          />
+        )}
       </div>
     </section>
   );

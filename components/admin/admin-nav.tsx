@@ -7,6 +7,7 @@ import { logout } from "@/lib/admin/actions/auth";
 import { t } from "@/lib/admin/strings";
 
 const OWNER_LINKS = [
+  { href: "/admin/content", label: t.nav.content },
   { href: "/admin/property", label: t.nav.property },
   { href: "/admin/house", label: t.nav.house },
   { href: "/admin/booking", label: t.nav.booking },

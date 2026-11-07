@@ -2,6 +2,7 @@ legacy
 docs
 pnpm-lock.yaml
 .next
+.next-offline
 tests/baseline/legacy
 lib/db/types.ts
 .claude

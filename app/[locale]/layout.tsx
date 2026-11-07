@@ -12,10 +12,16 @@ import type { ReactNode } from "react";
 import { preload } from "react-dom";
 import { BookBar } from "@/components/site/book-bar";
 import { CookieBanner } from "@/components/site/cookie-banner";
+import { PreviewBanner } from "@/components/site/preview-banner";
 import { RevealObserver } from "@/components/site/reveal-observer";
 import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
 import { routing } from "@/i18n/routing";
+import { isPreviewing, loadContact } from "@/lib/cms/public";
+
+// Publishing revalidates the pages it changes at once (WEB-08). This is only
+// the safety net, for a page last rendered while the database was unreachable.
+export const revalidate = 3600;
 
 // Only the strings the browser needs: the page text stays on the server.
 const clientNamespaces = ["Common", "Nav", "Consent", "Map", "Error"] as const;
@@ -64,6 +70,8 @@ export default async function LocaleLayout({
     clientNamespaces.map((namespace) => [namespace, messages[namespace]]),
   );
   const t = await getTranslations("Common");
+  const contact = await loadContact(locale);
+  const previewing = await isPreviewing();
 
   return (
     <html lang={locale}>
@@ -72,7 +80,8 @@ export default async function LocaleLayout({
           <a className="skip-link" href="#main">
             {t("skipToContent")}
           </a>
-          <SiteHeader />
+          {previewing && <PreviewBanner />}
+          <SiteHeader contact={contact} />
           <main id="main" tabIndex={-1}>
             {children}
           </main>

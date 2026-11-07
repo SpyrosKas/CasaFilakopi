@@ -2,8 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { contact } from "@/content/contact";
 import { Link, usePathname } from "@/i18n/navigation";
+import type { SiteContact } from "@/lib/cms/public";
 import { LanguageSwitcher } from "./language-switcher";
 import { MapEmbed } from "./map-embed";
 
@@ -50,7 +50,7 @@ function keepFocusInMenu(event: KeyboardEvent) {
   }
 }
 
-export function SiteHeader() {
+export function SiteHeader({ contact }: { contact: SiteContact }) {
   const t = useTranslations("Nav");
   const tCommon = useTranslations("Common");
   const pathname = usePathname();
@@ -179,7 +179,7 @@ export function SiteHeader() {
           <div className="extra-info">
             <h2>{t("contactInfo")}</h2>
             <p>
-              {t("addressLine1")} <br /> {t("addressLine2")}
+              {contact.addressLine1} <br /> {contact.addressLine2}
             </p>
             <p>
               <a href={`mailto:${contact.email}`}>{contact.email}</a>

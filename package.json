@@ -16,6 +16,8 @@
     "test:e2e": "playwright test",
     "baseline": "playwright test -c playwright.baseline.config.ts",
     "seed:invoices": "tsx scripts/seed-invoice-demo.ts",
+    "migrate:content": "tsx scripts/migrate-content.ts",
+    "migrate:media": "tsx scripts/migrate-media.ts",
     "visual": "playwright test -c tests/visual/playwright.config.ts"
   },
   "dependencies": {
@@ -29,6 +31,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
+    "sharp": "^0.35.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -43,7 +46,6 @@
     "pg": "^8.23.1",
     "prettier": "^3.9.10",
     "tsx": "4.23.15",
-    "sharp": "^0.35.5",
     "typescript": "^5",
     "vitest": "^5.1.0"
   },

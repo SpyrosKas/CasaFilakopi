@@ -1,6 +1,6 @@
-import { useTranslations } from "next-intl";
-import { contact } from "@/content/contact";
+import { getLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
+import { loadContact } from "@/lib/cms/public";
 import { CookieSettingsButton } from "./cookie-banner";
 import { Icon } from "./icon";
 
@@ -22,10 +22,11 @@ const extraLinks = [
   { href: "/cookies", key: "cookies" },
 ] as const;
 
-export function SiteFooter() {
-  const t = useTranslations("Footer");
-  const tNav = useTranslations("Nav");
-  const tCommon = useTranslations("Common");
+export async function SiteFooter() {
+  const t = await getTranslations("Footer");
+  const tNav = await getTranslations("Nav");
+  const tCommon = await getTranslations("Common");
+  const contact = await loadContact(await getLocale());
 
   return (
     <footer id="site-footer" className="footer-section">
@@ -33,7 +34,7 @@ export function SiteFooter() {
         <div className="footer-brand">
           <p className="footer-name">{tCommon("siteName")}</p>
           <address>
-            {tNav("addressLine1")} <br /> {tNav("addressLine2")}
+            {contact.addressLine1} <br /> {contact.addressLine2}
           </address>
           <p className="social">
             <a

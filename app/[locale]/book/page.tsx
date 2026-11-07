@@ -1,32 +1,34 @@
 import type { Metadata } from "next";
-import { useTranslations } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { use } from "react";
 import { PageHero } from "@/components/site/hero";
-import { contact } from "@/content/contact";
-import { heroImages } from "@/content/house";
+import { loadContact, loadPage, pageMetadata } from "@/lib/cms/public";
 
 type Props = { params: Promise<{ locale: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "Book" });
-  return { title: t("metaTitle") };
+  return pageMetadata("book", locale, t("metaTitle"));
 }
 
 /** Placeholder entry point. Track PAY builds the booking flow here. */
-export default function BookPage({ params }: Props) {
-  const { locale } = use(params);
+export default async function BookPage({ params }: Props) {
+  const { locale } = await params;
   setRequestLocale(locale);
-  const t = useTranslations("Book");
+  const t = await getTranslations("Book");
+  const page = await loadPage("book", locale);
+  const contact = await loadContact(locale);
 
   return (
     <>
-      <PageHero image={heroImages.page} title={t("title")} />
+      <PageHero
+        image={page.photo("page.hero")?.src}
+        title={page.text("hero", "title")}
+      />
       <section className="section">
         <div className="wrap page-content">
-          <p className="lead">{t("soon")}</p>
-          <p>{t("body")}</p>
+          <p className="lead">{page.text("main", "soon")}</p>
+          <p>{page.text("main", "body")}</p>
           <p className="book-links">
             <a href={`mailto:${contact.email}`}>
               {t("emailLabel", { email: contact.email })}

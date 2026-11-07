@@ -26,6 +26,7 @@ export const t = {
     booking: "Booking settings",
     rules: "Payment and cancellation",
     invoices: "Invoices and receipts",
+    content: "Text and photos",
     account: "My account",
     signOut: "Sign out",
   },
