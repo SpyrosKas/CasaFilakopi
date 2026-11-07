@@ -18,23 +18,49 @@ const TAB_LINKS: { href: string; key: NavKey }[] = [
   { href: "/admin/messages", key: "messages" },
 ];
 
-const STAFF_LINKS: { href: string; key: NavKey }[] = [
-  { href: "/admin/guests", key: "guests" },
-  { href: "/admin/rates/restrictions", key: "restrictions" },
-];
+type NavLink = { href: string; key: NavKey; ownerOnly?: boolean };
+type GroupKey = keyof AdminStrings["navGroups"];
 
-const OWNER_LINKS: { href: string; key: NavKey }[] = [
-  { href: "/admin/reports", key: "reports" },
-  { href: "/admin/rates", key: "rates" },
-  { href: "/admin/content", key: "content" },
-  { href: "/admin/property", key: "property" },
-  { href: "/admin/house", key: "house" },
-  { href: "/admin/booking", key: "booking" },
-  { href: "/admin/rules", key: "rules" },
-  { href: "/admin/invoices", key: "invoices" },
-  { href: "/admin/integrations", key: "integrations" },
-  { href: "/admin/email", key: "email" },
-  { href: "/admin/users", key: "users" },
+/**
+ * The menu behind "Menu", in groups so Yorgos finds a screen by what it is
+ * for. Staff see only the links without ownerOnly, and a group with none left
+ * is not shown.
+ */
+const MENU_GROUPS: { key: GroupKey; links: NavLink[] }[] = [
+  {
+    key: "guests",
+    links: [
+      { href: "/admin/guests", key: "guests" },
+      { href: "/admin/invoices", key: "invoices", ownerOnly: true },
+      { href: "/admin/reports", key: "reports", ownerOnly: true },
+    ],
+  },
+  {
+    key: "prices",
+    links: [
+      { href: "/admin/rates", key: "rates", ownerOnly: true },
+      { href: "/admin/rates/restrictions", key: "restrictions" },
+      { href: "/admin/booking", key: "booking", ownerOnly: true },
+      { href: "/admin/rules", key: "rules", ownerOnly: true },
+    ],
+  },
+  {
+    key: "website",
+    links: [
+      { href: "/admin/content", key: "content", ownerOnly: true },
+      { href: "/admin/house", key: "house", ownerOnly: true },
+      { href: "/admin/property", key: "property", ownerOnly: true },
+    ],
+  },
+  {
+    key: "setup",
+    links: [
+      { href: "/admin/integrations", key: "integrations", ownerOnly: true },
+      { href: "/admin/email", key: "email", ownerOnly: true },
+      { href: "/admin/users", key: "users", ownerOnly: true },
+      { href: "/admin/account", key: "account" },
+    ],
+  },
 ];
 
 // The slash matters: /admin/bookings is not under /admin/booking.
@@ -48,11 +74,11 @@ export function AdminNav({ isOwner }: { isOwner: boolean }) {
   const isReady = useHydrated();
   const pathname = usePathname();
 
-  const links = [
-    ...STAFF_LINKS,
-    ...(isOwner ? OWNER_LINKS : []),
-    { href: "/admin/account", key: "account" as const },
-  ];
+  const groups = MENU_GROUPS.map((group) => ({
+    key: group.key,
+    links: group.links.filter((link) => isOwner || !link.ownerOnly),
+  })).filter((group) => group.links.length > 0);
+  const links = groups.flatMap((group) => group.links);
   // /admin/rates/restrictions sits under /admin/rates, so the longest match wins.
   const here = links
     .filter((link) => isHere(pathname, link.href))
@@ -65,16 +91,25 @@ export function AdminNav({ isOwner }: { isOwner: boolean }) {
       </Link>
       <div id="admin-menu" className={open ? "menu menu-open" : "menu"}>
         <ul>
-          {links.map((link) => (
-            <li key={link.href}>
-              <Link
-                href={link.href}
-                prefetch={false}
-                aria-current={link.href === here ? "page" : undefined}
-                onClick={() => setOpen(false)}
-              >
-                {t.nav[link.key]}
-              </Link>
+          {groups.map((group) => (
+            <li key={group.key} className="menu-group">
+              <p className="menu-heading" id={`menu-${group.key}`}>
+                {t.navGroups[group.key]}
+              </p>
+              <ul aria-labelledby={`menu-${group.key}`}>
+                {group.links.map((link) => (
+                  <li key={link.href}>
+                    <Link
+                      href={link.href}
+                      prefetch={false}
+                      aria-current={link.href === here ? "page" : undefined}
+                      onClick={() => setOpen(false)}
+                    >
+                      {t.nav[link.key]}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </li>
           ))}
           <li className="menu-language">

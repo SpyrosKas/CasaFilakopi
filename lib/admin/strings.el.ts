@@ -65,6 +65,12 @@ export const adminEl: AdminStrings = {
     account: "Ο λογαριασμός μου",
     signOut: "Αποσύνδεση",
   },
+  navGroups: {
+    guests: "Επισκέπτες και έσοδα",
+    prices: "Τιμές και διαμονές",
+    website: "Ιστοσελίδα",
+    setup: "Ρυθμίσεις",
+  },
   login: {
     title: "Σύνδεση",
     email: "Email",

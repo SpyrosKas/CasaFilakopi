@@ -57,6 +57,12 @@ const en = {
     account: "My account",
     signOut: "Sign out",
   },
+  navGroups: {
+    guests: "Guests and money",
+    prices: "Prices and stays",
+    website: "Website",
+    setup: "Setup",
+  },
   login: {
     title: "Sign in",
     email: "Email",

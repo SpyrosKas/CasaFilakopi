@@ -1291,3 +1291,27 @@
     align-self: flex-start;
   }
 }
+
+/* Menu groups: a small heading over each set of screens. */
+.menu-group + .menu-group,
+.menu-group + .menu-language {
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  padding-top: 4px;
+}
+
+.menu-heading {
+  margin: 0;
+  padding: 8px 16px 2px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@media (min-width: 900px) {
+  .menu-heading {
+    padding: 12px 12px 2px;
+  }
+}

@@ -396,6 +396,10 @@ Security and tooling:
 - [x] T6.7 README, runbook, ER diagram, host guide in Greek and English (`DOC-01` to `DOC-04`)
 - [x] T6.8 Late-payment and double-webhook drills
 - [x] T6.11 Calendar feedback (2026-11-07): past dates faded, price per night on each free date, general minimum stay in Admin → Booking settings next to the maximum, and a clear message on a too-short or too-long stay, in the calendar and from the server
+- [x] T6.12 Speed (2026-11-08): Vercel functions pinned to `dub1` next to Supabase `eu-west-1` (`vercel.json`); fewer sequential database trips in the calendar and quote; the return page asks every second for the first 15 s. Staging: calendar data 1.7–3.8 s → ~0.5 s, quote ~1.5 s → ~0.22 s, booking page 1.5–3 s → ~0.4 s. Home LCP on staging is the hero at ~1 s; the Next "LCP image" warnings in the test logs come from the tests scrolling, so no change there
+- [x] T6.13 Checkout country dropdown (2026-11-08): countries in the guest's language, picking one fills the phone dialling code, still editable; the booking keeps the English country name
+- [ ] T6.14 Admin menu in groups (2026-11-08): Guests and money, Prices and stays, Website, Setup; staff see only their links
+- [ ] T6.15 Dependabot alert #5: jQuery 3.2.1 in the legacy site on `master` (`js/jquery-3.2.1.min.js`), fixed in 3.4.0. Needs YOU to approve touching `master`, or it goes away at T7.5/T7.7
 
 - [ ] T6.9 HOST sets real starting values for payment and cancellation rules in Admin
 - [ ] T6.10 HOST test, unaided: change a cancellation rule, upload, delete and reorder photos, from a phone

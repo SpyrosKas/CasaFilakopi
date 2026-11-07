@@ -131,17 +131,14 @@ export async function loadAvailability(
     Math.max(booking.minLeadDays, afterCutoff ? 1 : 0),
   );
 
-  const calendar = await createAvailabilityService(deps.db).getCalendar(
-    house.id,
-    today,
-    addDays(lastNight, 1),
-  );
-  const taken = calendar
-    .filter((day) => !day.isAvailable)
-    .map((day) => day.night);
-  const takenSet = new Set(taken);
-
-  const [allPrices, rules] = await Promise.all([
+  // The free nights, the prices and the stay rules need only the dates above,
+  // so they load together.
+  const [calendar, allPrices, rules] = await Promise.all([
+    createAvailabilityService(deps.db).getCalendar(
+      house.id,
+      today,
+      addDays(lastNight, 1),
+    ),
     loadNightPrices(
       deps,
       house.id,
@@ -156,6 +153,10 @@ export async function loadAvailability(
       .gte("end_date", firstCheckIn)
       .lte("start_date", lastNight),
   ]);
+  const taken = calendar
+    .filter((day) => !day.isAvailable)
+    .map((day) => day.night);
+  const takenSet = new Set(taken);
   if (rules.error) throw new Error(rules.error.message);
   // Only free nights carry a price, so a taken night says nothing more.
   const prices = Object.fromEntries(
