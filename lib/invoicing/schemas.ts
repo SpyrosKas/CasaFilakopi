@@ -24,13 +24,21 @@ const company = z.object({
   taxOffice: required(120),
 });
 
+const issueFields = {
+  paymentId: z.uuid(),
+  /** Used in place of a guest name the PDF cannot show. */
+  billingName: optional(200).default(""),
+};
+
 export const issueSchema = z.discriminatedUnion("docType", [
-  z.object({ docType: z.literal("receipt"), paymentId: z.uuid() }),
-  company.extend({ docType: z.literal("invoice"), paymentId: z.uuid() }),
+  z.object({ docType: z.literal("receipt"), ...issueFields }),
+  company.extend({ docType: z.literal("invoice"), ...issueFields }),
 ]);
 
 export const creditSchema = z.object({
   invoiceId: z.uuid(),
+  /** What had been credited when the form opened. */
+  expectedCreditedCents: z.coerce.number().int().min(0),
   amount: required(20),
   reason: required(500),
 });

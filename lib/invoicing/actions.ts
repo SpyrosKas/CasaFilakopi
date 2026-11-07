@@ -13,6 +13,7 @@ import {
 import { requireOwner, type AdminContext } from "@/lib/admin/session";
 import { t } from "@/lib/admin/strings";
 import type { Json } from "@/lib/db/types";
+import { cannotPrint } from "./fonts";
 import {
   loadIndex,
   loadInvoicingSetup,
@@ -31,7 +32,7 @@ import { parseEuros } from "./format";
 import { buildCreditLines, buildPaymentLines } from "./lines";
 import type { SelectionReview } from "./review";
 import { creditSchema, issueSchema, issuerFormSchema } from "./schemas";
-import { storeInvoicePdf } from "./storage";
+import { existingPdfs, storeInvoicePdf } from "./storage";
 
 // Every action starts with requireOwner: these are public POST endpoints, and
 // invoices are Owner only. Issuing goes through the database functions alone.
@@ -73,13 +74,39 @@ export async function issueDocument(
   const payment = await loadIssuablePayment(admin, form.paymentId);
   if (!payment) return errorState(s.errors.paymentGone);
 
-  const { lines } = buildPaymentLines({
+  const built = buildPaymentLines({
     reference: payment.reference,
     breakdown: payment.breakdown,
-    payment: { kind: payment.kind, amountCents: payment.amountCents },
+    payment: {
+      kind: payment.kind,
+      amountCents: payment.amountCents,
+      isRetained: payment.isRetained,
+    },
   });
+  if (!built.ok) return errorState(s.errors.priceUnreadable);
+
+  // What the Owner types must print: it cannot be fixed after issuing.
+  const typed: Record<string, string> = {
+    billingName: form.billingName,
+    ...(form.docType === "invoice"
+      ? {
+          companyName: form.companyName,
+          address: form.address,
+          taxOffice: form.taxOffice,
+        }
+      : {}),
+  };
+  const fieldErrors = Object.fromEntries(
+    Object.entries(typed)
+      .filter(([, value]) => cannotPrint(value).length > 0)
+      .map(([field]) => [field, s.errors.cannotPrint]),
+  );
+  if (Object.keys(fieldErrors).length > 0) {
+    return { status: "error", message: t.common.fixErrors, fieldErrors };
+  }
+
   const customer = {
-    name: payment.guestName,
+    name: form.billingName || payment.guestName,
     email: payment.guestEmail,
     country: payment.guestCountry,
     ...(form.docType === "invoice"
@@ -92,24 +119,25 @@ export async function issueDocument(
       : {}),
   };
 
-  let invoiceId: string;
+  let issued: { invoice_id: string; already_issued: boolean };
   try {
-    const result = await callAdminRpc(admin, "issue_invoice", {
+    issued = (await callAdminRpc(admin, "issue_invoice", {
       p_booking_id: payment.bookingId,
       p_doc_type: form.docType,
       p_customer: asJson(customer),
-      p_lines: asJson(lines),
+      p_lines: asJson(built.lines),
       p_payment_id: payment.paymentId,
       p_payment_method: payment.method,
-    });
-    invoiceId = (result as { invoice_id: string }).invoice_id;
+    })) as typeof issued;
   } catch (error) {
     return errorState(databaseMessage(error));
   }
 
-  await tryStorePdf(admin, invoiceId);
+  await tryStorePdf(admin, issued.invoice_id);
   revalidatePath(LIST);
-  redirect(`${LIST}/${invoiceId}`);
+  redirect(
+    `${LIST}/${issued.invoice_id}${issued.already_issued ? "?notice=already_issued" : ""}`,
+  );
 }
 
 export async function issueCreditNote(
@@ -119,7 +147,14 @@ export async function issueCreditNote(
   const admin = await requireOwner();
   const parsed = creditSchema.safeParse(formFields(formData));
   if (!parsed.success) return fromZodError(parsed.error);
-  const { invoiceId, amount, reason } = parsed.data;
+  const { invoiceId, amount, reason, expectedCreditedCents } = parsed.data;
+  if (cannotPrint(reason).length > 0) {
+    return {
+      status: "error",
+      message: t.common.fixErrors,
+      fieldErrors: { reason: s.errors.cannotPrint },
+    };
+  }
 
   const rows = await loadIndex(admin);
   const original = rows.find((row) => row.id === invoiceId);
@@ -130,6 +165,7 @@ export async function issueCreditNote(
   const earlier = rows.filter((row) => row.creditsInvoiceId === invoiceId);
   const creditedCents = earlier.reduce((sum, r) => sum + r.totalCents, 0);
   const creditedVatCents = earlier.reduce((sum, r) => sum + r.vatCents, 0);
+  const creditedFeeCents = earlier.reduce((sum, r) => sum + r.feeCents, 0);
   const amountCents = parseEuros(amount);
   if (amountCents === null || amountCents <= 0) {
     return {
@@ -145,16 +181,20 @@ export async function issueCreditNote(
       documentNumber: original.documentNumber,
       totalCents: original.totalCents,
       vatCents: original.vatCents,
+      feeCents: original.feeCents,
       lines: await loadLines(admin, invoiceId),
       creditedCents,
       creditedVatCents,
+      creditedFeeCents,
       amountCents,
     });
-    // The database holds the real limit, under a lock.
+    // The database holds the real limit, under a lock, and refuses a form
+    // that was opened before another credit note went through.
     const result = await callAdminRpc(admin, "issue_credit_note", {
       p_invoice_id: invoiceId,
       p_lines: asJson(lines),
       p_reason: reason,
+      p_expected_credited_cents: expectedCreditedCents,
     });
     creditId = (result as { invoice_id: string }).invoice_id;
   } catch (error) {
@@ -247,9 +287,14 @@ export async function markSent(
   const resolved = await resolveSelection(admin, formData.getAll("id"));
   if (!resolved.ok) return errorState(s.selection.refused);
 
-  const ready = resolved.rows.filter((row) => row.hasPdf);
-  const skipped = resolved.rows.length - ready.length;
   try {
+    // The file itself is checked: a stored path alone proves nothing.
+    const paths = resolved.rows.flatMap((row) => row.pdfPath ?? []);
+    const files = await existingPdfs(admin, paths);
+    const ready = resolved.rows.filter(
+      (row) => row.pdfPath && files.has(row.pdfPath),
+    );
+    const skipped = resolved.rows.length - ready.length;
     const marked = await callAdminRpc(admin, "mark_invoices_exported", {
       p_invoice_ids: ready.map((row) => row.id),
     });
@@ -275,19 +320,23 @@ export async function saveInvoicingSettings(
   if (!parsed.success) return fromZodError(parsed.error);
   const { defaultDocType, ...issuer } = parsed.data;
 
-  const { settings, isUnreadable } = await loadInvoicingSetup(admin);
+  const { settings, stored, isStored, isUnreadable } =
+    await loadInvoicingSetup(admin);
   if (isUnreadable) return errorState(s.settings.unreadable);
 
+  // The stored value, not the parsed one: filling in a default here would look
+  // to the database like a change to isProvisional.
+  const base = isStored ? stored : { isProvisional: true, myDataMode: "off" };
   const { error } = await admin.supabase.from("settings").upsert({
     key: "invoicing",
     is_public: false,
     value: asJson({
-      ...settings,
+      ...base,
       defaultDocType,
       issuer: { ...settings.issuer, ...issuer },
     }),
   });
-  if (error) return errorState(t.common.somethingWrong);
+  if (error) return errorState(databaseMessage(error));
 
   revalidatePath(`${LIST}/settings`);
   return okState(t.common.saved);

@@ -38,11 +38,6 @@ export function formatPercent(basisPoints: number): string {
   return basisPoints % 100 === 0 ? `${whole}%` : `${whole},${part}%`;
 }
 
-/** The same shape finish_invoice returns as document_number. */
-export function documentNumber(prefix: string, number: number): string {
-  return `${prefix}-${String(number).padStart(6, "0")}`;
-}
-
 /** The calendar date on Milos at this instant. */
 export const issuedOn = (issuedAt: string): string =>
   athensDate(new Date(issuedAt));
@@ -51,13 +46,38 @@ export function previousMonth(now: Date): string {
   return addMonths(`${athensDate(now).slice(0, 7)}-01`, -1).slice(0, 7);
 }
 
-/** Storage refuses some characters, and a series prefix is free text. */
-export function pdfFileName(number: string): string {
-  return `${number.replace(/[^A-Za-z0-9._-]/g, "_")}.pdf`;
+/** A tax document should not sit in a shared cache. The value is seconds. */
+export const PDF_CACHE_SECONDS = "0";
+
+/**
+ * A name a phone or computer can save. Greek stays readable, because a series
+ * prefix may be Greek. Different numbers can come out alike here, so this name
+ * is never used to tell two documents apart.
+ */
+export function readableName(number: string): string {
+  const name = number
+    .normalize("NFC")
+    .replace(/[^\p{L}\p{N}._-]/gu, "_")
+    .replace(/^\.+/, "");
+  return name || "document";
 }
 
-/** {year}/{month}/{documentNumber}.pdf, by the issue date on Milos. */
-export function pdfStoragePath(number: string, issuedAt: string): string {
+/** The name of one document saved on its own. */
+export function pdfFileName(number: string): string {
+  return `${readableName(number)}.pdf`;
+}
+
+/** Inside a ZIP, where names must be unique: the id settles any clash. */
+export function zipEntryName(number: string, invoiceId: string): string {
+  return `${readableName(number)}-${invoiceId.slice(0, 8)}.pdf`;
+}
+
+/**
+ * {year}/{month}/{invoiceId}.pdf, by the issue date on Milos. The id, not the
+ * number: storage keys are ASCII, so two Greek numbers could otherwise land on
+ * one path and one document could show another's file.
+ */
+export function pdfStoragePath(invoiceId: string, issuedAt: string): string {
   const [year, month] = issuedOn(issuedAt).split("-");
-  return `${year}/${month}/${pdfFileName(number)}`;
+  return `${year}/${month}/${invoiceId}.pdf`;
 }

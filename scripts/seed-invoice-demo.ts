@@ -2,13 +2,14 @@ import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 import type { Database } from "@/lib/db/types";
 import { athensDate, addMonths } from "@/lib/domain/dates";
-import { documentNumber, pdfStoragePath } from "@/lib/invoicing/format";
+import { PDF_CACHE_SECONDS, pdfStoragePath } from "@/lib/invoicing/format";
 import { buildCreditLines, buildPaymentLines } from "@/lib/invoicing/lines";
 import { renderInvoicePdf } from "@/lib/invoicing/pdf";
 import {
   isLocalUrl,
   seedRefusal,
   setupRefusal,
+  stagingRefFrom,
 } from "@/lib/invoicing/seed-guard";
 import {
   invoicingSettingsSchema,
@@ -26,7 +27,7 @@ import {
 
 // Demo invoices for local and staging. Run it with:
 //   pnpm seed:invoices            (local)
-//   pnpm seed:invoices --staging  (staging)
+//   pnpm seed:invoices --staging=iecsohriashrdbqcelkl  (staging)
 // Every guest is fake and every email is @example.test. Stays are in 2035, so
 // no real dates are blocked. Documents can never be deleted, so run it once.
 //
@@ -153,7 +154,7 @@ async function main() {
       process.env.APP_ENV,
       process.env.SUPABASE_PROJECT_NAME,
     ],
-    stagingFlag: process.argv.includes("--staging"),
+    stagingRef: stagingRefFrom(process.argv),
   });
   if (refused) stop(refused);
 
@@ -216,7 +217,7 @@ async function main() {
     }
     const { data: row, error } = await db
       .from("invoices")
-      .select("*, invoice_series ( prefix ), bookings ( reference )")
+      .select("*, bookings ( reference )")
       .eq("id", invoiceId)
       .single();
     if (error) stop(error.message);
@@ -239,21 +240,13 @@ async function main() {
     if (row.credits_invoice_id) {
       const { data: original } = await db
         .from("invoices")
-        .select("number, invoice_series ( prefix )")
+        .select("document_number")
         .eq("id", row.credits_invoice_id)
         .single();
-      creditsDocumentNumber = original
-        ? documentNumber(
-            original.invoice_series?.prefix ?? "",
-            original.number ?? 0,
-          )
-        : null;
+      creditsDocumentNumber = original?.document_number ?? null;
     }
 
-    const number = documentNumber(
-      row.invoice_series?.prefix ?? "",
-      row.number ?? 0,
-    );
+    const number = row.document_number ?? "";
     const bytes = await renderInvoicePdf({
       documentNumber: number,
       docType: row.doc_type as DocType,
@@ -271,13 +264,22 @@ async function main() {
       creditsDocumentNumber,
       reason: row.reason,
     });
-    const path = pdfStoragePath(number, row.issued_at ?? "");
+    const path = pdfStoragePath(invoiceId, row.issued_at ?? "");
     const { error: uploadError } = await db.storage
       .from("invoices")
-      .upload(path, bytes, { contentType: "application/pdf", upsert: true });
+      .upload(path, bytes, {
+        contentType: "application/pdf",
+        cacheControl: PDF_CACHE_SECONDS,
+      });
     if (uploadError) stop(uploadError.message);
     await rpc("attach_invoice_pdf", { p_invoice_id: invoiceId, p_path: path });
-    return { number, lines, total: row.total_cents, vat: row.vat_cents };
+    return {
+      number,
+      lines,
+      total: row.total_cents,
+      vat: row.vat_cents,
+      fee: row.fee_cents,
+    };
   }
 
   const today = athensDate(new Date());
@@ -334,11 +336,12 @@ async function main() {
         p_note: `demo-ref-${number}-${part}`,
       });
 
-      const { lines } = buildPaymentLines({
+      const built = buildPaymentLines({
         reference: booking.reference,
         breakdown,
         payment: { kind: payment.kind, amountCents: payment.amount },
       });
+      if (!built.ok) stop("The demo price could not be read.");
       const result = await rpc<{ invoice_id: string }>("issue_invoice", {
         p_booking_id: booking.booking_id,
         p_doc_type: plan.doc,
@@ -357,7 +360,7 @@ async function main() {
                 email: `demo-guest-${number}@example.test`,
                 country: "GR",
               },
-        p_lines: lines,
+        p_lines: built.lines,
         p_payment_id: paymentId,
         p_payment_method: plan.method,
       });
@@ -373,11 +376,14 @@ async function main() {
             documentNumber: document.number,
             totalCents: document.total,
             vatCents: document.vat,
+            feeCents: document.fee,
             lines: document.lines,
             creditedCents: 0,
             creditedVatCents: 0,
+            creditedFeeCents: 0,
             amountCents,
           }),
+          p_expected_credited_cents: 0,
           p_reason:
             plan.credit === "full"
               ? "Ακύρωση κράτησης (demo) / Booking cancelled (demo)"

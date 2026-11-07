@@ -3,8 +3,6 @@ import {
   createTestUser,
   deleteCreatedUsers,
   enrolOwner,
-  lockSharedSettings,
-  releaseSharedSettings,
   signInWithPassword,
   testAddress,
   type TestUser,
@@ -118,14 +116,12 @@ async function phone(browser: Browser, width: number) {
 let owner: TestUser;
 
 test.beforeAll(async () => {
-  await lockSharedSettings();
   await ensureInvoicing();
 });
 
 test.afterAll(async () => {
   await cleanUpInvoices();
   await deleteCreatedUsers();
-  await releaseSharedSettings();
 });
 
 for (const width of WIDTHS) {
@@ -160,12 +156,11 @@ for (const width of WIDTHS) {
 
       await page.goto("/admin/invoices");
       await check(page, "list");
-      await page.getByRole("button", { name: "Menu" }).isVisible();
+      await expect(page.getByRole("button", { name: "Menu" })).toBeVisible();
     });
 
     test("the rows are cards on a phone", async () => {
       await page.goto(`/admin/invoices?month=${month}`);
-      if (width >= 900) return;
       const thead = page.locator(".inv-table thead");
       await expect(thead).toBeHidden();
       const box = await page
@@ -231,6 +226,11 @@ for (const width of WIDTHS) {
       await page.getByRole("button", { name: "Issue the document" }).click();
       await page.locator(".field-error").first().waitFor();
       await check(page, "issue-errors");
+
+      const unreadable = await paidBooking({ guest: "अनिता शर्मा" });
+      await page.goto(`/admin/invoices/issue/${unreadable.paymentId}`);
+      await expect(page.getByTestId("name-warning")).toBeVisible();
+      await check(page, "issue-name-warning");
     });
 
     test("a credit note", async () => {

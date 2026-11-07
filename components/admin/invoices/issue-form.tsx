@@ -11,9 +11,12 @@ const s = t.invoices.issue;
 export function IssueForm({
   paymentId,
   defaultType,
+  unprintable,
 }: {
   paymentId: string;
   defaultType: IssuableDocType;
+  /** Characters in the guest's name that the PDF cannot show. */
+  unprintable: string[];
 }) {
   const [docType, setDocType] = useState<IssuableDocType>(defaultType);
   const options = [
@@ -36,6 +39,16 @@ export function IssueForm({
       pendingLabel={s.submitting}
     >
       <input type="hidden" name="paymentId" value={paymentId} />
+      {unprintable.length > 0 && (
+        <div className="stack" data-testid="name-warning">
+          <p className="notice notice-bad">{s.nameWarning}</p>
+          <Field
+            label={s.billingName}
+            name="billingName"
+            hint={s.billingNameHint}
+          />
+        </div>
+      )}
       <fieldset>
         <legend>{s.typeHeading}</legend>
         {options.map((option) => (

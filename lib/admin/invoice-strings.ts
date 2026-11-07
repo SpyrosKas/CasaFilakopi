@@ -167,10 +167,12 @@ export const invoiceStrings = {
     regenerate: "Make the PDF again",
     regenerating: "Making the PDF...",
     pdfMade: "The PDF is ready.",
+    alreadyIssued:
+      "This payment already had this document, so nothing new was issued and the details you just typed were not applied. To correct it, issue a credit note.",
     sentOn: (date: string) => `Sent to the accountant on ${date}.`,
     notSent: "Not sent to the accountant yet.",
     assumption:
-      "For the accountant to confirm: one line for a deposit or balance, with VAT in proportion to the booking.",
+      "For the accountant to confirm: these amounts are a share of the booking, or do not match its full price.",
     creditsHeading: "Credits this document",
     reason: "Reason",
     creditHistory: "Credit notes",
@@ -190,7 +192,7 @@ export const invoiceStrings = {
     amountHint: "Example: 120,50",
     reason: "Reason",
     assumption:
-      "For the accountant to confirm: part of a document is credited as one line, with VAT in proportion.",
+      "For the accountant to confirm: part of a document is credited as a taxable line and a fee line, in proportion.",
     submit: "Issue the credit note",
     submitting: "Issuing...",
     nothingLeft: "This document has already been fully credited.",
@@ -216,7 +218,14 @@ export const invoiceStrings = {
     previewHeading: "What will be on the document",
     guest: "Guest",
     assumption:
-      "For the accountant to confirm: a deposit or balance is one line, with VAT in proportion. The climate fee is not shown apart on it.",
+      "For the accountant to confirm: this is a share of the booking, with VAT in proportion and the climate fee on its own line.",
+    retained:
+      "This booking ended without a stay. The document covers only the money kept, not the refunded part. For the accountant to confirm (question 7).",
+    nameWarning:
+      "The guest's name has letters the PDF cannot show. They would print as question marks. Type the name in Latin or Greek letters below.",
+    retainedShort: "Money kept on a booking that ended without a stay",
+    billingName: "Name on the document",
+    billingNameHint: "Leave empty to keep the name as it is.",
     warning:
       "Once issued, a document cannot be changed or deleted. Its number is used for good.",
     submit: "Issue the document",
@@ -271,6 +280,10 @@ export const invoiceStrings = {
     notFound: "That document could not be found.",
     paymentGone:
       "This payment cannot have a document now. It may already have one.",
+    priceUnreadable:
+      "The price stored on this booking cannot be read, so no document was issued. Please ask for help before going on.",
+    cannotPrint:
+      "This has letters the PDF cannot show. Please use Latin or Greek letters.",
     pdfFailed:
       "The PDF could not be made just now. The document is safe. Please try again.",
     database: {
@@ -284,6 +297,12 @@ export const invoiceStrings = {
       invoice_not_found: "That document could not be found.",
       invoice_not_creditable: "This document cannot be credited.",
       credit_reason_required: "Please give a reason.",
+      credit_already_changed:
+        "Another credit note went through after you opened this page, so nothing was issued. Please open it again and check the amount.",
+      provisional_flag_locked:
+        "Provisional documents cannot be switched off here, so nothing was saved.",
+      invoice_series_in_use:
+        "A number series already in use cannot be changed.",
       credit_exceeds_invoice:
         "That is more than is left to credit on this document.",
     },

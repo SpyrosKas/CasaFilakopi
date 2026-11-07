@@ -9,6 +9,7 @@ import {
   loadInvoicingSetup,
   loadIssuablePayment,
 } from "@/lib/invoicing/data";
+import { cannotPrint } from "@/lib/invoicing/fonts";
 import { formatEuro } from "@/lib/invoicing/format";
 import { buildPaymentLines } from "@/lib/invoicing/lines";
 
@@ -33,10 +34,14 @@ export default async function IssuePage({
   if (!payment) notFound();
 
   const { settings } = await loadInvoicingSetup(admin);
-  const { lines, isSingleLine } = buildPaymentLines({
+  const built = buildPaymentLines({
     reference: payment.reference,
     breakdown: payment.breakdown,
-    payment: { kind: payment.kind, amountCents: payment.amountCents },
+    payment: {
+      kind: payment.kind,
+      amountCents: payment.amountCents,
+      isRetained: payment.isRetained,
+    },
   });
 
   return (
@@ -46,26 +51,36 @@ export default async function IssuePage({
         {s.title}
       </Link>
 
-      <section className="preview">
-        <h2>{s.previewHeading}</h2>
-        <p>
-          {s.guest}: {payment.guestName || "-"}
+      {!built.ok ? (
+        <p className="notice notice-bad" role="alert">
+          {t.invoices.errors.priceUnreadable}
         </p>
-        <ul className="inv-lines">
-          {lines.map((line, index) => (
-            <li key={index}>
-              <span>{line.description}</span>
-              <strong>{formatEuro(line.totalCents)}</strong>
-            </li>
-          ))}
-        </ul>
-        {isSingleLine && <p className="hint">{s.assumption}</p>}
-      </section>
+      ) : (
+        <>
+          <section className="preview">
+            <h2>{s.previewHeading}</h2>
+            <p>
+              {s.guest}: {payment.guestName || "-"}
+            </p>
+            <ul className="inv-lines">
+              {built.lines.map((line, index) => (
+                <li key={index}>
+                  <span>{line.description}</span>
+                  <strong>{formatEuro(line.totalCents)}</strong>
+                </li>
+              ))}
+            </ul>
+            {built.needsConfirmation && <p className="hint">{s.assumption}</p>}
+            {payment.isRetained && <p className="hint">{s.retained}</p>}
+          </section>
 
-      <IssueForm
-        paymentId={payment.paymentId}
-        defaultType={settings.defaultDocType}
-      />
+          <IssueForm
+            paymentId={payment.paymentId}
+            defaultType={settings.defaultDocType}
+            unprintable={cannotPrint(payment.guestName)}
+          />
+        </>
+      )}
     </div>
   );
 }

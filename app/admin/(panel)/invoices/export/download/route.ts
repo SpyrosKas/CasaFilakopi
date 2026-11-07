@@ -12,6 +12,9 @@ import { applyFilters, filtersSchema } from "@/lib/invoicing/filters";
 // The monthly pack and a selection are the same export: only how the list of
 // documents is found differs. Neither marks anything as sent.
 
+/** A long month of PDFs is sent as it is read, so this is the slow case. */
+export const maxDuration = 300;
+
 function refuse(message: string, status: number): Response {
   return new Response(message, {
     status,

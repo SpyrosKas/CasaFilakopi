@@ -3,8 +3,8 @@ import type { AdminContext } from "@/lib/admin/session";
 import { buildCsv, type CsvRow } from "./csv";
 import { loadIndex, loadLinesFor, type IndexRow } from "./data";
 import { selectionSchema } from "./filters";
-import { formatPercent, issuedOn, pdfFileName } from "./format";
-import { hasSingleLineAssumption, vatBreakdown } from "./lines";
+import { formatPercent, issuedOn, pdfFileName, zipEntryName } from "./format";
+import { needsAccountantCheck, vatBreakdown } from "./lines";
 import { reviewRows, type SelectionReview } from "./review";
 import { readPdf } from "./storage";
 import { zipStream, type ZipEntry } from "./zip";
@@ -46,10 +46,12 @@ export function reviewOf(rows: IndexRow[]): SelectionReview {
   );
 }
 
+/** Headers are ASCII, so a Greek name goes in the encoded form browsers read. */
 function attachmentHeaders(fileName: string, type: string): HeadersInit {
+  const plain = fileName.replace(/[^A-Za-z0-9._-]/g, "_");
   return {
     "Content-Type": type,
-    "Content-Disposition": `attachment; filename="${fileName}"`,
+    "Content-Disposition": `attachment; filename="${plain}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
     "Cache-Control": "private, no-store",
   };
 }
@@ -77,7 +79,7 @@ async function csvRows(
       address: row.customer.address,
       bookingReference: row.bookingReference,
       paymentMethod: row.paymentMethod ?? "",
-      transaction: row.transactionIds[0] ?? "",
+      transaction: row.stripeReference,
       netCents: row.netCents,
       vatCents: row.vatCents,
       feeCents: row.feeCents,
@@ -88,8 +90,8 @@ async function csvRows(
         .join(", "),
       creditsDocument: row.creditsDocumentNumber ?? "",
       reason: row.reason ?? "",
-      note: hasSingleLineAssumption(own)
-        ? "Μία γραμμή, προς επιβεβαίωση / One line, to be confirmed"
+      note: needsAccountantCheck(own)
+        ? "Προς επιβεβαίωση από τον λογιστή / To be confirmed by the accountant"
         : "",
       isSent: row.isSent,
       pdfFile: pdfFiles.get(row.id) ?? PDF_MISSING_CELL,
@@ -111,7 +113,7 @@ async function* packEntries(
   for (const row of rows) {
     const data = row.pdfPath ? await readPdf(admin, row.pdfPath) : null;
     if (!data) continue;
-    const fileName = pdfFileName(row.documentNumber);
+    const fileName = zipEntryName(row.documentNumber, row.id);
     pdfFiles.set(row.id, fileName);
     yield { name: fileName, data };
   }

@@ -1,6 +1,6 @@
 import "server-only";
 import type { AdminContext } from "@/lib/admin/session";
-import { documentNumber, issuedOn } from "./format";
+import { issuedOn } from "./format";
 import type { FilterableRow } from "./filters";
 import type { PdfInput } from "./pdf";
 import { invoicingSettingsSchema, type InvoicingSettings } from "./settings";
@@ -23,10 +23,9 @@ import {
 const PAGE = 1000;
 
 const INDEX_COLUMNS = `
-  id, number, doc_type, issued_at, is_provisional, issuer, customer,
+  id, document_number, doc_type, issued_at, is_provisional, issuer, customer,
   booking_id, payment_id, payment_method, pdf_path, exported_at,
   credits_invoice_id, reason, total_cents, net_cents, vat_cents, fee_cents,
-  invoice_series ( prefix ),
   bookings ( reference, guest_name ),
   payments ( stripe_payment_intent_id, stripe_checkout_session_id, note )
 `;
@@ -44,11 +43,13 @@ export interface IndexRow extends FilterableRow {
   exportedAt: string | null;
   reason: string | null;
   creditsDocumentNumber: string | null;
+  /** The Stripe reference, for the export. A credit note takes its original's. */
+  stripeReference: string;
 }
 
 interface RawRow {
   id: string;
-  number: number | null;
+  document_number: string | null;
   doc_type: DocType;
   issued_at: string | null;
   is_provisional: boolean;
@@ -65,7 +66,6 @@ interface RawRow {
   net_cents: number;
   vat_cents: number;
   fee_cents: number;
-  invoice_series: { prefix: string } | null;
   bookings: { reference: string | null; guest_name: string | null } | null;
   payments: {
     stripe_payment_intent_id: string | null;
@@ -78,13 +78,9 @@ function toRow(raw: RawRow): IndexRow {
   const customer = parseCustomer(raw.customer);
   const guest = raw.bookings?.guest_name ?? "";
   const issuedAt = raw.issued_at ?? "";
-  const number = documentNumber(
-    raw.invoice_series?.prefix ?? "",
-    raw.number ?? 0,
-  );
   return {
     id: raw.id,
-    documentNumber: number,
+    documentNumber: raw.document_number ?? "",
     docType: raw.doc_type,
     issuedAt,
     issuedOn: issuedOn(issuedAt),
@@ -110,6 +106,10 @@ function toRow(raw: RawRow): IndexRow {
     reason: raw.reason,
     creditsInvoiceId: raw.credits_invoice_id,
     creditsDocumentNumber: null,
+    stripeReference:
+      raw.payments?.stripe_payment_intent_id ??
+      raw.payments?.stripe_checkout_session_id ??
+      "",
     totalCents: raw.total_cents,
     netCents: raw.net_cents,
     vatCents: raw.vat_cents,
@@ -135,9 +135,10 @@ export async function loadIndex(admin: AdminContext): Promise<IndexRow[]> {
   const rows = raw.map(toRow);
   const byId = new Map(rows.map((row) => [row.id, row]));
   for (const row of rows) {
-    if (row.creditsInvoiceId) {
-      row.creditsDocumentNumber =
-        byId.get(row.creditsInvoiceId)?.documentNumber ?? null;
+    const original = row.creditsInvoiceId && byId.get(row.creditsInvoiceId);
+    if (original) {
+      row.creditsDocumentNumber = original.documentNumber;
+      row.stripeReference = original.stripeReference;
     }
   }
   return rows;
@@ -238,13 +239,26 @@ export async function loadPayment(
 }
 
 /** Bookings a document may be issued for, as this screen sees them. */
-const ISSUABLE_BOOKINGS = ["confirmed", "checked_in", "completed"] as const;
+const ISSUABLE_BOOKINGS = [
+  "confirmed",
+  "checked_in",
+  "completed",
+  "cancelled",
+  "no_show",
+] as const;
+const ENDED_BOOKINGS: string[] = ["cancelled", "no_show"];
 
 export interface IssuablePayment {
   paymentId: string;
   kind: PaymentKind;
   method: PaymentMethod;
+  /**
+   * What the document is for. On a cancelled or no-show booking that is only
+   * the money kept. ASSUMPTION, flagged for the accountant (question 7).
+   */
   amountCents: number;
+  /** True for money kept on a cancelled or no-show booking. */
+  isRetained: boolean;
   paidAt: string | null;
   bookingId: string;
   reference: string;
@@ -258,6 +272,7 @@ export interface IssuablePayment {
 
 const ISSUABLE_COLUMNS = `
   id, kind, method, amount_cents, paid_at,
+  refunds ( amount_cents, status ),
   bookings!inner (
     id, reference, status, guest_name, guest_email, guest_country,
     check_in, check_out, price_breakdown
@@ -270,8 +285,10 @@ interface RawIssuable {
   method: PaymentMethod;
   amount_cents: number;
   paid_at: string | null;
+  refunds: { amount_cents: number; status: string }[];
   bookings: {
     id: string;
+    status: string;
     reference: string | null;
     guest_name: string | null;
     guest_email: string | null;
@@ -282,13 +299,28 @@ interface RawIssuable {
   };
 }
 
+/** What is left of a payment once refunds are taken off. */
+function keptCents(raw: RawIssuable): number {
+  const refunded = raw.refunds
+    .filter((refund) => refund.status !== "failed")
+    .reduce((sum, refund) => sum + refund.amount_cents, 0);
+  return raw.amount_cents - refunded;
+}
+
+/** On a cancelled or no-show booking, only if some money was kept. */
+function canIssue(raw: RawIssuable): boolean {
+  return !ENDED_BOOKINGS.includes(raw.bookings.status) || keptCents(raw) > 0;
+}
+
 function toIssuable(raw: RawIssuable): IssuablePayment {
   const booking = raw.bookings;
+  const isRetained = ENDED_BOOKINGS.includes(booking.status);
   return {
     paymentId: raw.id,
     kind: raw.kind,
     method: raw.method,
-    amountCents: raw.amount_cents,
+    amountCents: isRetained ? keptCents(raw) : raw.amount_cents,
+    isRetained,
     paidAt: raw.paid_at,
     bookingId: booking.id,
     reference: booking.reference ?? "",
@@ -327,7 +359,9 @@ export async function loadIssuablePayments(
     raw.push(...(data as unknown as RawIssuable[]));
     if (data.length < PAGE) break;
   }
-  return raw.filter((row) => !issued.has(row.id)).map(toIssuable);
+  return raw
+    .filter((row) => !issued.has(row.id) && canIssue(row))
+    .map(toIssuable);
 }
 
 export async function loadIssuablePayment(
@@ -342,11 +376,14 @@ export async function loadIssuablePayment(
     .in("bookings.status", ISSUABLE_BOOKINGS)
     .maybeSingle();
   if (error) throw error;
-  return data ? toIssuable(data as unknown as RawIssuable) : null;
+  const raw = data as unknown as RawIssuable | null;
+  return raw && canIssue(raw) ? toIssuable(raw) : null;
 }
 
 export interface InvoicingSetup {
   settings: InvoicingSettings;
+  /** Exactly as stored, so a save changes only what it means to. */
+  stored: Record<string, unknown>;
   /** False when the setting has never been saved. */
   isStored: boolean;
   /** True when the stored setting could not be read as expected. */
@@ -365,6 +402,7 @@ export async function loadInvoicingSetup(
   const parsed = invoicingSettingsSchema.safeParse(data?.value ?? {});
   return {
     settings: parsed.data ?? invoicingSettingsSchema.parse({}),
+    stored: (data?.value ?? {}) as Record<string, unknown>,
     isStored: data !== null,
     isUnreadable: !parsed.success,
   };

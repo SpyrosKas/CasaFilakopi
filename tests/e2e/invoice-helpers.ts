@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import { documentNumber, pdfStoragePath } from "@/lib/invoicing/format";
+import { pdfStoragePath } from "@/lib/invoicing/format";
 import { renderInvoicePdf } from "@/lib/invoicing/pdf";
 import { parseCustomer, parseIssuer } from "@/lib/invoicing/types";
 import { db } from "./admin-helpers";
@@ -21,6 +21,7 @@ const created = {
   bookings: [] as string[],
   series: [] as string[],
   paths: [] as string[],
+  emails: [] as string[],
   roomId: "",
   settings: false,
 };
@@ -60,6 +61,43 @@ const BREAKDOWN = {
 
 export const BOOKING_TOTAL = BREAKDOWN.totalCents;
 
+/** 864,00 of house charges, 13% VAT 112,32 and a 15,00 fee. */
+export const VAT_BREAKDOWN = {
+  ...BREAKDOWN,
+  totalCents: 99132,
+  dueNowCents: 99132,
+  lines: [
+    {
+      kind: "accommodation",
+      label: { en: "Accommodation", el: "Διαμονή" },
+      quantity: 5,
+      unitCents: 18000,
+      totalCents: 90000,
+    },
+    {
+      kind: "discount",
+      label: { en: "Discount", el: "Έκπτωση" },
+      quantity: 1,
+      unitCents: -3600,
+      totalCents: -3600,
+    },
+    {
+      kind: "vat",
+      label: { en: "VAT", el: "ΦΠΑ" },
+      quantity: 1,
+      unitCents: 11232,
+      totalCents: 11232,
+    },
+    {
+      kind: "fee",
+      label: { en: "Climate resilience fee", el: "Τέλος ανθεκτικότητας" },
+      quantity: 5,
+      unitCents: 300,
+      totalCents: 1500,
+    },
+  ],
+};
+
 export const DUMMY_ISSUER = {
   legalName: "DUMMY Business Name",
   vatNumber: "000000000",
@@ -69,7 +107,7 @@ export const DUMMY_ISSUER = {
   email: "host@miloscasa.com",
 };
 
-/** The seed may not have run here yet. Call while holding the settings lock. */
+/** Works with or without the seed. Only adds what is missing. */
 export async function ensureInvoicing(): Promise<void> {
   const inserted = await db.query(
     `insert into public.settings (key, value) values ('invoicing', $1::jsonb)
@@ -122,12 +160,16 @@ export async function paidBooking(
     kind?: "full" | "deposit";
     amountCents?: number;
     method?: string;
+    breakdown?: { totalCents: number };
   } = {},
 ): Promise<PaidBooking> {
+  const breakdown = options.breakdown ?? BREAKDOWN;
   stayDay += 3;
   const start = new Date(Date.UTC(2041, 0, stayDay));
   const end = new Date(Date.UTC(2041, 0, stayDay + 2));
   const guest = options.guest ?? `Δοκιμή ${randomUUID().slice(0, 8)}`;
+  const email = `invoice-e2e-${randomUUID()}@example.test`;
+  created.emails.push(email);
   const { rows } = await db.query(
     `select public.create_manual_booking(
        $1, $2::date, $3::date, 2, 0, $4::jsonb, $5::jsonb, $6,
@@ -139,29 +181,69 @@ export async function paidBooking(
       end.toISOString().slice(0, 10),
       JSON.stringify({
         name: guest,
-        email: `invoice-e2e-${randomUUID()}@example.test`,
+        email,
         country: "GR",
       }),
-      JSON.stringify(BREAKDOWN),
-      BOOKING_TOTAL,
+      JSON.stringify(breakdown),
+      breakdown.totalCents,
     ],
   );
   const { booking_id: bookingId, reference } = rows[0].r;
   created.bookings.push(bookingId);
 
   const intent = `pi_e2e_${randomUUID()}`;
-  const payment = await db.query(
-    `select public.record_payment($1, $2::public.payment_kind,
-       $3::public.payment_method, $4, $5) as id`,
-    [
-      bookingId,
-      options.kind ?? "full",
-      options.method ?? "card",
-      options.amountCents ?? BOOKING_TOTAL,
-      intent,
-    ],
+  const paymentId = await addPayment(
+    bookingId,
+    options.kind ?? "full",
+    options.amountCents ?? breakdown.totalCents,
+    intent,
+    options.method,
   );
-  return { bookingId, reference, paymentId: payment.rows[0].id, intent, guest };
+  return { bookingId, reference, paymentId, intent, guest };
+}
+
+export async function addPayment(
+  bookingId: string,
+  kind: string,
+  amountCents: number,
+  intent = `pi_e2e_${randomUUID()}`,
+  method = "card",
+): Promise<string> {
+  const { rows } = await db.query(
+    `select public.record_payment($1, $2::public.payment_kind,
+       $3::public.payment_method, $4, $5, 'free text note, ref 7') as id`,
+    [bookingId, kind, method, amountCents, intent],
+  );
+  return rows[0].id;
+}
+
+/** Cancels a booking, leaving part or all of a payment refunded. */
+export async function cancelWithRefund(
+  booking: PaidBooking,
+  refundCents: number,
+): Promise<void> {
+  await db.query(`select public.cancel_booking($1, 'Test')`, [
+    booking.bookingId,
+  ]);
+  await db.query(
+    `insert into public.refunds (booking_id, payment_id, amount_cents, status)
+     values ($1, $2, $3, 'succeeded')`,
+    [booking.bookingId, booking.paymentId, refundCents],
+  );
+}
+
+export async function setStatus(bookingId: string, status: string) {
+  await db.query(
+    `update public.bookings set status = $1::public.booking_status where id = $2`,
+    [status, bookingId],
+  );
+}
+
+export async function setBreakdown(bookingId: string, breakdown: unknown) {
+  await db.query(
+    `update public.bookings set price_breakdown = $1::jsonb where id = $2`,
+    [JSON.stringify(breakdown), bookingId],
+  );
 }
 
 export interface Fixture extends PaidBooking {
@@ -176,7 +258,7 @@ export interface Fixture extends PaidBooking {
  */
 export async function issuedDocument(
   month: string,
-  options: { withPdf?: boolean; guest?: string } = {},
+  options: { withPdf?: boolean; guest?: string; number?: string } = {},
 ): Promise<Fixture> {
   const booking = await paidBooking({ guest: options.guest });
   const lines = [
@@ -201,20 +283,20 @@ export async function issuedDocument(
   );
   const id: string = rows[0].r.invoice_id;
   const issuedAt = `${month}-15T10:00:00.000Z`;
+  const number: string = options.number ?? rows[0].r.document_number;
   await withoutTriggers(async (client) => {
     await client.query(
-      `update public.invoices set issued_at = $1 where id = $2`,
-      [issuedAt, id],
+      `update public.invoices set issued_at = $1, document_number = $2
+       where id = $3`,
+      [issuedAt, number, id],
     );
   });
-  const number: string = rows[0].r.document_number;
   if (options.withPdf === false) {
     return { ...booking, id, number, pdfPath: null };
   }
 
   const { rows: stored } = await db.query(
-    `select i.issuer, s.prefix, i.number from public.invoices i
-     join public.invoice_series s on s.id = i.series_id where i.id = $1`,
+    `select issuer from public.invoices where id = $1`,
     [id],
   );
   const bytes = await renderInvoicePdf({
@@ -239,10 +321,7 @@ export async function issuedDocument(
     creditsDocumentNumber: null,
     reason: null,
   });
-  const path = pdfStoragePath(
-    documentNumber(stored[0].prefix, stored[0].number),
-    issuedAt,
-  );
+  const path = pdfStoragePath(id, issuedAt);
   const { error } = await storage.upload(path, bytes, {
     contentType: "application/pdf",
     upsert: true,
@@ -286,11 +365,19 @@ export async function bulkDocuments(
     );
     await client.query(
       `insert into public.invoices (
-         booking_id, series_id, number, doc_type, status, issued_at, total_cents
+         booking_id, series_id, number, document_number, doc_type, status,
+         issued_at, total_cents
        )
-       select $1, $2, n, 'receipt', 'issued', $3::timestamptz, 100
+       select $1, $2, n, $5 || '-' || n, 'receipt', 'issued',
+         $3::timestamptz, 100
        from generate_series(1, $4::int) n`,
-      [booking.bookingId, series, `${month}-15T10:00:00Z`, count],
+      [
+        booking.bookingId,
+        series,
+        `${month}-15T10:00:00Z`,
+        count,
+        `ZB-${series}`,
+      ],
     );
   });
 }
@@ -327,6 +414,10 @@ export async function cleanUpInvoices(): Promise<void> {
       ids,
     );
     await client.query(
+      `delete from public.refunds where booking_id = any($1::uuid[])`,
+      ids,
+    );
+    await client.query(
       `delete from public.payments where booking_id = any($1::uuid[])`,
       ids,
     );
@@ -346,9 +437,10 @@ export async function cleanUpInvoices(): Promise<void> {
       [created.series],
     );
   });
-  await db.query(
-    `delete from public.guests where email like 'invoice-e2e-%@example.test'`,
-  );
+  // Only this spec's own: another may be running with bookings of its own.
+  await db.query(`delete from public.guests where email = any($1::text[])`, [
+    created.emails,
+  ]);
   if (created.settings) {
     await db.query(`delete from public.settings where key = 'invoicing'`);
   }

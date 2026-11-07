@@ -18,8 +18,9 @@ const NEWLINE = "\r\n";
 // skips. Tabs and returns count too.
 const FORMULA_START = /^[\s\u00A0]*[=+\-@\uFF1D\uFF0B\uFF0D\uFF20]|^[\t\r\n]/;
 
+/** Commas too: the file may be opened where the comma is the separator. */
 function quote(text: string): string {
-  return /[;"\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  return /[;,"\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 /** Text from anywhere. The apostrophe makes Excel treat it as plain text. */
@@ -99,10 +100,10 @@ function rowCells(row: CsvRow): string[] {
     textCell(row.paymentMethod),
     textCell(row.transaction),
     // Formatted here from whole numbers, so a minus sign is safe.
-    csvAmount(sign * row.netCents),
-    csvAmount(sign * row.vatCents),
-    csvAmount(sign * row.feeCents),
-    csvAmount(sign * row.totalCents),
+    quote(csvAmount(sign * row.netCents)),
+    quote(csvAmount(sign * row.vatCents)),
+    quote(csvAmount(sign * row.feeCents)),
+    quote(csvAmount(sign * row.totalCents)),
     textCell(row.vatRates),
     textCell(row.creditsDocument),
     textCell(row.reason),

@@ -67,6 +67,7 @@ export default async function IssueListPage({
                     {formatEuro(payment.amountCents)}. {s.stay}:{" "}
                     {formatDate(payment.checkIn)} to{" "}
                     {formatDate(payment.checkOut)}
+                    {payment.isRetained && `. ${s.retainedShort}`}
                   </span>
                 </span>
               </Link>

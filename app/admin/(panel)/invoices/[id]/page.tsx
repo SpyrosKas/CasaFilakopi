@@ -17,7 +17,7 @@ import {
   formatPercent,
   issuedOn,
 } from "@/lib/invoicing/format";
-import { hasSingleLineAssumption, vatBreakdown } from "@/lib/invoicing/lines";
+import { needsAccountantCheck, vatBreakdown } from "@/lib/invoicing/lines";
 
 const s = t.invoices;
 const d = s.detail;
@@ -49,12 +49,12 @@ export default async function InvoiceDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ pdf?: string }>;
+  searchParams: Promise<{ pdf?: string; notice?: string }>;
 }) {
   const admin = await requireOwner();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
-  const { pdf } = await searchParams;
+  const { pdf, notice } = await searchParams;
 
   const rows = await loadIndex(admin);
   const row = rows.find((entry) => entry.id === id);
@@ -83,6 +83,12 @@ export default async function InvoiceDetailPage({
 
       {row.isProvisional && (
         <p className="notice notice-bad">{s.provisional}</p>
+      )}
+
+      {notice === "already_issued" && (
+        <p className="notice notice-bad" role="alert">
+          {d.alreadyIssued}
+        </p>
       )}
 
       {pdf === "ready" && row.hasPdf && (
@@ -216,9 +222,7 @@ export default async function InvoiceDetailPage({
             </li>
           ))}
         </ul>
-        {hasSingleLineAssumption(lines) && (
-          <p className="hint">{d.assumption}</p>
-        )}
+        {needsAccountantCheck(lines) && <p className="hint">{d.assumption}</p>}
       </section>
 
       <section className="stack">

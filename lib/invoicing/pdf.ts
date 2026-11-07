@@ -1,9 +1,14 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, degrees, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { formatDate, formatEuro, formatPercent, issuedOn } from "./format";
-import { hasSingleLineAssumption, vatBreakdown } from "./lines";
+import {
+  FONT_BOLD,
+  FONT_REGULAR,
+  fontFile,
+  plainOnly,
+  printable,
+} from "./fonts";
+import { needsAccountantCheck, vatBreakdown } from "./lines";
 import type {
   Customer,
   DocType,
@@ -63,18 +68,6 @@ const LINE = rgb(0.8, 0.82, 0.85);
 const BRAND = rgb(0.09, 0.31, 0.42);
 const WARNING = rgb(0.72, 0.07, 0.07);
 const WHITE = rgb(1, 1, 1);
-
-const fontBytes = new Map<string, Uint8Array>();
-
-function loadFont(name: string): Uint8Array {
-  const known = fontBytes.get(name);
-  if (known) return known;
-  const bytes = readFileSync(
-    path.join(process.cwd(), "lib", "invoicing", "fonts", name),
-  );
-  fontBytes.set(name, bytes);
-  return bytes;
-}
 
 /** One line of drawing, moving down the page. */
 class Sheet {
@@ -435,11 +428,11 @@ function drawNotes(sheet: Sheet, input: PdfInput) {
     );
   }
   if (input.reason) drawParagraph(sheet, "Αιτία / Reason", input.reason);
-  if (hasSingleLineAssumption(input.lines)) {
+  if (needsAccountantCheck(input.lines)) {
     drawParagraph(
       sheet,
       "Προς επιβεβαίωση από τον λογιστή / For the accountant to confirm",
-      "Μία γραμμή για την προκαταβολή ή το υπόλοιπο, με ΦΠΑ κατ' αναλογία. / One line for a deposit or balance, with VAT in proportion.",
+      "Τα ποσά είναι αναλογία της κράτησης ή δεν αντιστοιχούν στην πλήρη τιμή της. / These amounts are a share of the booking, or do not match its full price.",
     );
   }
 }
@@ -458,15 +451,54 @@ function drawFooters(sheet: Sheet, input: PdfInput) {
   });
 }
 
-export async function renderInvoicePdf(input: PdfInput): Promise<Uint8Array> {
+/**
+ * Every stored string is made safe once, here, so no drawing code can meet
+ * text the font library might refuse. No guest's name may stop a PDF.
+ */
+function safeInput(stored: PdfInput, fonts: PDFFont[]): PdfInput {
+  const safe = (text: string): string => {
+    const clean = printable(text);
+    try {
+      for (const font of fonts) font.widthOfTextAtSize(clean, 10);
+      return clean;
+    } catch {
+      return plainOnly(clean);
+    }
+  };
+  const safeAll = <T extends object>(record: T): T =>
+    Object.fromEntries(
+      Object.entries(record).map(([key, value]) => [
+        key,
+        typeof value === "string" ? safe(value) : value,
+      ]),
+    ) as T;
+
+  return {
+    ...stored,
+    documentNumber: safe(stored.documentNumber),
+    issuer: safeAll(stored.issuer),
+    customer: safeAll(stored.customer),
+    lines: stored.lines.map((line) => ({
+      ...line,
+      description: safe(line.description),
+    })),
+    bookingReference: safe(stored.bookingReference),
+    creditsDocumentNumber:
+      stored.creditsDocumentNumber && safe(stored.creditsDocumentNumber),
+    reason: stored.reason && safe(stored.reason),
+  };
+}
+
+export async function renderInvoicePdf(stored: PdfInput): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
-  const regular = await doc.embedFont(loadFont("NotoSans-Regular.ttf"), {
+  const regular = await doc.embedFont(fontFile(FONT_REGULAR), {
     subset: false,
   });
-  const bold = await doc.embedFont(loadFont("NotoSans-Bold.ttf"), {
+  const bold = await doc.embedFont(fontFile(FONT_BOLD), {
     subset: false,
   });
+  const input = safeInput(stored, [regular, bold]);
 
   // The library stamps the current time unless told otherwise.
   const issued = new Date(input.issuedAt);

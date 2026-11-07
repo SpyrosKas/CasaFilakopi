@@ -67,6 +67,17 @@ test.beforeAll(async () => {
     `select value from public.settings where key = 'payment'`,
   );
   savedPayment = payment.rows[0].value;
+  // The tests read a deposit rule, which the seed no longer has by default.
+  await db.query(
+    `update public.settings set value = $1::jsonb where key = 'payment'`,
+    [
+      JSON.stringify({
+        mode: "deposit",
+        deposit: { kind: "percent", percent: 30 },
+        balanceDaysBefore: 14,
+      }),
+    ],
+  );
   const policy = await db.query(
     `select id, tiers, is_non_refundable from public.cancellation_policies where is_default`,
   );

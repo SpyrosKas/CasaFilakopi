@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   csvAmount,
-  documentNumber,
   formatDate,
   formatEuro,
   formatPercent,
@@ -10,10 +9,16 @@ import {
   pdfFileName,
   pdfStoragePath,
   previousMonth,
+  zipEntryName,
 } from "@/lib/invoicing/format";
 import { reviewRows } from "@/lib/invoicing/review";
 import { isDummyIssuer } from "@/lib/invoicing/settings";
-import { seedRefusal, setupRefusal } from "@/lib/invoicing/seed-guard";
+import {
+  seedRefusal,
+  setupRefusal,
+  STAGING_PROJECT_REF,
+  stagingRefFrom,
+} from "@/lib/invoicing/seed-guard";
 import { parseCustomer, parseIssuer } from "@/lib/invoicing/types";
 
 describe("money", () => {
@@ -59,10 +64,6 @@ describe("dates and numbers", () => {
     expect(previousMonth(new Date("2027-01-15T10:00:00Z"))).toBe("2026-12");
   });
 
-  it("numbers documents like the database does", () => {
-    expect(documentNumber("TEST-R", 12)).toBe("TEST-R-000012");
-  });
-
   it("prints a rate", () => {
     expect(formatPercent(1300)).toBe("13%");
     expect(formatPercent(650)).toBe("6,5%");
@@ -71,16 +72,44 @@ describe("dates and numbers", () => {
 });
 
 describe("the storage path", () => {
-  it("is year, month and number, by the date on Milos", () => {
-    expect(pdfStoragePath("TEST-R-000012", "2026-11-30T22:30:00Z")).toBe(
-      "2026/12/TEST-R-000012.pdf",
+  const id = "11111111-2222-4333-8444-555555555555";
+
+  it("is year, month and document id, by the date on Milos", () => {
+    expect(pdfStoragePath(id, "2026-11-30T22:30:00Z")).toBe(
+      `2026/12/${id}.pdf`,
     );
   });
 
+  it("is plain ASCII, as storage keys must be", () => {
+    expect(pdfStoragePath(id, "2026-11-30T22:30:00Z")).toMatch(
+      /^[a-z0-9/.-]+$/,
+    );
+  });
+});
+
+describe("file names", () => {
+  const a = "aaaaaaaa-2222-4333-8444-555555555555";
+  const b = "bbbbbbbb-2222-4333-8444-555555555555";
+
+  it("keep Greek readable", () => {
+    expect(pdfFileName("ΑΠΥ-000001")).toBe("ΑΠΥ-000001.pdf");
+  });
+
   it("cannot be walked out of, whatever the prefix says", () => {
-    const name = pdfFileName("../../etc/Ψ-000001");
-    expect(name).not.toContain("/");
-    expect(name).toBe(".._.._etc__-000001.pdf");
+    for (const number of ["../../etc/Ψ-000001", "..\\x", "/etc/passwd"]) {
+      const name = pdfFileName(number);
+      expect(name).not.toMatch(/[/\\]/);
+      expect(name.startsWith(".")).toBe(false);
+    }
+  });
+
+  it("never come out empty", () => {
+    expect(pdfFileName("...")).toBe("document.pdf");
+  });
+
+  it("are unique in a ZIP, even for numbers that look alike", () => {
+    expect(zipEntryName("ΑΠΥ-000001", a)).toBe("ΑΠΥ-000001-aaaaaaaa.pdf");
+    expect(zipEntryName("Α/Β-1", a)).not.toBe(zipEntryName("Α:Β-1", b));
   });
 });
 
@@ -154,40 +183,60 @@ describe("reviewing a selection", () => {
 
 describe("the demo data guard", () => {
   const local = "http://127.0.0.1:54321";
+  const staging = `https://${STAGING_PROJECT_REF}.supabase.co`;
+  const other = "https://abcdefghijklmnopqrst.supabase.co";
 
   it("runs locally", () => {
     expect(
-      seedRefusal({ supabaseUrl: local, names: [], stagingFlag: false }),
+      seedRefusal({ supabaseUrl: local, names: [], stagingRef: undefined }),
     ).toBeNull();
   });
 
-  it("refuses anything named production", () => {
+  it("refuses anything named production, even with the right ref", () => {
     for (const target of [
       { supabaseUrl: "https://casa-prod.supabase.co", names: [] },
       { supabaseUrl: local, names: ["production"] },
       { supabaseUrl: local, names: [undefined, "PRODUCTION"] },
-      { supabaseUrl: "https://abc.supabase.co", names: ["Prod-EU"] },
+      { supabaseUrl: staging, names: ["Prod-EU"] },
     ]) {
-      expect(seedRefusal({ ...target, stagingFlag: true })).toMatch(
-        /production/,
-      );
+      expect(
+        seedRefusal({ ...target, stagingRef: STAGING_PROJECT_REF }),
+      ).toMatch(/production/);
     }
   });
 
-  it("needs --staging for anything not local", () => {
-    const remote = { supabaseUrl: "https://abc.supabase.co", names: [] };
-    expect(seedRefusal({ ...remote, stagingFlag: false })).toMatch(/--staging/);
-    expect(seedRefusal({ ...remote, stagingFlag: true })).toBeNull();
-  });
-
-  it("a hostname cannot pretend to be local", () => {
+  it("the staging project runs only with its own ref typed", () => {
     expect(
       seedRefusal({
-        supabaseUrl: "http://127.0.0.1.evil.test",
+        supabaseUrl: staging,
         names: [],
-        stagingFlag: false,
+        stagingRef: STAGING_PROJECT_REF,
       }),
-    ).toMatch(/--staging/);
+    ).toBeNull();
+  });
+
+  it("refuses every other way of asking for a remote project", () => {
+    for (const target of [
+      { supabaseUrl: staging, stagingRef: undefined },
+      { supabaseUrl: staging, stagingRef: "" },
+      { supabaseUrl: staging, stagingRef: "abcdefghijklmnopqrst" },
+      { supabaseUrl: other, stagingRef: STAGING_PROJECT_REF },
+      { supabaseUrl: other, stagingRef: "abcdefghijklmnopqrst" },
+      {
+        supabaseUrl: `https://${STAGING_PROJECT_REF}.supabase.co.evil.test`,
+        stagingRef: STAGING_PROJECT_REF,
+      },
+      { supabaseUrl: "http://127.0.0.1.evil.test", stagingRef: undefined },
+    ]) {
+      expect(seedRefusal({ ...target, names: [] })).toMatch(/not a local/);
+    }
+  });
+
+  it("reads the ref from the command line", () => {
+    const ref = (...args: string[]) => stagingRefFrom(["node", "x", ...args]);
+    expect(ref(`--staging=${STAGING_PROJECT_REF}`)).toBe(STAGING_PROJECT_REF);
+    expect(ref("--staging")).toBe("");
+    expect(ref()).toBeUndefined();
   });
 
   it("stops if the database is not a dummy, provisional setup", () => {

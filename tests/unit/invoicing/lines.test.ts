@@ -4,9 +4,10 @@ import {
   buildCreditLines,
   buildPaymentLines,
   derivedRate,
-  hasSingleLineAssumption,
+  needsAccountantCheck,
   spreadVat,
   vatBreakdown,
+  type PaymentLineInput,
 } from "@/lib/invoicing/lines";
 import type { DocumentLine } from "@/lib/invoicing/types";
 
@@ -44,20 +45,50 @@ const withVat = {
   ],
 };
 
+/** The owner's worked example: 864,00 + 13% VAT 112,32 + fee 15,00. */
+const worked = {
+  totalCents: 99132,
+  lines: [
+    line("accommodation", 90000, 5, "Accommodation", "Διαμονή"),
+    line("discount", -3600, 1, "Discount", "Έκπτωση"),
+    line("vat", 11232, 1, "VAT", "ΦΠΑ"),
+    line("fee", 1500, 5, "Climate resilience fee", "Τέλος ανθεκτικότητας"),
+  ],
+};
+
+function built(input: PaymentLineInput) {
+  const result = buildPaymentLines(input);
+  if (!result.ok) throw new Error("The price should have been readable");
+  return result;
+}
+
+const pay = (
+  breakdown: unknown,
+  kind: PaymentLineInput["payment"]["kind"],
+  amountCents: number,
+) => built({ reference: "CF-1", breakdown, payment: { kind, amountCents } });
+
 const full = (breakdown: unknown, amountCents: number) =>
-  buildPaymentLines({
-    reference: "CF-1",
-    breakdown,
-    payment: { kind: "full", amountCents },
-  });
+  pay(breakdown, "full", amountCents);
 
 const sum = (lines: DocumentLine[], key: keyof DocumentLine) =>
   lines.reduce((total, l) => total + Number(l[key]), 0);
 
-describe("payment lines", () => {
-  it("a full payment uses the booking's lines, in both languages", () => {
-    const { lines, isSingleLine } = full(noVat, noVat.totalCents);
-    expect(isSingleLine).toBe(false);
+/** The figures a document's database row works out from its lines. */
+function figures(lines: DocumentLine[]) {
+  const total = sum(lines, "totalCents");
+  const vat = sum(lines, "vatCents");
+  const fee = sum(
+    lines.filter((l) => l.kind === "fee"),
+    "totalCents",
+  );
+  return { total, vat, fee, net: total - vat - fee };
+}
+
+describe("a full payment", () => {
+  it("uses the booking's lines, in both languages", () => {
+    const { lines, needsConfirmation } = full(noVat, noVat.totalCents);
+    expect(needsConfirmation).toBe(false);
     expect(lines.map((l) => l.kind)).toEqual([
       "accommodation",
       "cleaning",
@@ -103,10 +134,7 @@ describe("payment lines", () => {
   });
 
   it("keeps VAT visible if there is nothing to share it across", () => {
-    const breakdown = {
-      totalCents: 500,
-      lines: [line("vat", 500)],
-    };
+    const breakdown = { totalCents: 500, lines: [line("vat", 500)] };
     const { lines } = full(breakdown, 500);
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatchObject({
@@ -116,50 +144,167 @@ describe("payment lines", () => {
     });
   });
 
-  it("a deposit and a balance are one line each, and their VAT adds up", () => {
-    const deposit = buildPaymentLines({
-      reference: "CF-1",
-      breakdown: withVat,
-      payment: { kind: "deposit", amountCents: 3333 },
+  it("that does not match the booking is flagged, never dressed up", () => {
+    const { lines, needsConfirmation } = full(noVat, 123);
+    expect(needsConfirmation).toBe(true);
+    expect(lines[0].kind).toBe("other");
+    expect(sum(lines, "totalCents")).toBe(123);
+    expect(needsAccountantCheck(lines)).toBe(true);
+  });
+});
+
+describe("the worked example", () => {
+  const deposit = pay(worked, "deposit", 29740);
+  const balance = pay(worked, "balance", 99132 - 29740);
+  const whole = full(worked, 99132);
+
+  it("gives the full payment's figures", () => {
+    expect(figures(whole.lines)).toEqual({
+      total: 99132,
+      vat: 11232,
+      fee: 1500,
+      net: 86400,
     });
-    const balance = buildPaymentLines({
-      reference: "CF-1",
-      breakdown: withVat,
-      payment: {
-        kind: "balance",
-        amountCents: withVat.totalCents - 3333,
-      },
+  });
+
+  it("the deposit is a taxable line and a fee line", () => {
+    expect(deposit.lines.map((l) => l.kind)).toEqual(["deposit", "fee"]);
+    expect(figures(deposit.lines)).toEqual({
+      total: 29740,
+      vat: 3370,
+      fee: 450,
+      net: 25920,
     });
-    expect(deposit.isSingleLine).toBe(true);
-    expect(deposit.lines).toHaveLength(1);
-    expect(deposit.lines[0].kind).toBe("deposit");
-    expect(balance.lines[0].kind).toBe("balance");
+    expect(deposit.lines[0]).toMatchObject({
+      unitCents: 25920,
+      totalCents: 29290,
+      vatCents: 3370,
+      vatBasisPoints: 1300,
+    });
+    expect(deposit.lines[1]).toMatchObject({
+      totalCents: 450,
+      vatCents: 0,
+      vatBasisPoints: 0,
+    });
+  });
+
+  it("the balance takes exactly what the deposit left", () => {
+    expect(figures(balance.lines)).toEqual({
+      total: 69392,
+      vat: 7862,
+      fee: 1050,
+      net: 60480,
+    });
+  });
+
+  it("deposit plus balance equals the full payment, column by column", () => {
+    const [a, b, c] = [deposit, balance, whole].map((d) => figures(d.lines));
+    expect(a.total + b.total).toBe(c.total);
+    expect(a.net + b.net).toBe(c.net);
+    expect(a.vat + b.vat).toBe(c.vat);
+    expect(a.fee + b.fee).toBe(c.fee);
+  });
+
+  it("keeps the fee out of the VAT base", () => {
+    expect(vatBreakdown(deposit.lines)).toEqual([
+      { basisPoints: 1300, baseCents: 25920, vatCents: 3370 },
+    ]);
+  });
+
+  it("keeps the flag for the accountant", () => {
+    expect(deposit.needsConfirmation).toBe(true);
+    expect(balance.needsConfirmation).toBe(true);
+    expect(needsAccountantCheck(deposit.lines)).toBe(true);
+  });
+
+  it("names the booking and the fee", () => {
     expect(deposit.lines[0].description).toContain("CF-1");
-    expect(deposit.lines[0].vatCents + balance.lines[0].vatCents).toBe(1733);
-    expect(hasSingleLineAssumption(deposit.lines)).toBe(true);
-    expect(hasSingleLineAssumption(full(noVat, noVat.totalCents).lines)).toBe(
-      false,
-    );
+    expect(deposit.lines[1].description).toContain("Τέλος ανθεκτικότητας");
   });
 
-  it("falls back to one line when the payment and the booking disagree", () => {
-    const { lines, isSingleLine } = full(noVat, 123);
-    expect(isSingleLine).toBe(true);
-    expect(lines[0]).toMatchObject({ kind: "other", totalCents: 123 });
-  });
-
-  it("falls back to one line for a price it cannot read", () => {
-    for (const breakdown of [{ nights: [] }, null, "nonsense"]) {
-      const { lines, isSingleLine } = full(breakdown, 5000);
-      expect(isSingleLine).toBe(true);
-      expect(lines[0]).toMatchObject({ totalCents: 5000, vatCents: 0 });
+  it("adds up at every deposit size", () => {
+    for (let deposited = 1; deposited < 99132; deposited += 977) {
+      const a = figures(pay(worked, "deposit", deposited).lines);
+      const b = figures(pay(worked, "balance", 99132 - deposited).lines);
+      expect(a.total + b.total).toBe(99132);
+      expect(a.vat + b.vat).toBe(11232);
+      expect(a.fee + b.fee).toBe(1500);
+      expect(a.net + b.net).toBe(86400);
     }
   });
 
-  it("does not trust totals that do not add up", () => {
-    const broken = { ...noVat, totalCents: noVat.totalCents + 1 };
-    expect(full(broken, broken.totalCents).isSingleLine).toBe(true);
+  it("two fees share one line with a general name", () => {
+    const breakdown = {
+      totalCents: 10300,
+      lines: [line("accommodation", 10000), line("fee", 200), line("fee", 100)],
+    };
+    const { lines } = pay(breakdown, "deposit", 3090);
+    expect(lines[1].totalCents).toBe(90);
+    expect(lines[1].description).toContain("Fees outside VAT");
   });
+});
+
+describe("a payment with no fee", () => {
+  it("is one line", () => {
+    const breakdown = {
+      totalCents: 1000,
+      lines: [line("accommodation", 1000)],
+    };
+    const { lines } = pay(breakdown, "deposit", 300);
+    expect(lines.map((l) => l.kind)).toEqual(["deposit"]);
+  });
+});
+
+describe("money kept on a cancelled booking", () => {
+  it("is a flagged share, even if it was a full payment", () => {
+    const { lines, needsConfirmation } = built({
+      reference: "CF-1",
+      breakdown: worked,
+      payment: { kind: "full", amountCents: 99132, isRetained: true },
+    });
+    expect(needsConfirmation).toBe(true);
+    expect(lines[0].kind).toBe("other");
+    expect(figures(lines)).toEqual({
+      total: 99132,
+      vat: 11232,
+      fee: 1500,
+      net: 86400,
+    });
+  });
+});
+
+describe("a price that cannot be read", () => {
+  const unreadable: [string, unknown][] = [
+    ["no lines", { nights: [] }],
+    ["nothing at all", null],
+    ["text", "nonsense"],
+    ["empty lines", { totalCents: 100, lines: [] }],
+    ["a line with no amount", { totalCents: 100, lines: [{ kind: "fee" }] }],
+    [
+      "a missing label",
+      { totalCents: 100, lines: [{ ...line("fee", 100), label: null }] },
+    ],
+    ["amounts as text", { totalCents: "100", lines: [line("fee", 100)] }],
+    [
+      "lines that do not add up",
+      { ...noVat, totalCents: noVat.totalCents + 1 },
+    ],
+    ["a zero price", { totalCents: 0, lines: [line("accommodation", 0)] }],
+  ];
+
+  for (const [name, breakdown] of unreadable) {
+    it(`refuses ${name}, and never gives VAT 0`, () => {
+      for (const kind of ["full", "deposit", "balance", "extra"] as const) {
+        expect(
+          buildPaymentLines({
+            reference: "CF-1",
+            breakdown,
+            payment: { kind, amountCents: 100 },
+          }),
+        ).toEqual({ ok: false });
+      }
+    });
+  }
 });
 
 describe("spreading VAT", () => {
@@ -182,42 +327,59 @@ describe("spreading VAT", () => {
 });
 
 describe("credit lines", () => {
-  const original = full(withVat, withVat.totalCents).lines;
+  const original = full(worked, worked.totalCents).lines;
   const base = {
     documentNumber: "TEST-R-000001",
-    totalCents: withVat.totalCents,
-    vatCents: 1733,
+    totalCents: worked.totalCents,
+    vatCents: 11232,
+    feeCents: 1500,
     lines: original,
     creditedCents: 0,
     creditedVatCents: 0,
+    creditedFeeCents: 0,
   };
 
   it("crediting everything repeats the lines", () => {
+    expect(buildCreditLines({ ...base, amountCents: 99132 })).toEqual(original);
+  });
+
+  it("crediting part keeps the fee out of the VAT base", () => {
+    const lines = buildCreditLines({ ...base, amountCents: 29740 });
+    expect(lines.map((l) => l.kind)).toEqual(["other", "fee"]);
+    expect(figures(lines)).toEqual({
+      total: 29740,
+      vat: 3370,
+      fee: 450,
+      net: 25920,
+    });
+    expect(lines[0].description).toContain("TEST-R-000001");
+    expect(lines[0].vatBasisPoints).toBe(1300);
+    expect(needsAccountantCheck(lines)).toBe(true);
+  });
+
+  it("the last part uses up exactly what is left", () => {
+    const first = figures(buildCreditLines({ ...base, amountCents: 10000 }));
+    const last = figures(
+      buildCreditLines({
+        ...base,
+        creditedCents: first.total,
+        creditedVatCents: first.vat,
+        creditedFeeCents: first.fee,
+        amountCents: base.totalCents - first.total,
+      }),
+    );
+    expect(first.vat + last.vat).toBe(11232);
+    expect(first.fee + last.fee).toBe(1500);
+    expect(first.net + last.net).toBe(86400);
+  });
+
+  it("a document with no fee has no fee line", () => {
     const lines = buildCreditLines({
       ...base,
-      amountCents: withVat.totalCents,
+      feeCents: 0,
+      amountCents: 1000,
     });
-    expect(lines).toEqual(original);
-  });
-
-  it("crediting part is one positive line with VAT in proportion", () => {
-    const [line] = buildCreditLines({ ...base, amountCents: 1000 });
-    expect(line.totalCents).toBe(1000);
-    expect(line.description).toContain("TEST-R-000001");
-    expect(line.vatCents).toBe(Math.round((1733 * 1000) / base.totalCents));
-    expect(line.unitCents + line.vatCents).toBe(1000);
-    expect(line.vatBasisPoints).toBe(1300);
-  });
-
-  it("the last part credited uses up exactly the VAT left", () => {
-    const first = buildCreditLines({ ...base, amountCents: 1000 })[0];
-    const last = buildCreditLines({
-      ...base,
-      creditedCents: 1000,
-      creditedVatCents: first.vatCents,
-      amountCents: base.totalCents - 1000,
-    })[0];
-    expect(first.vatCents + last.vatCents).toBe(1733);
+    expect(lines.map((l) => l.kind)).toEqual(["other"]);
   });
 });
 
@@ -227,6 +389,21 @@ describe("VAT breakdown", () => {
     expect(rows).toEqual([
       { basisPoints: 1300, baseCents: 13333, vatCents: 1733 },
     ]);
+  });
+});
+
+describe("what needs the accountant", () => {
+  const flagged = (kind: string) => needsAccountantCheck([{ kind }]);
+
+  it("covers deposits, balances and other", () => {
+    expect(flagged("deposit")).toBe(true);
+    expect(flagged("balance")).toBe(true);
+    expect(flagged("other")).toBe(true);
+  });
+
+  it("leaves ordinary lines alone", () => {
+    expect(flagged("accommodation")).toBe(false);
+    expect(flagged("fee")).toBe(false);
   });
 });
 

@@ -83,7 +83,10 @@ describe("the PDF", () => {
     const text = await pdfText(await renderInvoicePdf(input({ lines })));
     const pages = text.split("\n");
     expect(pages.length).toBeGreaterThan(1);
-    for (const page of pages) has(page, PROVISIONAL_EN);
+    for (const page of pages) {
+      has(page, PROVISIONAL_EN);
+      has(page, PROVISIONAL_EL);
+    }
     has(text, "Γραμμή 89");
   });
 
@@ -133,15 +136,30 @@ describe("the PDF", () => {
     has(text, "Ακύρωση κράτησης");
   });
 
-  it("flags a deposit's single line for the accountant", async () => {
-    const text = await pdfText(
-      await renderInvoicePdf(
-        input({
-          lines: [{ ...input().lines[0], kind: "deposit" }],
-        }),
-      ),
+  for (const kind of ["deposit", "balance", "other"] as const) {
+    it(`flags a line of kind ${kind} for the accountant`, async () => {
+      const text = await pdfText(
+        await renderInvoicePdf(
+          input({ lines: [{ ...input().lines[0], kind }] }),
+        ),
+      );
+      has(text, "For the accountant to confirm");
+      has(text, "Προς επιβεβαίωση από τον λογιστή");
+    });
+  }
+
+  it("has no flag on an ordinary full payment", async () => {
+    const text = await pdfText(await renderInvoicePdf(input()));
+    expect(squeezed(text)).not.toContain(
+      squeezed("For the accountant to confirm"),
     );
-    has(text, "For the accountant to confirm");
+  });
+
+  it("prints a Greek document number", async () => {
+    const text = await pdfText(
+      await renderInvoicePdf(input({ documentNumber: "ΑΠΥ-000001" })),
+    );
+    has(text, "ΑΠΥ-000001");
   });
 
   it("gives identical bytes every time, whatever the clock says", async () => {
@@ -151,19 +169,33 @@ describe("the PDF", () => {
     expect(Buffer.compare(first, second)).toBe(0);
   });
 
-  it("does not fail on characters the font lacks, or long text", async () => {
+  it("stays readable with characters the font lacks and long text", async () => {
     const text = await pdfText(
       await renderInvoicePdf(
         input({
           customer: parseCustomer({
-            name: `😀 ${"Χ".repeat(300)}`,
+            name: `😀 Νίκος ${"Χ".repeat(300)}`,
             email: `${"a".repeat(200)}@example.test`,
           }),
           reason: `line one\r\nline two ${"λ".repeat(500)}`,
         }),
       ),
     );
-    has(text, "line one line two");
+    // Every part survives, wrapped but complete, with the emoji replaced.
+    has(text, "? Νίκος");
+    has(text, "Χ".repeat(300));
+    has(text, `${"a".repeat(200)}@example.test`);
+    has(text, `line one line two ${"λ".repeat(500)}`);
+    has(text, PROVISIONAL_EL);
+    has(text, PROVISIONAL_EN);
+    has(text, "1.754,20 €");
+  });
+
+  it("gives identical bytes for a name it has to replace", async () => {
+    const odd = input({ customer: parseCustomer({ name: "अनिता 😀" }) });
+    const first = await renderInvoicePdf(odd);
+    const second = await renderInvoicePdf(odd);
+    expect(Buffer.compare(first, second)).toBe(0);
   });
 
   it("copes with a document missing most details", async () => {

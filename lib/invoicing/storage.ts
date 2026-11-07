@@ -1,9 +1,9 @@
 import "server-only";
-import { writeAudit } from "@/lib/admin/audit";
+import { callAdminRpc } from "@/lib/admin/audit";
 import type { AdminContext } from "@/lib/admin/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { loadLines, pdfInput, type IndexRow } from "./data";
-import { pdfFileName, pdfStoragePath } from "./format";
+import { PDF_CACHE_SECONDS, pdfStoragePath } from "./format";
 import { renderInvoicePdf } from "./pdf";
 
 // The bucket has no policies, so only the secret key reaches it. Each call
@@ -26,17 +26,13 @@ const bucket = () => createAdminClient().storage.from(BUCKET);
 /** Null when the file is not in the bucket. */
 export async function signedPdfUrl(
   admin: AdminContext,
-  row: Pick<IndexRow, "pdfPath" | "documentNumber">,
-  options: { download: boolean },
+  row: Pick<IndexRow, "pdfPath">,
 ): Promise<string | null> {
   await assertOwner(admin);
   if (!row.pdfPath) return null;
   const { data, error } = await bucket().createSignedUrl(
     row.pdfPath,
     SIGNED_URL_SECONDS,
-    options.download
-      ? { download: pdfFileName(row.documentNumber) }
-      : undefined,
   );
   return error ? null : data.signedUrl;
 }
@@ -51,33 +47,39 @@ export async function readPdf(
   return error ? null : new Uint8Array(await data.arrayBuffer());
 }
 
-/**
- * attach_invoice_pdf takes no p_actor, so callAdminRpc cannot call it and the
- * audit line is written here to name the Owner.
- */
-async function attachPdf(
+/** Which of these paths really hold a file, asking once per folder. */
+export async function existingPdfs(
   admin: AdminContext,
-  invoiceId: string,
-  path: string,
-): Promise<void> {
+  paths: string[],
+): Promise<Set<string>> {
   await assertOwner(admin);
-  const { error } = await createAdminClient().rpc("attach_invoice_pdf", {
-    p_invoice_id: invoiceId,
-    p_path: path,
-  });
-  if (error) throw error;
-  await writeAudit(admin, {
-    action: "invoice_pdf_attached",
-    entity: "invoices",
-    entityId: invoiceId,
-    after: { path },
-  });
+  const folders = new Set(
+    paths.map((path) => path.slice(0, path.lastIndexOf("/"))),
+  );
+  const found = new Set<string>();
+  const pageSize = 1000;
+  for (const folder of folders) {
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await bucket().list(folder, {
+        limit: pageSize,
+        offset,
+      });
+      if (error) throw error;
+      for (const file of data) found.add(`${folder}/${file.name}`);
+      if (data.length < pageSize) break;
+    }
+  }
+  return found;
 }
+
+const sameBytes = (a: Uint8Array, b: Uint8Array) =>
+  a.length === b.length && Buffer.compare(a, b) === 0;
 
 /**
  * Makes the PDF from stored data, stores it and links it to the document. Safe
- * to repeat: the same document always gives the same file at the same path, so
- * a file already there from an earlier, half-finished try is simply linked.
+ * to repeat: the same document always gives the same file. A file already at
+ * that path is only linked if it is byte for byte this document, because
+ * linking anything else would show a guest's document with the wrong contents.
  * Throws if it fails. The document stays issued and listed as "PDF missing".
  */
 export async function storeInvoicePdf(
@@ -88,11 +90,18 @@ export async function storeInvoicePdf(
   const bytes = await renderInvoicePdf(
     pdfInput(row, await loadLines(admin, row.id)),
   );
-  const path = pdfStoragePath(row.documentNumber, row.issuedAt);
+  const path = pdfStoragePath(row.id, row.issuedAt);
   const { error } = await bucket().upload(path, bytes, {
     contentType: "application/pdf",
+    cacheControl: PDF_CACHE_SECONDS,
     upsert: false,
   });
-  if (error && !/exists|duplicate/i.test(error.message)) throw error;
-  await attachPdf(admin, row.id, path);
+  if (error) {
+    const stored = await readPdf(admin, path);
+    if (!stored || !sameBytes(stored, bytes)) throw error;
+  }
+  await callAdminRpc(admin, "attach_invoice_pdf", {
+    p_invoice_id: row.id,
+    p_path: path,
+  });
 }

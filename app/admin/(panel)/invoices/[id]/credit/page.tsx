@@ -51,6 +51,11 @@ export default async function CreditNotePage({
             pendingLabel={s.submitting}
           >
             <input type="hidden" name="invoiceId" value={row.id} />
+            <input
+              type="hidden"
+              name="expectedCreditedCents"
+              value={credited}
+            />
             <Field
               label={s.amount}
               name="amount"

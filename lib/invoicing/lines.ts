@@ -8,16 +8,21 @@ import type { DocumentLine, LineKind, PaymentKind } from "./types";
 
 const priceLine = z.object({
   kind: z.string(),
-  label: z.record(z.string(), z.string()).catch({}),
+  label: z.record(z.string(), z.string()),
   quantity: z.number(),
   unitCents: z.number().int(),
   totalCents: z.number().int(),
 });
 
-const breakdownSchema = z.object({
-  lines: z.array(priceLine).min(1),
-  totalCents: z.number().int(),
-});
+const breakdownSchema = z
+  .object({
+    lines: z.array(priceLine).min(1),
+    totalCents: z.number().int().positive(),
+  })
+  .refine(
+    ({ lines, totalCents }) =>
+      lines.reduce((sum, line) => sum + line.totalCents, 0) === totalCents,
+  );
 
 type PriceLine = z.output<typeof priceLine>;
 
@@ -25,7 +30,12 @@ type PriceLine = z.output<typeof priceLine>;
 const VAT_BASE_KINDS = ["accommodation", "extra_guest", "cleaning", "discount"];
 const LINE_KINDS: string[] = [...VAT_BASE_KINDS, "fee"];
 
+/** The kinds that rest on an assumption the accountant must confirm. */
+const TO_CONFIRM_KINDS: string[] = ["deposit", "balance", "other"];
+
 const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
+const clamp = (value: number, low: number, high: number) =>
+  Math.min(Math.max(value, low), high);
 
 /** Exact half cents round up, the rule in lib/domain/money.ts. */
 function roundedShare(amount: number, part: number, whole: number): number {
@@ -40,10 +50,21 @@ export function bilingual(label: Record<string, string>): string {
   return el || en || Object.values(label)[0] || "";
 }
 
-function vatOf(lines: PriceLine[]): { vat: number; base: PriceLine[] } {
+interface Split {
+  vat: number;
+  fee: number;
+  base: PriceLine[];
+  fees: PriceLine[];
+}
+
+function splitOf(lines: PriceLine[]): Split {
+  const total = (kind: string) =>
+    sum(lines.filter((l) => l.kind === kind).map((l) => l.totalCents));
   return {
-    vat: sum(lines.filter((l) => l.kind === "vat").map((l) => l.totalCents)),
+    vat: total("vat"),
+    fee: total("fee"),
     base: lines.filter((l) => VAT_BASE_KINDS.includes(l.kind)),
+    fees: lines.filter((l) => l.kind === "fee"),
   };
 }
 
@@ -76,7 +97,7 @@ export function spreadVat(amounts: number[], vatCents: number): number[] {
 }
 
 function fullLines(lines: PriceLine[]): DocumentLine[] {
-  const { vat, base } = vatOf(lines);
+  const { vat, base } = splitOf(lines);
   const baseCents = sum(base.map((line) => line.totalCents));
   const shares = spreadVat(
     base.map((line) => line.totalCents),
@@ -121,7 +142,7 @@ function fullLines(lines: PriceLine[]): DocumentLine[] {
   });
 }
 
-const SINGLE_LINE: Record<
+const SHARE_LINE: Record<
   PaymentKind,
   { kind: LineKind; el: string; en: string }
 > = {
@@ -139,67 +160,124 @@ const SINGLE_LINE: Record<
   },
 };
 
+const FEES_LABEL = "Τέλη εκτός ΦΠΑ / Fees outside VAT";
+
+function feeLabel(fees: PriceLine[]): string {
+  const label = fees.length === 1 ? bilingual(fees[0].label) : FEES_LABEL;
+  return label || FEES_LABEL;
+}
+
+/** One line for the taxable part and one for the fee, which VAT never touches. */
+function twoLines(input: {
+  description: string;
+  kind: LineKind;
+  amountCents: number;
+  feeCents: number;
+  vatCents: number;
+  vatBasisPoints: number;
+  feeDescription: string;
+}): DocumentLine[] {
+  const { amountCents, feeCents, vatCents } = input;
+  const taxable = amountCents - feeCents;
+  const lines: DocumentLine[] = [];
+  if (taxable > 0) {
+    lines.push({
+      description: input.description,
+      quantity: 1,
+      unitCents: taxable - vatCents,
+      totalCents: taxable,
+      vatCents,
+      vatBasisPoints: input.vatBasisPoints,
+      kind: input.kind,
+    });
+  }
+  if (feeCents > 0) {
+    lines.push({
+      description: input.feeDescription,
+      quantity: 1,
+      unitCents: feeCents,
+      totalCents: feeCents,
+      vatCents: 0,
+      vatBasisPoints: 0,
+      kind: "fee",
+    });
+  }
+  return lines;
+}
+
 export interface PaymentLineInput {
   reference: string;
   /** bookings.price_breakdown, as stored. */
   breakdown: unknown;
-  payment: { kind: PaymentKind; amountCents: number };
+  payment: {
+    kind: PaymentKind;
+    amountCents: number;
+    /** Money kept on a cancelled booking, which is not the booking's price. */
+    isRetained?: boolean;
+  };
 }
 
-export interface BuiltLines {
-  lines: DocumentLine[];
-  /** True when one line stands for the whole payment. */
-  isSingleLine: boolean;
-}
+export type BuiltLines =
+  | {
+      ok: true;
+      lines: DocumentLine[];
+      /** True when the amounts rest on an assumption for the accountant. */
+      needsConfirmation: boolean;
+    }
+  /** The stored price cannot be read, so no honest document can be made. */
+  | { ok: false };
 
 /**
  * ASSUMPTION, flagged for the accountant: each payment gets its own document.
- * A full payment lists the booking's lines. A deposit or balance is one line,
- * with VAT in proportion to the booking, so the climate fee is not shown apart
- * on those two documents. A deposit and its balance always add up to the
- * booking's VAT. Question 6 on docs/accountant-questions.md decides this.
+ * A full payment lists the booking's lines. Anything else is a share of the
+ * booking: one line for the taxable part and one for the climate fee, both in
+ * proportion, so the fee stays outside the VAT base. A deposit and its balance
+ * always add up to the booking's figures. Question 6 on
+ * docs/accountant-questions.md decides this; question 7 decides money kept on
+ * a cancelled booking.
  */
 export function buildPaymentLines(input: PaymentLineInput): BuiltLines {
   const { reference, payment } = input;
   const parsed = breakdownSchema.safeParse(input.breakdown);
-  const breakdown = parsed.success ? parsed.data : null;
+  if (!parsed.success) return { ok: false };
+  const breakdown = parsed.data;
+  const amount = payment.amountCents;
+  const kind = payment.isRetained ? "extra" : payment.kind;
 
-  const matchesBooking =
-    breakdown !== null &&
-    sum(breakdown.lines.map((line) => line.totalCents)) ===
-      breakdown.totalCents &&
-    payment.amountCents === breakdown.totalCents;
-
-  if (payment.kind === "full" && matchesBooking) {
-    return { lines: fullLines(breakdown.lines), isSingleLine: false };
+  if (kind === "full" && amount === breakdown.totalCents) {
+    return {
+      ok: true,
+      lines: fullLines(breakdown.lines),
+      needsConfirmation: false,
+    };
   }
 
-  const amount = payment.amountCents;
-  const bookingTotal = breakdown?.totalCents ?? 0;
-  const { vat, base } = vatOf(breakdown?.lines ?? []);
-  const shareVat =
-    payment.kind === "balance"
-      ? vat - roundedShare(vat, bookingTotal - amount, bookingTotal)
-      : roundedShare(vat, amount, bookingTotal);
-  const vatCents = Math.min(Math.max(shareVat, 0), amount);
-  const { kind, el, en } = SINGLE_LINE[payment.kind];
+  const { vat, fee, base, fees } = splitOf(breakdown.lines);
+  const total = breakdown.totalCents;
+  // A balance takes what the deposit left, so the two always add up.
+  const shareOf = (value: number) =>
+    kind === "balance"
+      ? value - roundedShare(value, total - amount, total)
+      : roundedShare(value, amount, total);
+  const feeCents = clamp(shareOf(fee), 0, amount);
+  const vatCents = clamp(shareOf(vat), 0, amount - feeCents);
+  const line = SHARE_LINE[kind];
 
   return {
-    isSingleLine: true,
-    lines: [
-      {
-        description: `${el} ${reference} / ${en} ${reference}`,
-        quantity: 1,
-        unitCents: amount - vatCents,
-        totalCents: amount,
-        vatCents,
-        vatBasisPoints: derivedRate(
-          vat,
-          sum(base.map((line) => line.totalCents)),
-        ),
-        kind,
-      },
-    ],
+    ok: true,
+    needsConfirmation: true,
+    lines: twoLines({
+      description: `${line.el} ${reference} / ${line.en} ${reference}`,
+      kind: line.kind,
+      amountCents: amount,
+      feeCents,
+      vatCents,
+      vatBasisPoints: derivedRate(
+        vat,
+        sum(base.map((entry) => entry.totalCents)),
+      ),
+      feeDescription: `${feeLabel(fees)} (αναλογία / share)`,
+    }),
   };
 }
 
@@ -207,18 +285,20 @@ export interface CreditInput {
   documentNumber: string;
   totalCents: number;
   vatCents: number;
+  feeCents: number;
   lines: DocumentLine[];
   /** Earlier credit notes against this document. */
   creditedCents: number;
   creditedVatCents: number;
+  creditedFeeCents: number;
   amountCents: number;
 }
 
 /**
  * Amounts are positive: the document type makes them a credit. Crediting a
  * whole document repeats its lines. ASSUMPTION, flagged for the accountant:
- * anything less is one line with VAT in proportion, and the climate fee is not
- * split out of it (question 10).
+ * anything less is a share, a taxable line and a fee line in proportion
+ * (question 10), and the last part uses up exactly what is left.
  */
 export function buildCreditLines(input: CreditInput): DocumentLine[] {
   const { amountCents, totalCents, creditedCents } = input;
@@ -228,26 +308,33 @@ export function buildCreditLines(input: CreditInput): DocumentLine[] {
     return input.lines.map((line) => ({ ...line }));
   }
 
-  const remainingVat = input.vatCents - input.creditedVatCents;
-  const shareVat =
-    amountCents === remaining
-      ? remainingVat
-      : roundedShare(input.vatCents, amountCents, totalCents);
-  const vatCents = Math.min(Math.max(shareVat, 0), amountCents, remainingVat);
-  const rate =
-    input.lines.find((line) => line.vatBasisPoints > 0)?.vatBasisPoints ?? 0;
+  const leftVat = input.vatCents - input.creditedVatCents;
+  const leftFee = input.feeCents - input.creditedFeeCents;
+  const isLast = amountCents === remaining;
+  const shareOf = (value: number, left: number) =>
+    isLast ? left : roundedShare(value, amountCents, totalCents);
+  const feeCents = clamp(
+    shareOf(input.feeCents, leftFee),
+    0,
+    Math.min(amountCents, leftFee),
+  );
+  const vatCents = clamp(
+    shareOf(input.vatCents, leftVat),
+    0,
+    Math.min(amountCents - feeCents, leftVat),
+  );
+  const number = input.documentNumber;
 
-  return [
-    {
-      description: `Πίστωση του ${input.documentNumber} / Credit against ${input.documentNumber}`,
-      quantity: 1,
-      unitCents: amountCents - vatCents,
-      totalCents: amountCents,
-      vatCents,
-      vatBasisPoints: rate,
-      kind: "other",
-    },
-  ];
+  return twoLines({
+    description: `Πίστωση του ${number} / Credit against ${number}`,
+    kind: "other",
+    amountCents,
+    feeCents,
+    vatCents,
+    vatBasisPoints:
+      input.lines.find((line) => line.vatBasisPoints > 0)?.vatBasisPoints ?? 0,
+    feeDescription: `Πίστωση τελών του ${number} / Fees credited on ${number}`,
+  });
 }
 
 export interface VatRow {
@@ -273,6 +360,6 @@ export function vatBreakdown(lines: DocumentLine[]): VatRow[] {
   return [...rows.values()].sort((a, b) => b.basisPoints - a.basisPoints);
 }
 
-/** A document whose single line stands in for a deposit or balance. */
-export const hasSingleLineAssumption = (lines: { kind: string }[]): boolean =>
-  lines.some((line) => line.kind === "deposit" || line.kind === "balance");
+/** A document whose amounts rest on an assumption for the accountant. */
+export const needsAccountantCheck = (lines: { kind: string }[]): boolean =>
+  lines.some((line) => TO_CONFIRM_KINDS.includes(line.kind));

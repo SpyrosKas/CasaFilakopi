@@ -93,7 +93,10 @@ describe("the accountant's CSV", () => {
     expect(first[CSV_HEADERS.indexOf("Σύνολο / Total")]).toBe("1248,56");
   });
 
-  it("a comma stays in its cell, and needs no quotes with semicolons", () => {
+  it("a comma is quoted, and stays in its cell", () => {
+    expect(buildCsv([row({ address: "Οδός 1, Αθήνα" })])).toContain(
+      `"Οδός 1, Αθήνα"`,
+    );
     const [, first] = parse(buildCsv([row({ address: "Οδός 1, Αθήνα" })]));
     expect(first[CSV_HEADERS.indexOf("Διεύθυνση / Address")]).toBe(
       "Οδός 1, Αθήνα",
@@ -121,6 +124,12 @@ describe("the accountant's CSV", () => {
   it("says when a PDF is not in the file", () => {
     const [, first] = parse(buildCsv([row({ pdfFile: "PDF missing" })]));
     expect(first.at(-1)).toBe("PDF missing");
+  });
+});
+
+describe("amounts", () => {
+  it("are quoted, since each holds a comma", () => {
+    expect(buildCsv([row()])).toContain(`"1234,56"`);
   });
 });
 
