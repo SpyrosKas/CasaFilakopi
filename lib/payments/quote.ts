@@ -113,14 +113,12 @@ async function loadNightPrices(
 export async function loadAvailability(
   deps: PaymentDeps,
 ): Promise<AvailabilityView | null> {
-  const house = await loadHouse(deps);
+  // One round trip for both: each costs a trip to the database.
+  const [house, { data, error }] = await Promise.all([
+    loadHouse(deps),
+    deps.db.from("settings").select("value").eq("key", "booking").single(),
+  ]);
   if (!house) return null;
-
-  const { data, error } = await deps.db
-    .from("settings")
-    .select("value")
-    .eq("key", "booking")
-    .single();
   if (error) throw new Error(error.message);
   const booking = parseBookingSettings(data.value);
 
@@ -284,17 +282,22 @@ export async function quoteStay(
 
   const now = deps.now();
   let breakdown: PriceBreakdown;
+  let cancellation: Awaited<
+    ReturnType<typeof loadRulesSnapshot>
+  >["cancellation"];
   try {
-    breakdown = await createPricingService(deps.db).quote(
-      { stay, promoCode: input.promoCode || undefined },
-      now,
-    );
+    // The price and the cancellation rules do not depend on each other.
+    [breakdown, { cancellation }] = await Promise.all([
+      createPricingService(deps.db).quote(
+        { stay, promoCode: input.promoCode || undefined },
+        now,
+      ),
+      loadRulesSnapshot(deps.db, now),
+    ]);
   } catch (error) {
     if (error instanceof QuoteError) return { ok: false, reason: error.code };
     throw error;
   }
-
-  const { cancellation } = await loadRulesSnapshot(deps.db, now);
   return {
     ok: true,
     nights: daysBetween(input.checkIn, input.checkOut),

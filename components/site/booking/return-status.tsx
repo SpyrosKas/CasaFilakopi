@@ -13,6 +13,9 @@ type State =
   | { state: "unknown" }
   | { state: "confirmed"; reference: string | null; path: string | null };
 
+/** Stripe's webhook usually lands within a few seconds, so ask often at first. */
+const FAST_POLL_MS = 1000;
+const FAST_FOR_MS = 15_000;
 const POLL_MS = 2500;
 const SLOW_POLL_MS = 15_000;
 /** After this it says it is slow, and asks less often. */
@@ -69,7 +72,11 @@ export function ReturnStatus({
       setWaited(elapsed);
       timer = setTimeout(
         poll,
-        elapsed < SLOW_AFTER_MS ? POLL_MS : SLOW_POLL_MS,
+        elapsed < FAST_FOR_MS
+          ? FAST_POLL_MS
+          : elapsed < SLOW_AFTER_MS
+            ? POLL_MS
+            : SLOW_POLL_MS,
       );
     }
 
