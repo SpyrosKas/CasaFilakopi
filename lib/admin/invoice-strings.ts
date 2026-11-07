@@ -1,0 +1,310 @@
+// The invoices section's words, kept apart so strings.ts stays short.
+
+const documentWord = (count: number) =>
+  count === 1 ? "1 document" : `${count} documents`;
+
+export const invoiceStrings = {
+  title: "Invoices and receipts",
+  intro: "Every document issued for a booking.",
+  provisional:
+    "Every document here is provisional and is not a tax document. Nothing goes to guests.",
+  issueLink: "Issue a document",
+  exportLink: "Prepare for the accountant",
+  settingsLink: "Invoice settings",
+  backToList: "Back to the list",
+  docType: {
+    receipt: "Receipt",
+    invoice: "Invoice",
+    credit_note: "Credit note",
+  },
+  method: {
+    card: "Card",
+    cash: "Cash",
+    bank_transfer: "Bank transfer",
+    pos: "POS",
+  },
+  paymentKind: {
+    full: "Full payment",
+    deposit: "Deposit",
+    balance: "Balance",
+    extra: "Extra payment",
+  },
+  badge: {
+    pdfMissing: "PDF missing",
+    sent: "Sent to accountant",
+    credited: "Fully credited",
+    partCredited: "Partly credited",
+  },
+  columns: {
+    select: "Select",
+    number: "Document",
+    date: "Date",
+    customer: "Customer",
+    booking: "Booking",
+    total: "Total",
+    status: "Status",
+    download: "Download",
+  },
+  downloadPdf: "Download PDF",
+  filters: {
+    heading: "Search and filter",
+    month: "Month",
+    from: "From date",
+    to: "To date",
+    type: "Document type",
+    status: "Status",
+    sent: "Sent to accountant",
+    booking: "Booking reference",
+    guest: "Guest name",
+    method: "Payment method",
+    transaction: "Transaction",
+    transactionHint: "Stripe payment id or payment reference",
+    any: "Any",
+    yes: "Yes",
+    no: "No",
+    apply: "Show results",
+    clear: "Clear filters",
+    statusOption: {
+      open: "Not credited",
+      part_credited: "Partly credited",
+      credited: "Fully credited",
+      pdf_missing: "PDF missing",
+    },
+  },
+  totals: {
+    heading: "Totals for these results",
+    count: "Documents",
+    billed: "Issued",
+    credited: "Credited",
+    total: "Total after credits",
+    vat: "VAT",
+    fees: "Fees outside VAT",
+  },
+  empty: "No documents match.",
+  emptyAll: "No documents have been issued yet.",
+  pagination: {
+    previous: "Previous page",
+    next: "Next page",
+    page: (page: number, pages: number) => `Page ${page} of ${pages}`,
+  },
+  selection: {
+    selectRow: (number: string) => `Select ${number}`,
+    selectPage: "Select this page",
+    selectAll: (count: number) => `Select all ${count} matching this filter`,
+    selecting: "Selecting...",
+    count: (count: number) => `${count} selected`,
+    total: "Total",
+    download: "Download",
+    downloadAnyway: "Download anyway",
+    downloading: "Checking...",
+    clear: "Clear",
+    markSent: "Mark as sent",
+    close: "Close",
+    tooMany: (count: number, limit: number) =>
+      `That is ${count} documents, and ${limit} is the most at one time. Please narrow the filter, for example to one month.`,
+    tooManyPicked: (limit: number) =>
+      `${limit} is the most you can select at one time.`,
+    refused:
+      "One of the selected documents could not be found, so nothing was done. Please clear the selection and choose again.",
+    missingHeading: "These have no PDF",
+    missingNote:
+      "They will not be in the download. They are listed in the file so nothing is lost. Open each one to make its PDF again.",
+    onlyMissing: "This document has no PDF yet. Open it to make its PDF again.",
+    sentHeading: "Already sent to the accountant",
+    sentNote: "Check before sending these again. You can still include them.",
+    sentOn: (number: string, date: string) => `${number}, sent ${date}`,
+    markHeading: "Mark as sent",
+    markIntro:
+      "Downloading does not mark anything. Do this after the accountant has the files.",
+    confirm: "The accountant has these documents",
+    confirmRequired: "Please tick this box first.",
+    markSubmit: "Mark as sent",
+    marking: "Marking...",
+    marked: (marked: number, skipped: number) =>
+      `${documentWord(marked)} marked as sent.${
+        skipped ? ` ${documentWord(skipped)} with no PDF left unmarked.` : ""
+      }`,
+  },
+  detail: {
+    numberMissing: "Document",
+    issued: "Issued",
+    bookingHeading: "Booking",
+    otherDocuments: "All documents for this booking",
+    noBooking: "No booking linked.",
+    paymentHeading: "Payment",
+    paymentKind: "Payment type",
+    amount: "Amount",
+    paidOn: "Paid on",
+    method: "Method",
+    transaction: "Transaction",
+    note: "Reference",
+    issuerHeading: "Issuer",
+    customerHeading: "Customer",
+    linesHeading: "Lines",
+    quantity: "Quantity",
+    unit: "Unit price",
+    vat: "VAT",
+    lineTotal: "Total",
+    vatHeading: "VAT breakdown",
+    vatRate: "Rate",
+    vatBase: "Base",
+    vatNone: "No rate",
+    totalsHeading: "Totals",
+    net: "Net",
+    fees: "Fees outside VAT",
+    total: "Total",
+    company: "Company",
+    vatNumber: "VAT number",
+    taxOffice: "Tax office",
+    address: "Address",
+    name: "Name",
+    email: "Email",
+    country: "Country",
+    phone: "Phone",
+    openPdf: "Open PDF",
+    pdfMissing:
+      "The PDF is missing. The document itself is safe. Make the PDF again from the stored details: it will be the same document, and no new number is used.",
+    regenerate: "Make the PDF again",
+    regenerating: "Making the PDF...",
+    pdfMade: "The PDF is ready.",
+    alreadyIssued:
+      "This payment already had this document, so nothing new was issued and the details you just typed were not applied. To correct it, issue a credit note.",
+    sentOn: (date: string) => `Sent to the accountant on ${date}.`,
+    notSent: "Not sent to the accountant yet.",
+    assumption:
+      "For the accountant to confirm: these amounts are a share of the booking, or do not match its full price.",
+    creditsHeading: "Credits this document",
+    reason: "Reason",
+    creditHistory: "Credit notes",
+    noCredits: "No credit notes for this document.",
+    creditedSoFar: (credited: string, left: string) =>
+      `Credited so far: ${credited}. Left to credit: ${left}.`,
+    creditLink: "Issue a credit note",
+    immutable:
+      "Issued documents never change. To correct one, issue a credit note.",
+  },
+  credit: {
+    title: (number: string) => `Credit note for ${number}`,
+    intro:
+      "A credit note cancels all or part of this document. It cannot be changed afterwards.",
+    left: (amount: string) => `You can credit up to ${amount}.`,
+    amount: "Amount to credit, in euros",
+    amountHint: "Example: 120,50",
+    reason: "Reason",
+    assumption:
+      "For the accountant to confirm: part of a document is credited as a taxable line and a fee line, in proportion.",
+    submit: "Issue the credit note",
+    submitting: "Issuing...",
+    nothingLeft: "This document has already been fully credited.",
+  },
+  issue: {
+    title: "Issue a document",
+    intro:
+      "Each payment gets its own document. Payments that already have one are not listed.",
+    searchLabel: "Booking reference or guest name",
+    search: "Search",
+    empty: "Every payment on a confirmed booking has a document.",
+    choose: "Choose",
+    stay: "Stay",
+    formTitle: (reference: string) => `Document for booking ${reference}`,
+    typeHeading: "Type of document",
+    receiptHint: "For a private guest.",
+    invoiceHint: "For a company.",
+    companyHeading: "Company details",
+    companyName: "Company name",
+    vatNumber: "VAT number",
+    address: "Address",
+    taxOffice: "Tax office",
+    previewHeading: "What will be on the document",
+    guest: "Guest",
+    assumption:
+      "For the accountant to confirm: this is a share of the booking, with VAT in proportion and the climate fee on its own line.",
+    retained:
+      "This booking ended without a stay. The document covers only the money kept, not the refunded part. For the accountant to confirm (question 7).",
+    nameWarning:
+      "The guest's name has letters the PDF cannot show. They would print as question marks. Type the name in Latin or Greek letters below.",
+    retainedShort: "Money kept on a booking that ended without a stay",
+    billingName: "Name on the document",
+    billingNameHint: "Leave empty to keep the name as it is.",
+    warning:
+      "Once issued, a document cannot be changed or deleted. Its number is used for good.",
+    submit: "Issue the document",
+    submitting: "Issuing...",
+  },
+  export: {
+    title: "Prepare for the accountant",
+    intro:
+      "Download one month's documents, send them to the accountant, then mark them as sent.",
+    month: "Month",
+    show: "Show this month",
+    summary: (count: number) => `${documentWord(count)} this month.`,
+    none: "No documents were issued this month.",
+    download: "Download ZIP",
+    downloadHint:
+      "The ZIP holds every PDF and a spreadsheet that opens in Excel with Greek letters. Downloading does not mark anything as sent.",
+    emailLater:
+      "Sending straight to the accountant by email will be added later. For now, attach the ZIP to an email.",
+    pickSome: "To send only some documents, tick them in the list instead.",
+  },
+  settings: {
+    title: "Invoice settings",
+    intro: "The details printed on new documents.",
+    dummy:
+      "These are dummy details. Replace them with the real ones when the accountant has confirmed them.",
+    missing: "Invoicing has not been set up yet. Save these details to start.",
+    unreadable:
+      "The saved settings could not be read, so nothing was changed. Please ask for help.",
+    issuedNote:
+      "Changing these affects new documents only. Documents already issued keep the details they have.",
+    legalName: "Business name",
+    vatNumber: "VAT number",
+    taxOffice: "Tax office",
+    address: "Address",
+    phone: "Phone",
+    email: "Email",
+    defaultType: "Default document type",
+    fixedHeading: "Set up with the accountant",
+    fixedNote: "These cannot be changed here.",
+    provisional: "Provisional documents",
+    provisionalOn: "Yes, every document is marked provisional",
+    provisionalOff: "No",
+    mode: "myDATA",
+    modeOff: "Off. The accountant uploads the documents.",
+    series: "Number series",
+    noSeries: "No number series has been set up yet.",
+  },
+  errors: {
+    vatNumber: "Please use 6 to 15 letters and numbers, with no spaces.",
+    amount: "Please type an amount such as 120,50.",
+    notCreditable: "This document cannot be credited.",
+    notFound: "That document could not be found.",
+    paymentGone:
+      "This payment cannot have a document now. It may already have one.",
+    priceUnreadable:
+      "The price stored on this booking cannot be read, so no document was issued. Please ask for help before going on.",
+    cannotPrint:
+      "This has letters the PDF cannot show. Please use Latin or Greek letters.",
+    pdfFailed:
+      "The PDF could not be made just now. The document is safe. Please try again.",
+    database: {
+      booking_not_found: "That booking could not be found.",
+      booking_not_confirmed: "This booking is not confirmed yet.",
+      payment_not_found: "That payment could not be found.",
+      invoice_settings_missing:
+        "Invoicing has not been set up yet. Save the invoice settings first.",
+      invoice_series_missing:
+        "No number series has been set up for this document type yet.",
+      invoice_not_found: "That document could not be found.",
+      invoice_not_creditable: "This document cannot be credited.",
+      credit_reason_required: "Please give a reason.",
+      credit_already_changed:
+        "Another credit note went through after you opened this page, so nothing was issued. Please open it again and check the amount.",
+      provisional_flag_locked:
+        "Provisional documents cannot be switched off here, so nothing was saved.",
+      invoice_series_in_use:
+        "A number series already in use cannot be changed.",
+      credit_exceeds_invoice:
+        "That is more than is left to credit on this document.",
+    },
+  },
+} as const;

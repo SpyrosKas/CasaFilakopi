@@ -15,13 +15,17 @@
     "db:types": "supabase gen types typescript --local > lib/db/types.ts",
     "test:e2e": "playwright test",
     "baseline": "playwright test -c playwright.baseline.config.ts",
+    "seed:invoices": "tsx scripts/seed-invoice-demo.ts",
     "visual": "playwright test -c tests/visual/playwright.config.ts"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "1.1.1",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.119.0",
+    "fflate": "0.8.3",
     "next": "16.4.5",
     "next-intl": "^4.14.9",
+    "pdf-lib": "1.17.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
@@ -35,8 +39,10 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
+    "pdfjs-dist": "6.5.438",
     "pg": "^8.23.1",
     "prettier": "^3.9.10",
+    "tsx": "4.23.15",
     "sharp": "^0.35.5",
     "typescript": "^5",
     "vitest": "^5.1.0"

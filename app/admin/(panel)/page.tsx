@@ -12,6 +12,7 @@ export default async function AdminHomePage() {
         { href: "/admin/house", label: t.nav.house },
         { href: "/admin/booking", label: t.nav.booking },
         { href: "/admin/rules", label: t.nav.rules },
+        { href: "/admin/invoices", label: t.nav.invoices },
         { href: "/admin/account", label: t.nav.account },
       ]
     : [{ href: "/admin/account", label: t.nav.account }];

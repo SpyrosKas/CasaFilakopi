@@ -9,6 +9,8 @@ import {
   deleteCreatedUsers,
   enrolOwner,
   latestMail,
+  lockSharedSettings,
+  releaseSharedSettings,
   rememberUser,
   seedAttempts,
   signInOwner,
@@ -358,8 +360,15 @@ test("the security headers are sent and the page still works under them", async 
     .toBeGreaterThan(0);
   await page.goto("/admin/mfa");
   await enrolOwner(page, user);
-  await page.goto("/admin/rules");
-  await page.getByRole("button", { name: "Add a line" }).click();
+  // "Add a line" only shows while refunds are allowed, and other specs change
+  // that shared rule while they run, so this waits its turn.
+  await lockSharedSettings();
+  try {
+    await page.goto("/admin/rules");
+    await page.getByRole("button", { name: "Add a line" }).click();
+  } finally {
+    await releaseSharedSettings();
+  }
   expect(violations).toEqual([]);
 });
 

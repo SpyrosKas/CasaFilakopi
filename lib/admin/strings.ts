@@ -1,6 +1,8 @@
 // Every word the admin panel shows, in one place, so Greek can be added by
 // turning this object into one per language.
 
+import { invoiceStrings } from "@/lib/admin/invoice-strings";
+
 const dayWord = (days: number) => (days === 1 ? "1 day" : `${days} days`);
 
 export const t = {
@@ -23,6 +25,7 @@ export const t = {
     house: "The house",
     booking: "Booking settings",
     rules: "Payment and cancellation",
+    invoices: "Invoices and receipts",
     account: "My account",
     signOut: "Sign out",
   },
@@ -249,6 +252,7 @@ export const t = {
         `we keep the ${kept} and you still owe ${owed}`,
     },
   },
+  invoices: invoiceStrings,
   validation: {
     required: "Please fill this in.",
     tooLong: "This is too long.",
