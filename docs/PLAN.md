@@ -82,6 +82,8 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | Empty channel feed | Releases only after 6 hours and two or more empty reads, with an alert. Any release of a future stay alerts Yorgos |
 | Stale sync alert | 3 hours June to September, 6 hours otherwise |
 | Closures made only on Airbnb | Do not copy to Booking.com; Yorgos blocks dates in Admin |
+| Turnstile | Required in production: the form fails closed with phone and email shown if keys are missing |
+| Old queued email | Rows older than 72 hours expire as Not sent, except booking confirmations |
 | Exporting checkout holds to channels | Off until real feeds are checked, because a hold could return as a false conflict and trigger a wrong refund (D16) |
 | Contact details | Public details come from Text and photos. Property keeps legal details and the internal notification address, relabelled so the two cannot be confused |
 
