@@ -1,8 +1,10 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 
 export default async function NotAllowedPage() {
+  const { t } = await adminI18n();
+
   await requireAdmin();
   return (
     <div className="stack">

@@ -6,7 +6,7 @@ import {
   type BrowserContext,
   type Page,
 } from "@playwright/test";
-import { formatDate } from "@/lib/admin/format";
+import { formatters } from "@/lib/admin/format";
 import { addDays, athensDate } from "@/lib/domain/dates";
 import {
   createTestUser,
@@ -29,6 +29,8 @@ import {
   removeFixtures,
   type FixtureRoom,
 } from "./admin-ops-fixtures";
+
+const { formatDate } = formatters("en");
 
 // Server actions are public POST endpoints, so each one is captured from the
 // real Owner and sent again as everybody else. A refused replay must change

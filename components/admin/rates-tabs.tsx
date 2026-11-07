@@ -1,5 +1,5 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { Tabs } from "@/components/admin/ui";
-import { t } from "@/lib/admin/strings";
 
 const LINKS = [
   { key: "calendar", href: "/admin/rates" },
@@ -10,13 +10,15 @@ const LINKS = [
 ] as const;
 
 /** Staff reach stay rules only, so they see no tabs. */
-export function RatesTabs({
+export async function RatesTabs({
   current,
   isOwner,
 }: {
   current: (typeof LINKS)[number]["key"];
   isOwner: boolean;
 }) {
+  const { t } = await adminI18n();
+
   if (!isOwner) return null;
   return (
     <Tabs

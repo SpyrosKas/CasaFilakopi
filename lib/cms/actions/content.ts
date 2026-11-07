@@ -1,6 +1,8 @@
 "use server";
 
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { revalidatePath } from "next/cache";
+import { i18nFor } from "@/lib/admin/i18n";
 import { requireOwner, type AdminContext } from "@/lib/admin/session";
 import { findEmptyLanguages, findMissingRequired } from "@/lib/cms/checks";
 import { findPage } from "@/lib/cms/registry";
@@ -12,9 +14,9 @@ import {
   saveDraftSchema,
 } from "@/lib/cms/schemas";
 import { blockDataSchema } from "@/lib/cms/stored";
-import { t } from "@/lib/cms/strings";
 import type { BlockData, PageDef } from "@/lib/cms/types";
 import type { Json } from "@/lib/db/types";
+import type { CmsStrings } from "@/lib/cms/strings";
 
 // Draft, publish and discard. Everything runs through the Owner's own client,
 // so RLS applies as well as the check on the first line, and the database
@@ -37,10 +39,12 @@ export type ContentResult =
       versions?: BlockVersions;
     };
 
-const failed = (message: string = t.common.somethingWrong): ContentResult => ({
-  ok: false,
-  message,
-});
+const failure =
+  (t: CmsStrings) =>
+  (message: string = t.common.somethingWrong): ContentResult => ({
+    ok: false,
+    message,
+  });
 
 const asJson = (value: unknown) => value as NonNullable<Json>;
 
@@ -59,7 +63,13 @@ async function pageId(
 
   const { data, error } = await admin.supabase
     .from("pages")
-    .insert({ slug: page.slug, title: { en: page.label, el: page.label } })
+    .insert({
+      slug: page.slug,
+      title: {
+        en: i18nFor("en").say(page.label),
+        el: i18nFor("el").say(page.label),
+      },
+    })
     .select("id")
     .single();
   return error ? null : data.id;
@@ -75,6 +85,9 @@ async function readRows(admin: AdminContext, id: string) {
 }
 
 export async function saveDraft(input: unknown): Promise<ContentResult> {
+  const { cms: t, say } = await adminI18n();
+  const failed = failure(t);
+
   const admin = await requireOwner();
   const parsed = saveDraftSchema.safeParse(input);
   if (!parsed.success) return failed();
@@ -86,7 +99,7 @@ export async function saveDraft(input: unknown): Promise<ContentResult> {
     const index = page.sections.findIndex((section) => section.key === key);
     if (index === -1) return failed();
     const result = cleanBlock(page.sections[index], block);
-    if ("error" in result) return failed(result.error);
+    if ("error" in result) return failed(say(result.error));
     cleaned.push({ key, index, data: result.data });
   }
 
@@ -162,6 +175,9 @@ const sameJson = (a: unknown, b: unknown) =>
   JSON.stringify(a) === JSON.stringify(b);
 
 export async function publishPage(input: unknown): Promise<ContentResult> {
+  const { cms: t, sayAll } = await adminI18n();
+  const failed = failure(t);
+
   const admin = await requireOwner();
   const parsed = publishSchema.safeParse(input);
   if (!parsed.success) return failed();
@@ -181,11 +197,11 @@ export async function publishPage(input: unknown): Promise<ContentResult> {
         return block.success ? [[row.key, block.data]] : [];
       }),
     );
-    const missingFields = findMissingRequired(page, drafts);
+    const missingFields = findMissingRequired(sayAll(page), drafts, t);
     if (missingFields.length) {
       return { ok: false, message: t.editor.requiredTitle, missingFields };
     }
-    const emptyFields = findEmptyLanguages(page, drafts);
+    const emptyFields = findEmptyLanguages(sayAll(page), drafts, t);
     if (emptyFields.length && !parsed.data.confirmedEmpty) {
       return { ok: false, message: t.editor.emptyTitle, emptyFields };
     }
@@ -249,6 +265,9 @@ export async function publishPage(input: unknown): Promise<ContentResult> {
 }
 
 export async function discardDraft(input: unknown): Promise<ContentResult> {
+  const { cms: t } = await adminI18n();
+  const failed = failure(t);
+
   const admin = await requireOwner();
   const parsed = discardSchema.safeParse(input);
   if (!parsed.success) return failed();
@@ -285,6 +304,9 @@ export async function discardDraft(input: unknown): Promise<ContentResult> {
  * statement, so its rows share a timestamp.
  */
 export async function restorePrevious(input: unknown): Promise<ContentResult> {
+  const { cms: t } = await adminI18n();
+  const failed = failure(t);
+
   const admin = await requireOwner();
   const parsed = discardSchema.safeParse(input);
   if (!parsed.success) return failed();

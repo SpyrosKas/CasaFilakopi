@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdminI18n } from "@/components/admin/language-provider";
 import {
   useActionState,
   useRef,
@@ -9,7 +10,6 @@ import {
 } from "react";
 import { FormMessage } from "@/components/admin/form";
 import { idleState } from "@/lib/admin/form-state";
-import { t } from "@/lib/admin/strings";
 import {
   previewTemplate,
   resetTemplate,
@@ -17,8 +17,6 @@ import {
   type PreviewState,
 } from "@/lib/email/admin-actions";
 import type { EmailLocale, TemplateCopy } from "@/emails/types";
-
-const s = t.email.templates;
 
 const WIDTHS = { phone: 375, computer: 640 };
 
@@ -37,6 +35,9 @@ export function TemplateEditor({
   isEdited: boolean;
   preview: PreviewState;
 }) {
+  const { t } = useAdminI18n();
+  const s = t.email.templates;
+
   const form = useRef<HTMLFormElement>(null);
   const [state, save, saving] = useActionState(saveTemplate, idleState);
   const [resetState, reset, resetting] = useActionState(

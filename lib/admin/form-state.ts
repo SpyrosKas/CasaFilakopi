@@ -1,5 +1,5 @@
 import type { ZodError } from "zod";
-import { t } from "@/lib/admin/strings";
+import { isMarker, later } from "@/lib/admin/later";
 
 /** What every admin server action returns to its form. */
 export interface ActionState {
@@ -18,16 +18,25 @@ export function errorState(message: string): ActionState {
   return { status: "error", message };
 }
 
-/** Turns a Zod failure into one plain message per field. */
-export function fromZodError(error: ZodError): ActionState {
+/**
+ * Turns a Zod failure into one plain message per field, in the language of
+ * `say`. Zod's own messages are English, so a field a schema gave no words for
+ * gets a general one.
+ */
+export function fromZodError(
+  error: ZodError,
+  say: (text: string) => string,
+): ActionState {
   const fieldErrors: Record<string, string> = {};
   for (const issue of error.issues) {
     const key = issue.path.join(".") || "form";
-    fieldErrors[key] ??= issue.message;
+    fieldErrors[key] ??= say(
+      isMarker(issue.message) ? issue.message : later.admin.validation.invalid,
+    );
   }
   return {
     status: "error",
-    message: fieldErrors.form ?? t.common.fixErrors,
+    message: fieldErrors.form ?? say(later.admin.common.fixErrors),
     fieldErrors,
   };
 }

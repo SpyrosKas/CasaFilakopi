@@ -16,6 +16,7 @@ export interface EmailTemplateDef {
   audience: "guest" | "host";
   /** What Yorgos sees in the list. */
   label: string;
+  labelEl: string;
   /** Every name the text may use. Anything else is refused. */
   placeholders: readonly string[];
   /** Names the text must keep, because the email is pointless without them. */

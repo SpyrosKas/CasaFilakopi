@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdminI18n } from "@/components/admin/language-provider";
 import { useActionState } from "react";
 import { useHydrated } from "@/components/admin/use-hydrated";
 import { ActionForm, Field, FormMessage } from "@/components/admin/form";
@@ -8,12 +9,13 @@ import {
   startEnrolment,
   type EnrolState,
 } from "@/lib/admin/actions/mfa";
-import { t } from "@/lib/admin/strings";
 
 const start = (): Promise<EnrolState> => startEnrolment();
 
 /** Sets up TOTP. The key is shown only here and is never stored by the app. */
 export function EnrolForm({ intro }: { intro: string }) {
+  const { t } = useAdminI18n();
+
   const [state, startAction, starting] = useActionState<EnrolState>(start, {
     status: "idle",
   });

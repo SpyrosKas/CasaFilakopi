@@ -1,5 +1,6 @@
 "use server";
 
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { revalidatePath } from "next/cache";
 import { assertAdminRole, writeAudit } from "@/lib/admin/audit";
 import {
@@ -16,7 +17,6 @@ import {
   loadExternalStay,
   loadMessage,
 } from "@/lib/admin/stay-data";
-import { t } from "@/lib/admin/strings";
 import { createAdminClient } from "@/lib/db/admin";
 import type { Json } from "@/lib/db/types";
 
@@ -84,9 +84,11 @@ export async function queueGuestMessage(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireAdmin();
   const parsed = messageSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { target, id, subject, body } = parsed.data;
 
   const recipient = await findRecipient(admin, target, id);
@@ -126,9 +128,11 @@ export async function setMessageStatus(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireAdmin();
   const parsed = messageStatusSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
 
   const { data, error } = await admin.supabase
     .from("contact_messages")

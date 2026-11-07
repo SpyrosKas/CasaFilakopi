@@ -1,8 +1,8 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { ActionForm, Field, TextAreaField } from "@/components/admin/form";
 import { BOOKING_PLACEHOLDERS } from "@/emails/registry";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import { athensDate } from "@/lib/domain/dates";
 import {
   cancelScheduled,
@@ -12,15 +12,10 @@ import {
 } from "@/lib/email/admin-actions";
 import { loadScheduledRules, type ScheduledRule } from "@/lib/email/scheduled";
 
-const s = t.email.scheduled;
+async function PlaceholderList() {
+  const { t } = await adminI18n();
+  const s = t.email.scheduled;
 
-const when = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "Europe/Athens",
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
-function PlaceholderList() {
   return (
     <>
       <p className="hint">{s.placeholders}</p>
@@ -35,7 +30,10 @@ function PlaceholderList() {
   );
 }
 
-function RuleForm({ rule }: { rule?: ScheduledRule }) {
+async function RuleForm({ rule }: { rule?: ScheduledRule }) {
+  const { t } = await adminI18n();
+  const s = t.email.scheduled;
+
   const offset = rule?.offsetDays ?? -7;
   return (
     <ActionForm
@@ -107,6 +105,9 @@ function RuleForm({ rule }: { rule?: ScheduledRule }) {
 }
 
 export default async function ScheduledMessagesPage() {
+  const { t, formatStamp } = await adminI18n();
+  const s = t.email.scheduled;
+
   const admin = await requireOwner();
   const rules = await loadScheduledRules(admin.supabase);
 
@@ -194,7 +195,7 @@ export default async function ScheduledMessagesPage() {
               </div>
               <p className="eml-meta">{row.recipient}</p>
               <p className="eml-meta">
-                {s.goesOut(when.format(new Date(row.next_attempt_at)))}
+                {s.goesOut(formatStamp(row.next_attempt_at))}
               </p>
               <form action={cancelScheduled}>
                 <input type="hidden" name="id" value={row.id} />

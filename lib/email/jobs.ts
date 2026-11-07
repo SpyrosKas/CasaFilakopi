@@ -62,11 +62,12 @@ export async function alertStaleJob(
   job: string,
   label: string,
   now: Date,
+  note: string,
 ): Promise<boolean> {
   const result = await queueEmailWith(
     db,
     "host_job_failure",
-    { job: label, failures: 1, error: "It has not run on time." },
+    { job: label, failures: 1, error: note },
     { dedupeKey: `job-stale:${job}:${athensDate(now)}` },
   );
   return result.ok;

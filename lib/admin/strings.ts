@@ -1,10 +1,10 @@
-// Every word the admin panel shows, in one place. Each language is one object
-// with the same keys. Greek comes later (D25): add `el` to `languages` below
-// and choose the language per user instead of the constant.
+// Every English word the admin panel shows, in one place. The Greek is in
+// strings.el.ts, typed against this object, so a key missing from either one
+// fails the type check. Nothing here picks a language: see lib/admin/i18n.ts.
 
-import { emailStrings } from "@/lib/admin/email-strings";
-import { invoiceStrings } from "@/lib/admin/invoice-strings";
-import { opsStrings } from "@/lib/admin/ops-strings";
+import { emailEn } from "@/lib/admin/email-strings";
+import { invoiceEn } from "@/lib/admin/invoice-strings";
+import { opsEn } from "@/lib/admin/ops-strings";
 
 const dayWord = (days: number) => (days === 1 ? "1 day" : `${days} days`);
 
@@ -12,6 +12,7 @@ const en = {
   common: {
     appName: "Casa Filakopi",
     panelName: "Casa Filakopi admin",
+    language: "Language",
     save: "Save",
     saving: "Saving...",
     saved: "Saved.",
@@ -51,6 +52,7 @@ const en = {
     invoices: "Invoices and receipts",
     integrations: "Channel sync",
     email: "Emails",
+    users: "Users",
     content: "Text and photos",
     account: "My account",
     signOut: "Sign out",
@@ -399,7 +401,7 @@ const en = {
       payment_not_found: "This payment could not be found.",
       booking_not_found: "This booking could not be found.",
       event_not_found: "This booking could not be found.",
-    } as Record<string, string>,
+    } satisfies Record<string, string>,
     notYetArrived: "This cannot be done before the day of arrival.",
     moneyMoved:
       "The money on this booking has just changed, so nothing was saved. Please check the page and try again.",
@@ -498,7 +500,7 @@ const en = {
       check_in_day_not_allowed: "You do not take arrivals on this weekday.",
       lead_time_not_met: "This is too soon for an online booking.",
       beyond_booking_horizon: "This is further ahead than guests can book.",
-    } as Record<string, string>,
+    } satisfies Record<string, string>,
     warnAllowed:
       "A guest could not book this online, but you can still add it.",
     quoteError: {
@@ -506,7 +508,7 @@ const en = {
       over_capacity: "That is more guests than the house takes.",
       room_inactive: "The house is closed for booking at the moment.",
       above_max_stay: "That stay is too long.",
-    } as Record<string, string>,
+    } satisfies Record<string, string>,
   },
   external: {
     title: (channel: string) => `${channel} booking`,
@@ -534,6 +536,8 @@ const en = {
   write: {
     title: "Write to guest",
     template: "Start from",
+    templateLanguage: (language: string) =>
+      `The starting texts are in ${language}, the language of this booking.`,
     templateBlank: "Blank message",
     subject: "Subject",
     body: "Message",
@@ -618,7 +622,7 @@ const en = {
       owner_use: "Family or own use",
       closed_period: "Closed for the season",
       other: "Other",
-    } as Record<string, string>,
+    } satisfies Record<string, string>,
     note: "Note (optional)",
     noteHint: "No guest names here",
     closed: "Dates closed.",
@@ -706,7 +710,7 @@ const en = {
       per_stay: "An amount per stay",
       per_guest_night: "An amount per guest, per night",
       percent: "A percentage of the price",
-    } as Record<string, string>,
+    } satisfies Record<string, string>,
     feeAmount: "Amount in euros",
     feePercent: "Percentage",
     feeIsVat: "This is VAT",
@@ -880,6 +884,10 @@ const en = {
       "Your account cannot open this page. If you need it, please ask the owner.",
     back: "Back to home",
   },
+  notFound: {
+    title: "This page could not be found",
+    intro: "It may have moved, or the link may be wrong.",
+  },
   account: {
     title: "My account",
     name: "Name",
@@ -1023,11 +1031,12 @@ const en = {
         `we keep the ${kept} and you owe nothing more`,
     },
   },
-  invoices: invoiceStrings,
-  email: emailStrings,
-  ops: opsStrings,
+  invoices: invoiceEn,
+  email: emailEn,
+  ops: opsEn,
   validation: {
     required: "Please fill this in.",
+    invalid: "Please check this.",
     tooLong: "This is too long.",
     email: "Please type a real email address.",
     passwordLength: (min: number) => `Please use at least ${min} characters.`,
@@ -1062,13 +1071,15 @@ const en = {
   },
 } as const;
 
-const languages = { en } as const;
+/** The shape of a catalog: the same keys, any words. */
+export type Words<T> = T extends string
+  ? string
+  : T extends (...args: infer A) => infer R
+    ? (...args: A) => Words<R>
+    : T extends object
+      ? { readonly [K in keyof T]: Words<T[K]> }
+      : T;
 
-export type AdminLanguage = keyof typeof languages;
+export type AdminStrings = Words<typeof en>;
 
-export const ADMIN_LANGUAGE: AdminLanguage = "en";
-
-/** For Intl date formats. */
-export const ADMIN_DATE_LOCALE = "en-GB";
-
-export const t = languages[ADMIN_LANGUAGE];
+export const adminEn: AdminStrings = en;

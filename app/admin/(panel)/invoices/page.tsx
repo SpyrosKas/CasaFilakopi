@@ -1,3 +1,4 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { InvoiceFiltersForm } from "@/components/admin/invoices/filters";
 import { InvoiceTable } from "@/components/admin/invoices/invoice-table";
@@ -6,7 +7,6 @@ import {
   SelectionTools,
 } from "@/components/admin/invoices/selection";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import { loadIndex } from "@/lib/invoicing/data";
 import {
   applyFilters,
@@ -19,13 +19,14 @@ import {
 } from "@/lib/invoicing/filters";
 import { formatEuro } from "@/lib/invoicing/format";
 
-const s = t.invoices;
-
 export default async function InvoicesPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const { t } = await adminI18n();
+  const s = t.invoices;
+
   const admin = await requireOwner();
   const filters = parseFilters(await searchParams);
 

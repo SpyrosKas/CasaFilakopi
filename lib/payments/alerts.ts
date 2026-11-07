@@ -1,9 +1,17 @@
+import { i18nFor } from "@/lib/admin/i18n";
 import { formatMoney } from "@/lib/email/format";
 import { dedupeId } from "@/lib/email/queue";
+import { loadEmailSettings } from "@/lib/email/settings";
 import { queue, type PaymentDeps } from "./deps";
 
 // Host alerts share the host_payment_failed template, whose reason line carries
-// what happened. Each has a dedupe key, so a replayed event never mails twice.
+// what happened, in the host's language. `reason` is a marker from
+// later.payments. Each has a dedupe key, so a replayed event never mails twice.
+
+export async function hostWords(deps: PaymentDeps) {
+  const { hostLocale } = await loadEmailSettings(deps.db);
+  return i18nFor(hostLocale);
+}
 
 export async function alertHost(
   deps: PaymentDeps,
@@ -14,8 +22,10 @@ export async function alertHost(
     amountCents?: number;
   },
 ): Promise<void> {
-  const { key, ...data } = alert;
-  await queue(deps, "host_payment_failed", data, {
+  const { key, reason, ...data } = alert;
+  const words = await hostWords(deps);
+  const said = { ...data, reason: words.say(reason) };
+  await queue(deps, "host_payment_failed", said, {
     dedupeKey: `payment_alert:${key}`,
   });
 }

@@ -23,7 +23,26 @@ export default defineConfig({
   workers: 1,
   globalSetup: "./global-setup.ts",
   retries: 1,
-  use: { baseURL: site, screenshot: "only-on-failure" },
+  use: {
+    baseURL: site,
+    screenshot: "only-on-failure",
+    // Admin is Greek by default (D25). These specs match the English text.
+    storageState: {
+      cookies: [
+        {
+          name: "admin_lang",
+          value: "en",
+          domain: "localhost",
+          path: "/",
+          expires: -1,
+          httpOnly: false,
+          secure: false,
+          sameSite: "Lax",
+        },
+      ],
+      origins: [],
+    },
+  },
   webServer: [
     {
       command: "pnpm exec tsx tests/support/fake-stripe-server.ts",

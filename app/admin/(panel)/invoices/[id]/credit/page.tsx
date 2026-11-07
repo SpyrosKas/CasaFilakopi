@@ -1,20 +1,21 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { ActionForm, Field, TextAreaField } from "@/components/admin/form";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import { issueCreditNote } from "@/lib/invoicing/actions";
 import { loadIndex } from "@/lib/invoicing/data";
 import { plainAmount, formatEuro } from "@/lib/invoicing/format";
-
-const s = t.invoices.credit;
 
 export default async function CreditNotePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { t } = await adminI18n();
+  const s = t.invoices.credit;
+
   const admin = await requireOwner();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();

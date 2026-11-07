@@ -1,7 +1,7 @@
 // The words for privacy, users and job health, kept apart so strings.ts stays
-// short. English here; the Greek catalog adds the same keys (D25).
+// short. The Greek is in ops-strings.el.ts, typed against this object.
 
-export const opsStrings = {
+export const opsEn = {
   privacy: {
     title: "Privacy",
     intro:
@@ -86,7 +86,6 @@ export const opsStrings = {
     no: "No",
   },
   users: {
-    nav: "Users",
     title: "Users",
     intro:
       "Who can sign in to this panel. Owners see everything. Staff see bookings, the calendar and messages, but not money settings.",
@@ -141,6 +140,7 @@ export const opsStrings = {
       `"${label}" has not run for longer than it should. Tell whoever looks after the site.`,
     failed: (label: string, when: string) =>
       `"${label}" failed on its last run (${when}). Tell whoever looks after the site.`,
+    lateRun: "It has not run on time.",
     siteSilent:
       "The site's scheduled jobs have not run recently, so emails and calendar syncs may be waiting. Tell whoever looks after the site.",
   },

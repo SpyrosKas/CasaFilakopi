@@ -1,3 +1,4 @@
+import { later } from "@/lib/admin/later";
 import { alertHost } from "./alerts";
 import { dbCode, requireStripe, type PaymentDeps } from "./deps";
 import { applyPaidSession } from "./webhook";
@@ -44,7 +45,11 @@ async function alertStuckEvents(deps: PaymentDeps): Promise<number> {
   for (const event of data) {
     await alertHost(deps, {
       key: `stuck_event:${event.id}`,
-      reason: `A Stripe event (${event.type}, ${event.id}) has not finished after an hour${event.error ? `: ${event.error.slice(0, 120)}` : ""}. Please check it.`,
+      reason: later.payments.stuckEvent(
+        event.type,
+        event.id,
+        event.error?.slice(0, 120) ?? "",
+      ),
     });
   }
   return data.length;
@@ -84,7 +89,7 @@ export async function reconcilePayments(
         key: `reconciled:${intent}`,
         bookingId,
         amountCents: session.amount_total ?? undefined,
-        reason: `Stripe took this payment (${intent}) but its webhook never reached the site. The regular check picked it up and ran it now. Please check the booking, and the webhook endpoint in Stripe.`,
+        reason: later.payments.reconciled(intent),
       });
     } catch (error) {
       result.failed += 1;
@@ -93,7 +98,7 @@ export async function reconcilePayments(
         key: `reconcile_failed:${intent}`,
         bookingId,
         amountCents: session.amount_total ?? undefined,
-        reason: `URGENT: Stripe took this payment (${intent}) but it could not be recorded here. Please check it in Stripe and in Admin.`,
+        reason: later.payments.reconcileFailed(intent),
       });
     }
   }

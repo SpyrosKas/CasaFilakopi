@@ -1,3 +1,4 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { Field } from "@/components/admin/form";
@@ -6,15 +7,15 @@ import { BackLink, PageHead } from "@/components/admin/ui";
 import { changeDates, previewChangeDates } from "@/lib/admin/actions/bookings";
 import { requireAdmin } from "@/lib/admin/session";
 import { loadBooking } from "@/lib/admin/stay-data";
-import { t } from "@/lib/admin/strings";
-
-const s = t.stayForm;
 
 export default async function ChangeDatesPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { t } = await adminI18n();
+  const s = t.stayForm;
+
   const admin = await requireAdmin();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();

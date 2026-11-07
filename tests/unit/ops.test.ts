@@ -6,6 +6,7 @@ import {
   type GuestDataExport,
 } from "@/lib/admin/guest-export";
 import { summariseJobs } from "@/lib/admin/job-health";
+import { adminEn } from "@/lib/admin/strings";
 import {
   logError,
   logInfo,
@@ -83,7 +84,7 @@ describe("guest data file", () => {
   };
 
   it("is a real workbook with a sheet for each kind of record", async () => {
-    const workbook = await readWorkbook(guestWorkbook(data));
+    const workbook = await readWorkbook(guestWorkbook(data, adminEn));
     expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
       "Guest",
       "Bookings",
@@ -104,14 +105,14 @@ describe("guest data file", () => {
   });
 
   it("keeps a formula-like name as text", async () => {
-    const workbook = await readWorkbook(guestWorkbook(data));
+    const workbook = await readWorkbook(guestWorkbook(data, adminEn));
     expect(workbook.getWorksheet("Guest")!.getRow(2).getCell(2).value).toBe(
       "=1+1",
     );
   });
 
   it("opens with no data at all", async () => {
-    const workbook = await readWorkbook(guestWorkbook(emptyData));
+    const workbook = await readWorkbook(guestWorkbook(emptyData, adminEn));
     expect(workbook.worksheets).toHaveLength(9);
   });
 });
@@ -181,9 +182,9 @@ describe("candidates in the file", () => {
   };
 
   it("leaves them out by default, and adds them only when asked", async () => {
-    const without = await readWorkbook(guestWorkbook(data));
+    const without = await readWorkbook(guestWorkbook(data, adminEn));
     expect(without.getWorksheet("Imported stays")!.rowCount).toBe(1);
-    const included = await readWorkbook(guestWorkbook(data, true));
+    const included = await readWorkbook(guestWorkbook(data, adminEn, true));
     expect(included.getWorksheet("Imported stays")!.rowCount).toBe(2);
   });
 });

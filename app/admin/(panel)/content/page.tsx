@@ -1,14 +1,16 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { requireOwner } from "@/lib/admin/session";
 import { loadDirtyPages } from "@/lib/cms/data";
 import { allPages } from "@/lib/cms/registry";
 import type { ListKind } from "@/lib/cms/schemas";
-import { t } from "@/lib/cms/strings";
 
-const h = t.hub;
 const lists: ListKind[] = ["faq", "testimonials", "places"];
 
 export default async function ContentHomePage() {
+  const { cms: t, say } = await adminI18n();
+  const h = t.hub;
+
   const admin = await requireOwner();
   const dirty = await loadDirtyPages(admin);
 
@@ -33,7 +35,7 @@ export default async function ContentHomePage() {
           <li key={page.slug}>
             <Link href={`/admin/content/${page.slug}`} prefetch={false}>
               <span className="cms-link-row">
-                {page.label}
+                {say(page.label)}
                 {dirty.includes(page.slug) && (
                   <span className="cms-badge-warn">{h.unpublished}</span>
                 )}

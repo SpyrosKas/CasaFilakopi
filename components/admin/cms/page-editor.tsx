@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdminI18n } from "@/components/admin/language-provider";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -19,7 +20,6 @@ import {
 import type { ContentResult } from "@/lib/cms/actions/content";
 import { emptyLanguage } from "@/lib/cms/checks";
 import { safeHref } from "@/lib/cms/rich";
-import { t } from "@/lib/cms/strings";
 import {
   LANGS,
   type BlockData,
@@ -31,7 +31,6 @@ import {
   type SectionDef,
 } from "@/lib/cms/types";
 
-const e = t.editor;
 const AUTOSAVE_MS = 1200;
 
 export interface EditorPhoto {
@@ -74,6 +73,9 @@ function TextField({
   missing: boolean;
   onChange: (value: string) => void;
 }) {
+  const { cms: t } = useAdminI18n();
+  const e = t.editor;
+
   const box = useRef<HTMLTextAreaElement>(null);
   const [badLink, setBadLink] = useState(false);
   const multiline = field.kind === "rich" || field.kind === "text";
@@ -149,6 +151,8 @@ function LangFields({
   values: Record<Lang, FieldValues>;
   onChange: (lang: Lang, field: string, value: string) => void;
 }) {
+  const { cms: t } = useAdminI18n();
+
   return fields.map((field) => {
     const empty = emptyLanguage(values, field);
     return (
@@ -183,6 +187,9 @@ function ListFields({
   stepPhotos: Record<string, EditorPhoto>;
   onChange: (next: BlockData) => void;
 }) {
+  const { cms: t } = useAdminI18n();
+  const e = t.editor;
+
   const items = block.items ?? [];
 
   const setItems = (next: typeof items) => onChange({ ...block, items: next });
@@ -317,6 +324,9 @@ function SectionCard({
   stepPhotos: Record<string, EditorPhoto>;
   onChange: (next: BlockData) => void;
 }) {
+  const { cms: t } = useAdminI18n();
+  const e = t.editor;
+
   const perLanguage = section.fields.filter((field) => !field.shared);
   const shared = section.fields.filter((field) => field.shared);
 
@@ -394,6 +404,9 @@ export function PageEditor({
   sectionPhotos: Record<string, EditorPhoto>;
   stepPhotos: Record<string, EditorPhoto>;
 }) {
+  const { cms: t } = useAdminI18n();
+  const e = t.editor;
+
   const [blocks, setBlocks] = useState(initialBlocks);
   const [lang, setLang] = useState<Lang>("el");
   const [dirty, setDirty] = useState(initialDirty);
@@ -460,7 +473,7 @@ export function PageEditor({
       return true;
     });
     return running.current;
-  }, [page.slug]);
+  }, [page.slug, e.draftFailed]);
 
   const updateBlock = (key: string, next: BlockData) => {
     latest.current = { ...latest.current, [key]: next };

@@ -1,3 +1,4 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -11,22 +12,21 @@ import {
 } from "@/components/admin/ui";
 import { WriteToGuest } from "@/components/admin/write-to-guest";
 import { setMessageStatus } from "@/lib/admin/actions/messages";
-import { formatStamp } from "@/lib/admin/format";
 import { requireAdmin } from "@/lib/admin/session";
 import {
   loadContactEmails,
   loadMessage,
   loadStayBook,
 } from "@/lib/admin/stay-data";
-import { t } from "@/lib/admin/strings";
-
-const m = t.messages;
 
 export default async function MessagePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { t, formatStamp } = await adminI18n();
+  const m = t.messages;
+
   const admin = await requireAdmin();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
@@ -118,6 +118,7 @@ export default async function MessagePage({
         target="contact"
         id={id}
         email={message.email}
+        locale={message.locale}
         templates={[]}
       />
       <SentMessages messages={emails} />

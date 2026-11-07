@@ -110,6 +110,62 @@
   font-weight: 600;
 }
 
+.brand-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* EN / ΕΛ: two real buttons, big enough for a thumb. */
+
+.language-switch {
+  display: inline-flex;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.language-switch button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.language-switch button[aria-pressed="true"] {
+  background: var(--brand);
+  color: #fff;
+}
+
+.language-row,
+.menu-language {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.menu-language {
+  padding-right: 16px;
+}
+
+.menu-language form:first-child {
+  flex: 1;
+}
+
+@media (min-width: 900px) {
+  .menu-language {
+    padding-right: 0;
+  }
+}
+
 /* Navigation: a bar at the thumb on a phone, a side list on a computer. */
 
 .tabbar {
@@ -133,9 +189,10 @@
   list-style: none;
 }
 
+/* Each tab takes the width of its word: Ημερολόγιο is long, Μενού is short. */
 .tabbar-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(5, auto);
 }
 
 .admin .tab,
@@ -152,8 +209,16 @@
   font: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
+  overflow-wrap: normal;
   text-decoration: none;
   cursor: pointer;
+}
+
+@media (max-width: 400px) {
+  .admin .tab,
+  .menu-button {
+    font-size: 0.75rem;
+  }
 }
 
 .admin .tab[aria-current="page"],
@@ -164,10 +229,10 @@
 
 .menu {
   display: none;
-  max-height: calc(100dvh - var(--tabbar) - 24px);
+  max-height: calc(100dvh - var(--tabbar) - 8px);
   overflow-y: auto;
   border-bottom: 1px solid var(--line);
-  padding: 8px 0;
+  padding: 4px 0;
 }
 
 .menu-open {
@@ -179,8 +244,8 @@
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 48px;
-  padding: 8px 16px;
+  min-height: 44px;
+  padding: 4px 16px;
   border: 0;
   background: transparent;
   color: var(--ink);
@@ -417,6 +482,7 @@
   color: #fff;
   font: inherit;
   font-weight: 600;
+  overflow-wrap: normal;
   text-align: center;
   text-decoration: none;
   cursor: pointer;
@@ -714,6 +780,14 @@
   font-weight: 650;
   letter-spacing: -0.01em;
   line-height: 1.25;
+  overflow-wrap: normal;
+}
+
+/* 127.425,37 € must not break inside the number. */
+@media (max-width: 400px) {
+  .stat-value {
+    font-size: 1.125rem;
+  }
 }
 
 .stat-label {

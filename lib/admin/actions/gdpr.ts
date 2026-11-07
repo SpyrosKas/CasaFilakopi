@@ -1,5 +1,6 @@
 "use server";
 
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -7,10 +8,7 @@ import { callAdminRpc } from "@/lib/admin/audit";
 import { errorState, okState, type ActionState } from "@/lib/admin/form-state";
 import { findSubject } from "@/lib/admin/guest-data";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import { createAdminClient } from "@/lib/db/admin";
-
-const p = t.ops.privacy;
 
 const schema = z.object({
   id: z.uuid(),
@@ -22,6 +20,9 @@ export async function anonymiseGuest(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { t } = await adminI18n();
+  const p = t.ops.privacy;
+
   const admin = await requireOwner();
   const parsed = schema.safeParse({
     id: formData.get("id"),

@@ -1,3 +1,5 @@
+import type { AdminStrings } from "@/lib/admin/strings";
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { ChannelAlertsPanel } from "@/components/admin/integrations/channel-alerts";
 import {
@@ -9,12 +11,6 @@ import {
   stayName,
   StayRow,
 } from "@/components/admin/ui";
-import {
-  formatDate,
-  formatEuro,
-  formatStay,
-  formatTenths,
-} from "@/lib/admin/format";
 import { buildReport } from "@/lib/admin/reports";
 import { requireAdmin } from "@/lib/admin/session";
 import {
@@ -26,12 +22,8 @@ import {
   toReportInput,
 } from "@/lib/admin/stay-data";
 import { dayPlan, type Stay } from "@/lib/admin/stays";
-import { t } from "@/lib/admin/strings";
 import { sumCents } from "@/lib/domain/money";
 import { athensDate } from "@/lib/domain/dates";
-
-const h = t.home;
-const j = t.ops.jobs;
 
 /** Home answers today's questions. The full lists are one tap away. */
 const MAX_LISTED = 5;
@@ -55,14 +47,20 @@ function StayList({
   );
 }
 
-const CHANNEL_NAME: Record<string, string> = {
-  airbnb: t.stay.source.airbnb,
-  booking_com: t.stay.source.booking_com,
-  other_ical: t.stay.source.other,
-};
+const channelName = (t: AdminStrings, channel: string): string =>
+  ({
+    airbnb: t.stay.source.airbnb,
+    booking_com: t.stay.source.booking_com,
+    other_ical: t.stay.source.other,
+  })[channel] ?? channel;
 
 /** The answer to "what do I need to do today?". */
 export default async function AdminHomePage() {
+  const i18n = await adminI18n();
+  const { t, formatDate, formatStay, formatEuro, formatTenths } = i18n;
+  const h = t.home;
+  const j = t.ops.jobs;
+
   const admin = await requireAdmin();
   const isOwner = admin.role === "owner";
   const now = new Date();
@@ -100,7 +98,7 @@ export default async function AdminHomePage() {
           {failures.map((row) => (
             <p key={row.channel}>
               {h.syncFailed(
-                CHANNEL_NAME[row.channel],
+                channelName(t, row.channel),
                 row.consecutive_failures,
               )}
             </p>
@@ -109,7 +107,7 @@ export default async function AdminHomePage() {
             <p key={stay.id}>
               <Link href={stay.href} prefetch={false} className="alert-link">
                 {h.conflict(
-                  stayName(stay),
+                  stayName(stay, i18n),
                   formatStay(stay.checkIn, stay.checkOut),
                 )}
               </Link>
@@ -244,7 +242,7 @@ export default async function AdminHomePage() {
           <StayList
             stays={plan.balances.slice(0, MAX_LISTED)}
             empty=""
-            side={balanceText}
+            side={(stay) => balanceText(stay, i18n)}
           />
         )}
       </Panel>

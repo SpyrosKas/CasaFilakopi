@@ -29,7 +29,7 @@ export const BOOKING_PLACEHOLDERS = [
 
 type GuestTemplate = Pick<
   EmailTemplateDef,
-  "key" | "label" | "needsGuestLink"
+  "key" | "label" | "labelEl" | "needsGuestLink"
 > & {
   extra?: readonly string[];
   required?: readonly string[];
@@ -45,6 +45,7 @@ export const GUEST_TEMPLATES: GuestTemplate[] = [
   {
     key: "booking_confirmation",
     label: "Booking confirmation",
+    labelEl: "Επιβεβαίωση κράτησης",
     needsGuestLink: true,
     required: ["reference"],
     en: {
@@ -95,6 +96,7 @@ Any questions? Just reply to this email.`,
   {
     key: "payment_receipt",
     label: "Payment received",
+    labelEl: "Η πληρωμή ελήφθη",
     extra: ["paymentAmount"],
     required: ["paymentAmount"],
     en: {
@@ -129,6 +131,8 @@ This email confirms your payment. It is not a tax document.`,
   {
     key: "invoice_document",
     label: "Invoice or receipt (off while documents are provisional)",
+    labelEl:
+      "Τιμολόγιο ή απόδειξη (κλειστό όσο τα παραστατικά είναι προσωρινά)",
     extra: ["documentNumber"],
     required: ["documentNumber"],
     en: {
@@ -148,6 +152,7 @@ Your document {{documentNumber}} for booking {{reference}} is attached to this e
   {
     key: "balance_request",
     label: "Balance payment request",
+    labelEl: "Αίτημα πληρωμής υπολοίπου",
     needsGuestLink: true,
     required: ["balanceAmount", "bookingLink"],
     en: {
@@ -181,6 +186,7 @@ Any questions? Just reply to this email.`,
   {
     key: "balance_reminder",
     label: "Balance payment reminder",
+    labelEl: "Υπενθύμιση πληρωμής υπολοίπου",
     needsGuestLink: true,
     required: ["balanceAmount", "bookingLink"],
     en: {
@@ -207,6 +213,7 @@ Any questions? Just reply to this email.`,
   {
     key: "pre_arrival",
     label: "Before arrival",
+    labelEl: "Πριν την άφιξη",
     en: {
       subject: "Your stay at {{houseName}} is coming up",
       body: `Hello {{guestName}},
@@ -245,6 +252,7 @@ Please reply to this email with your arrival time, if you have not told us yet.
   {
     key: "booking_cancellation",
     label: "Cancellation confirmation",
+    labelEl: "Επιβεβαίωση ακύρωσης",
     extra: ["refundAmount"],
     required: ["reference"],
     en: {
@@ -277,6 +285,7 @@ If you have any questions, please reply to this email.`,
   {
     key: "refund_confirmation",
     label: "Refund confirmation",
+    labelEl: "Επιβεβαίωση επιστροφής χρημάτων",
     extra: ["refundAmount"],
     required: ["refundAmount"],
     en: {
@@ -299,6 +308,7 @@ If you have any questions, please reply to this email.`,
   {
     key: "contact_auto_reply",
     label: "Contact form: automatic reply",
+    labelEl: "Φόρμα επικοινωνίας: αυτόματη απάντηση",
     standalone: true,
     // No guest-typed value here: anyone can type someone else's address, so
     // this email must not be able to carry their words.
@@ -323,6 +333,7 @@ For anything urgent, please call {{hostPhone}}.`,
   {
     key: "thank_you",
     label: "Thank you after the stay (off by default)",
+    labelEl: "Ευχαριστώ μετά τη διαμονή (κλειστό αρχικά)",
     en: {
       subject: "Thank you for staying at {{houseName}}",
       body: `Hello {{guestName}},
@@ -343,6 +354,7 @@ We would love to welcome you back.`,
   {
     key: "host_message",
     label: "Message written by the host",
+    labelEl: "Μήνυμα που γράφει ο οικοδεσπότης",
     standalone: true,
     fixed: true,
     extra: ["messageSubject", "message"],

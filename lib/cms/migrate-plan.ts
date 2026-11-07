@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { defaultBlocks, defaultReviews } from "@/lib/cms/defaults";
+import { i18nFor } from "@/lib/admin/i18n";
 import { allPages } from "@/lib/cms/registry";
 import type { ReviewBody } from "@/lib/cms/stored";
 import type { BlockData } from "@/lib/cms/types";
@@ -31,8 +32,8 @@ export function planPages(): PlannedPage[] {
       return {
         slug: page.slug,
         title: {
-          en: blocks.hero?.en.title ?? page.label,
-          el: blocks.hero?.el.title ?? page.label,
+          en: blocks.hero?.en.title ?? i18nFor("en").say(page.label),
+          el: blocks.hero?.el.title ?? i18nFor("el").say(page.label),
         },
         blocks: page.sections
           .filter((section) => section.fields.length > 0 || section.list)

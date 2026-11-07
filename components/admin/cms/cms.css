@@ -284,7 +284,7 @@
 
 @media (min-width: 700px) {
   .cms-photos {
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   }
 }
 
@@ -306,11 +306,24 @@
   position: relative;
 }
 
+/* One shape for every photo, so a tall one cannot push the cards apart. */
 .cms-photo-frame img {
   display: block;
   width: 100%;
   height: auto;
+  aspect-ratio: 3 / 2;
   border-radius: 6px;
+  background: var(--line);
+  object-fit: contain;
+}
+
+/* The photo is the handle. The press lands on the card, which is what drags. */
+.cms-photo[draggable="true"] .cms-photo-frame {
+  cursor: grab;
+}
+
+.cms-photo[draggable="true"] .cms-photo-frame img {
+  pointer-events: none;
 }
 
 .cms-cover {

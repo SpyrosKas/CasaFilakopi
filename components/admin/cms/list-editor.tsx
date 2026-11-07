@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdminI18n } from "@/components/admin/language-provider";
 import Image from "next/image";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
@@ -14,10 +15,7 @@ import {
 } from "@/lib/cms/actions/lists";
 import type { ListEntry } from "@/lib/cms/data";
 import type { ListKind } from "@/lib/cms/schemas";
-import { t } from "@/lib/cms/strings";
 import { LANGS, type Lang } from "@/lib/cms/types";
-
-const l = t.lists;
 
 export interface PhotoChoice {
   id: string;
@@ -25,12 +23,6 @@ export interface PhotoChoice {
   width: number;
   height: number;
 }
-
-const headings: Record<ListKind, { title: string; add: string }> = {
-  faq: l.faq,
-  testimonials: l.testimonials,
-  places: l.places,
-};
 
 type Values = Record<string, string>;
 
@@ -87,6 +79,8 @@ function LangField({
   long?: boolean;
   onChange: (name: string, value: string) => void;
 }) {
+  const { cms: t } = useAdminI18n();
+
   return (
     <div className="cms-langs cms-langs-always">
       {LANGS.map((lang: Lang) => {
@@ -128,6 +122,9 @@ function PhotoPicker({
   value: string | null;
   onChange: (id: string | null) => void;
 }) {
+  const { cms: t } = useAdminI18n();
+  const l = t.lists;
+
   return (
     <details className="cms-alt">
       <summary>{l.choosePhoto}</summary>
@@ -180,6 +177,9 @@ function EntryForm({
   onSave: (input: unknown) => Promise<boolean>;
   children?: ReactNode;
 }) {
+  const { cms: t } = useAdminI18n();
+  const l = t.lists;
+
   const [values, setValues] = useState(initial);
   const [mediaId, setMediaId] = useState(initialMediaId);
   const [saving, setSaving] = useState(false);
@@ -289,13 +289,16 @@ export function ListEditor({
   initialEntries: ListEntry[];
   choices: PhotoChoice[];
 }) {
+  const { cms: t } = useAdminI18n();
+  const l = t.lists;
+
   const [entries, setEntries] = useState(initialEntries);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(
     null,
   );
   const [deleting, setDeleting] = useState<ListEntry | null>(null);
   const [adding, setAdding] = useState(false);
-  const heading = headings[kind];
+  const heading = l[kind];
 
   const apply = (result: ListResult | null): boolean => {
     if (result?.ok) {

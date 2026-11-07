@@ -1,5 +1,6 @@
 "use server";
 
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -13,8 +14,9 @@ import {
   okState,
   type ActionState,
 } from "@/lib/admin/form-state";
+import { later } from "@/lib/admin/later";
 import { requireOwner, type AdminContext } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
+import type { AdminStrings } from "@/lib/admin/strings";
 import { createAdminClient } from "@/lib/db/admin";
 import type { Json } from "@/lib/db/types";
 import { athensDate } from "@/lib/domain/dates";
@@ -36,8 +38,6 @@ import { SKIPPED_PREFIX } from "./worker";
 // so its changes need the secret key, which skips the MFA check: the role is
 // checked first.
 
-const s = t.email;
-
 async function secretClient(admin: AdminContext) {
   const { data: role, error } = await admin.supabase.rpc("current_admin_role");
   if (error) throw error;
@@ -45,17 +45,23 @@ async function secretClient(admin: AdminContext) {
   return createAdminClient();
 }
 
+const m = later.admin.email;
+
 const whole = (min: number, max: number) =>
   z.coerce
-    .number({ error: s.settings.invalidNumber })
-    .int(s.settings.invalidNumber)
-    .min(min, s.settings.invalidNumber)
-    .max(max, s.settings.invalidNumber);
+    .number({ error: m.settings.invalidNumber })
+    .int(m.settings.invalidNumber)
+    .min(min, m.settings.invalidNumber)
+    .max(max, m.settings.invalidNumber);
 
 const settingsForm = z.object({
-  senderName: z.string().trim().min(1, t.validation.required).max(100),
-  fromAddress: z.email(s.settings.invalidEmail),
-  replyTo: z.email(s.settings.invalidEmail),
+  senderName: z
+    .string()
+    .trim()
+    .min(1, later.admin.validation.required)
+    .max(100),
+  fromAddress: z.email(m.settings.invalidEmail),
+  replyTo: z.email(m.settings.invalidEmail),
   hostRecipients: z
     .string()
     .transform((value) =>
@@ -66,9 +72,9 @@ const settingsForm = z.object({
     )
     .pipe(
       z
-        .array(z.email(s.settings.invalidEmails))
-        .min(1, s.settings.invalidEmails)
-        .max(10, s.settings.invalidEmails),
+        .array(z.email(m.settings.invalidEmails))
+        .min(1, m.settings.invalidEmails)
+        .max(10, m.settings.invalidEmails),
     ),
   hostLocale: z.enum(["en", "el"]),
   balanceReminderDays: whole(1, 60),
@@ -81,9 +87,11 @@ export async function saveEmailSettings(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const admin = await requireOwner();
   const parsed = settingsForm.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
 
   const stored = await loadEmailSettings(admin.supabase);
   const value = parseEmailSettings({
@@ -111,7 +119,7 @@ const templateForm = z.object({
   body: z.string(),
 });
 
-function describeProblem(problem: string): string {
+function describeProblem(problem: string, s: AdminStrings["email"]): string {
   const texts = s.templates.problems;
   const [kind, name] = problem.split(":");
   if (kind === "unknown") return texts.unknown(name);
@@ -128,6 +136,9 @@ export async function saveTemplate(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { t } = await adminI18n();
+  const s = t.email;
+
   const admin = await requireOwner();
   const parsed = templateForm.safeParse(formFields(formData));
   if (!parsed.success) return errorState(t.common.somethingWrong);
@@ -139,7 +150,9 @@ export async function saveTemplate(
 
   const problems = validateCopy(def, copy);
   if (problems.length) {
-    return errorState(problems.map(describeProblem).join(" "));
+    return errorState(
+      problems.map((problem) => describeProblem(problem, s)).join(" "),
+    );
   }
 
   const { error } = await admin.supabase
@@ -155,6 +168,9 @@ export async function resetTemplate(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { t } = await adminI18n();
+  const s = t.email;
+
   const admin = await requireOwner();
   const parsed = templateForm
     .pick({ key: true, locale: true })
@@ -185,6 +201,8 @@ export async function previewTemplate(
   formData: FormData,
 ): Promise<PreviewState> {
   await requireOwner();
+  const { t } = await adminI18n();
+  const s = t.email;
   const parsed = templateForm.safeParse(formFields(formData));
   const def = parsed.success ? findTemplate(parsed.data.key) : undefined;
   if (!parsed.success || !def) return previous;
@@ -192,7 +210,10 @@ export async function previewTemplate(
   const copy = copyFrom(parsed.data);
   const problems = validateCopy(def, copy);
   if (problems.length) {
-    return { ...previous, problems: problems.map(describeProblem) };
+    return {
+      ...previous,
+      problems: problems.map((problem) => describeProblem(problem, s)),
+    };
   }
   const locale: EmailLocale = parsed.data.locale;
   const email = renderCopy(copy, {
@@ -248,14 +269,30 @@ export async function retryEmail(formData: FormData): Promise<void> {
 
 const ruleForm = z.object({
   id: z.string().max(64).optional(),
-  name: z.string().trim().min(1, t.validation.required).max(120),
+  name: z.string().trim().min(1, later.admin.validation.required).max(120),
   days: whole(0, 365),
   direction: z.enum(["before", "after"]),
   anchor: z.enum(["check_in", "check_out"]),
-  subject_en: z.string().trim().min(1, t.validation.required).max(200),
-  body_en: z.string().trim().min(1, t.validation.required).max(10_000),
-  subject_el: z.string().trim().min(1, t.validation.required).max(200),
-  body_el: z.string().trim().min(1, t.validation.required).max(10_000),
+  subject_en: z
+    .string()
+    .trim()
+    .min(1, later.admin.validation.required)
+    .max(200),
+  body_en: z
+    .string()
+    .trim()
+    .min(1, later.admin.validation.required)
+    .max(10_000),
+  subject_el: z
+    .string()
+    .trim()
+    .min(1, later.admin.validation.required)
+    .max(200),
+  body_el: z
+    .string()
+    .trim()
+    .min(1, later.admin.validation.required)
+    .max(10_000),
 });
 
 async function writeRules(
@@ -276,9 +313,12 @@ export async function saveRule(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+  const s = t.email;
+
   const admin = await requireOwner();
   const parsed = ruleForm.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const value = parsed.data;
 
   const rule: ScheduledRule = {
@@ -316,19 +356,22 @@ export async function deleteRule(formData: FormData): Promise<void> {
 }
 
 const oneOffForm = z.object({
-  reference: z.string().trim().min(1, t.validation.required).max(40),
-  date: z.iso.date(s.scheduled.badDate),
-  subject: z.string().trim().min(1, t.validation.required).max(200),
-  body: z.string().trim().min(1, t.validation.required).max(10_000),
+  reference: z.string().trim().min(1, later.admin.validation.required).max(40),
+  date: z.iso.date(m.scheduled.badDate),
+  subject: z.string().trim().min(1, later.admin.validation.required).max(200),
+  body: z.string().trim().min(1, later.admin.validation.required).max(10_000),
 });
 
 export async function scheduleOneOff(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+  const s = t.email;
+
   const admin = await requireOwner();
   const parsed = oneOffForm.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { reference, date, subject, body } = parsed.data;
 
   const now = new Date();
@@ -386,6 +429,9 @@ export async function resendConfirmation(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { t } = await adminI18n();
+  const s = t.email;
+
   const admin = await requireOwner();
   const reference = String(formData.get("reference") ?? "").trim();
   const strings = s.log;

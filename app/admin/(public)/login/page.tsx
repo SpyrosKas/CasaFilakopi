@@ -1,15 +1,17 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ActionForm, Field } from "@/components/admin/form";
 import { login } from "@/lib/admin/actions/auth";
 import { resolveAdminSession } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 
 export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ expired?: string; signed_out?: string }>;
 }) {
+  const { t } = await adminI18n();
+
   const session = await resolveAdminSession();
   if (session.state !== "anonymous" && session.state !== "not_admin") {
     redirect("/admin");

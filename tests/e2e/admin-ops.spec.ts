@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { formatDate, formatStay } from "@/lib/admin/format";
+import { i18nFor } from "@/lib/admin/i18n";
 import { addDays, athensDate } from "@/lib/domain/dates";
 import { readWorkbook, rowStarting } from "../read-xlsx";
 import {
@@ -27,6 +27,8 @@ import {
   trackBooking,
   type FixtureRoom,
 } from "./admin-ops-fixtures";
+
+const { formatDate, formatStay } = i18nFor("en");
 
 // The operations screens, end to end, on a real database. Stays on the house
 // use 2043, which no other spec touches.

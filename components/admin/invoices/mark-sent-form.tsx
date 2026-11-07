@@ -1,13 +1,14 @@
 "use client";
 
+import { useAdminI18n } from "@/components/admin/language-provider";
 import { ActionForm } from "@/components/admin/form";
-import { t } from "@/lib/admin/strings";
 import { markSent } from "@/lib/invoicing/actions";
-
-const s = t.invoices.selection;
 
 /** The same step for a selection and for a whole month. */
 export function MarkSentForm({ ids }: { ids: string[] }) {
+  const { t } = useAdminI18n();
+  const s = t.invoices.selection;
+
   return (
     <ActionForm
       action={markSent}

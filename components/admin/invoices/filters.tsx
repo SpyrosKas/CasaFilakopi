@@ -1,5 +1,5 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
-import { t } from "@/lib/admin/strings";
 import {
   hasFilters,
   STATUS_FILTERS,
@@ -7,9 +7,7 @@ import {
 } from "@/lib/invoicing/filters";
 import { DOC_TYPES, PAYMENT_METHODS } from "@/lib/invoicing/types";
 
-const f = t.invoices.filters;
-
-function Choice({
+async function Choice({
   label,
   name,
   value,
@@ -20,6 +18,9 @@ function Choice({
   value: string | undefined;
   options: { value: string; label: string }[];
 }) {
+  const { t } = await adminI18n();
+  const f = t.invoices.filters;
+
   const id = `filter-${name}`;
   return (
     <div className="field">
@@ -60,7 +61,14 @@ function Box({
 }
 
 /** A plain GET form: the filters end up in the address, ready to share. */
-export function InvoiceFiltersForm({ filters }: { filters: InvoiceFilters }) {
+export async function InvoiceFiltersForm({
+  filters,
+}: {
+  filters: InvoiceFilters;
+}) {
+  const { t } = await adminI18n();
+  const f = t.invoices.filters;
+
   return (
     <details className="inv-filters" open={hasFilters(filters)}>
       <summary>{f.heading}</summary>

@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
+import { later } from "@/lib/admin/later";
 import type { ConfirmOutcome } from "@/lib/domain/contracts";
-import { alertHost, apologiseForLostDates } from "./alerts";
+import { alertHost, apologiseForLostDates, hostWords } from "./alerts";
 import { removeBalanceSession } from "./balance";
 import { releaseHold } from "./checkout";
 import { dbCode, queue, requireStripe, rpc, type PaymentDeps } from "./deps";
@@ -9,6 +10,8 @@ import {
   syncChargeRefunds,
   syncStripeRefund,
 } from "./refunds";
+
+const w = later.payments;
 
 // The only code that can confirm a booking (BKG-12).
 //
@@ -138,8 +141,7 @@ async function alertIfOverpaid(
     key: `overpaid:${intent}`,
     bookingId,
     amountCents: received - booking.total_cents,
-    reason:
-      "This booking has received more than its price, usually a second payment. Nothing was refunded automatically. Check the booking in Admin and refund it there if it should go back.",
+    reason: w.overpaid,
   });
 }
 
@@ -175,8 +177,7 @@ async function handleLostDates(
     key: `dates_lost:${intent}`,
     bookingId,
     amountCents: payment.amount_cents,
-    reason:
-      "URGENT: a guest paid, but the dates had already gone, so no booking was made. Their money is being refunded automatically and they have been told. Please contact them.",
+    reason: w.datesLost,
   });
 
   const { refundedCents, result } = await refundWholePayment(deps, payment);
@@ -185,8 +186,7 @@ async function handleLostDates(
       key: `dates_lost_refund:${intent}`,
       bookingId,
       amountCents: payment.amount_cents,
-      reason:
-        "URGENT: the automatic refund for a lost booking has not gone through. It will be retried, but please check Stripe and refund the guest there if it stays open.",
+      reason: w.datesLostRefund,
     });
     throw new Error("refund_not_sent");
   }
@@ -217,7 +217,7 @@ async function onBookingPaid(
     await alertHost(deps, {
       key: `no_booking:${intent}`,
       amountCents,
-      reason: `URGENT: Stripe took a payment (${intent}) for a booking that does not exist here. Please check Stripe.`,
+      reason: w.noBooking(intent),
     });
     return;
   }
@@ -236,8 +236,7 @@ async function onBookingPaid(
         key: `extra_payment:${intent}`,
         bookingId,
         amountCents,
-        reason:
-          "A second payment arrived on a confirmed booking. Nothing was refunded automatically. Check the booking in Admin and refund it there if it should go back.",
+        reason: w.extraPayment,
       });
       return;
     case "amount_mismatch":
@@ -245,8 +244,7 @@ async function onBookingPaid(
         key: `amount_mismatch:${intent}`,
         bookingId,
         amountCents,
-        reason:
-          "URGENT: a payment arrived for a different amount than this checkout expected, so the booking was NOT confirmed. The money is held and nothing was refunded automatically. Check Stripe, then confirm with the guest or refund them from Admin.",
+        reason: w.amountMismatch,
       });
       return;
     case "dates_lost":
@@ -280,8 +278,7 @@ async function onBalancePaid(
       key: `balance_on_closed:${intent}`,
       bookingId,
       amountCents,
-      reason:
-        "A balance payment arrived on a booking that is no longer live. Nothing was refunded automatically. Please refund it from Admin.",
+      reason: w.balanceOnClosed,
     });
   }
   await alertIfOverpaid(deps, bookingId, intent);
@@ -310,7 +307,7 @@ export async function applyPaidSession(
     await alertHost(deps, {
       key: `wrong_currency:${intent}`,
       bookingId,
-      reason: `URGENT: a payment arrived in ${session.currency} instead of euros (${intent}). The booking was NOT confirmed. Please check Stripe.`,
+      reason: w.wrongCurrency(String(session.currency), intent),
     });
     return;
   }
@@ -347,12 +344,9 @@ async function onAsyncFailed(
     key: `async_failed:${session.id}`,
     bookingId,
     amountCents: session.amount_total ?? undefined,
-    reason: "A delayed bank payment failed, so the payment was not received.",
+    reason: w.bankPaymentFailed,
   });
 }
-
-const DISPUTE_NOTE =
-  "The payment shows as disputed in Admin. Reply in the Stripe dashboard before its deadline.";
 
 type DisputeResult = { outcome: string; booking_id?: string };
 
@@ -372,7 +366,7 @@ async function onDisputeOpened(
     {
       bookingId: opened?.booking_id,
       amountCents: dispute.amount,
-      reason: `${dispute.reason}. ${DISPUTE_NOTE}`,
+      reason: (await hostWords(deps)).say(w.disputeOpened(dispute.reason)),
     },
     { dedupeKey: `dispute_opened:${dispute.id}` },
   );
@@ -396,7 +390,7 @@ async function onDisputeClosed(
     key: `dispute_closed:${dispute.id}`,
     bookingId: closed?.booking_id,
     amountCents: dispute.amount,
-    reason: `A card dispute closed with the result: ${dispute.status}. Check it in Stripe.`,
+    reason: w.disputeClosed(dispute.status),
   });
 }
 

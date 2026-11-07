@@ -1,11 +1,12 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
-import { TEMPLATES } from "@/emails/registry";
+import { TEMPLATES, templateLabel } from "@/emails/registry";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
-
-const s = t.email.templates;
 
 export default async function EmailTemplatesPage() {
+  const { t, lang } = await adminI18n();
+  const s = t.email.templates;
+
   const admin = await requireOwner();
   const { data, error } = await admin.supabase
     .from("email_templates")
@@ -23,7 +24,7 @@ export default async function EmailTemplatesPage() {
           .filter((template) => template.audience === audience)
           .map((template) => (
             <li key={template.key} className="eml-item">
-              <span>{template.label}</span>
+              <span>{templateLabel(template, lang)}</span>
               <div className="eml-row">
                 {(["el", "en"] as const).map((locale) => (
                   <Link

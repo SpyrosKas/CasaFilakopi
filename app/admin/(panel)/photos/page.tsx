@@ -1,10 +1,8 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Image from "next/image";
 import Link from "next/link";
 import { requireOwner } from "@/lib/admin/session";
 import { loadPhotoOverview, type CollectionSummary } from "@/lib/cms/data";
-import { t } from "@/lib/cms/strings";
-
-const p = t.photos;
 
 function groupsOf(summaries: CollectionSummary[]) {
   const groups = new Map<string, CollectionSummary[]>();
@@ -18,6 +16,9 @@ function groupsOf(summaries: CollectionSummary[]) {
 }
 
 export default async function PhotosPage() {
+  const { cms: t, sayAll } = await adminI18n();
+  const p = t.photos;
+
   const admin = await requireOwner();
   const { summaries, unused } = await loadPhotoOverview(admin);
 
@@ -30,7 +31,7 @@ export default async function PhotosPage() {
         <h1>{p.title}</h1>
       </div>
       <p>{p.intro}</p>
-      {groupsOf(summaries).map(([group, items]) => (
+      {groupsOf(sayAll(summaries)).map(([group, items]) => (
         <section className="stack" key={group}>
           <h2>{group}</h2>
           <ul className="cms-overview">

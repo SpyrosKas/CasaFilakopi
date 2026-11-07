@@ -1,13 +1,10 @@
-import { t } from "@/lib/admin/strings";
+import type { AdminStrings } from "@/lib/admin/strings";
 import type { Json } from "@/lib/db/types";
 import { buildXlsx, type Cell, type Sheet } from "@/lib/invoicing/xlsx";
 
 // A guest's data as an Excel file (CMP-02). Text stays text, so a guest called
 // "=1+1" stays exactly that. Secrets never appear here: no token hash, and no
 // email payloads, which can hold links.
-
-const c = t.ops.privacy.columns;
-const s = t.ops.privacy.sheets;
 
 export interface Identity {
   emails: string[];
@@ -180,7 +177,9 @@ function customerLine(customer: Json): string {
     .join(", ");
 }
 
-function guestSheet(data: GuestDataExport): Sheet {
+function guestSheet(data: GuestDataExport, t: AdminStrings): Sheet {
+  const c = t.ops.privacy.columns;
+  const s = t.ops.privacy.sheets;
   const { guest, identity } = data;
   const line = (field: string, value: string | null | undefined): Cell[] => [
     { kind: "text", value: field, style: "bold" },
@@ -209,8 +208,11 @@ function guestSheet(data: GuestDataExport): Sheet {
 
 export function guestWorkbook(
   input: GuestDataExport,
+  t: AdminStrings,
   withCandidates = false,
 ): Uint8Array {
+  const c = t.ops.privacy.columns;
+  const s = t.ops.privacy.sheets;
   const data = withCandidates
     ? {
         ...input,
@@ -219,7 +221,7 @@ export function guestWorkbook(
       }
     : input;
   return buildXlsx([
-    guestSheet(data),
+    guestSheet(data, t),
     table(
       s.bookings,
       [

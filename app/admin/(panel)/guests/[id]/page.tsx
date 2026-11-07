@@ -1,3 +1,4 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -11,26 +12,23 @@ import {
 import { ActionForm, CheckField } from "@/components/admin/form";
 import { WriteToGuest } from "@/components/admin/write-to-guest";
 import { anonymiseGuest } from "@/lib/admin/actions/gdpr";
-import { formatDate, formatStay } from "@/lib/admin/format";
 import { loadGuestData } from "@/lib/admin/guest-data";
 import type { GuestDataExport } from "@/lib/admin/guest-export";
 import { messageTemplates } from "@/lib/admin/message-templates";
 import { requireAdmin } from "@/lib/admin/session";
 import { loadStayBook } from "@/lib/admin/stay-data";
 import { buildGuests } from "@/lib/admin/stays";
-import { t } from "@/lib/admin/strings";
-
-const g = t.guests;
-const p = t.ops.privacy;
 
 /** Owner only: a copy of everything held, and the right to be removed. */
-function PrivacyPanel({
+async function PrivacyPanel({
   id,
   candidates,
 }: {
   id: string;
   candidates: GuestDataExport["candidates"];
 }) {
+  const { t, formatDate, formatStay } = await adminI18n();
+  const p = t.ops.privacy;
   const count = candidates.imported.length + candidates.messages.length;
   return (
     <Panel title={p.title}>
@@ -108,6 +106,10 @@ export default async function GuestPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const i18n = await adminI18n();
+  const { t, formatDate } = i18n;
+  const g = t.guests;
+
   const admin = await requireAdmin();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
@@ -138,7 +140,7 @@ export default async function GuestPage({
 
       {removedAt && (
         <p className="notice" role="status" data-testid="guest-anonymised">
-          {p.anonymised(formatDate(removedAt.slice(0, 10)))}
+          {t.ops.privacy.anonymised(formatDate(removedAt.slice(0, 10)))}
         </p>
       )}
 
@@ -179,12 +181,17 @@ export default async function GuestPage({
           target={latest.kind === "external" ? "external" : "booking"}
           id={latest.id}
           email={latest.email ?? guest.email}
-          templates={messageTemplates({
-            name: guest.name,
-            reference: latest.reference,
-            checkIn: latest.checkIn,
-            checkOut: latest.checkOut,
-          })}
+          locale={latest.locale}
+          templates={messageTemplates(
+            {
+              name: guest.name,
+              reference: latest.reference,
+              checkIn: latest.checkIn,
+              checkOut: latest.checkOut,
+              locale: latest.locale,
+            },
+            i18n,
+          )}
         />
       )}
 

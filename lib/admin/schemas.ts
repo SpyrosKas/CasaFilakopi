@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { MIN_HOLD_MINUTES, MIN_PASSWORD_LENGTH } from "@/lib/admin/config";
-import { t } from "@/lib/admin/strings";
+import { later } from "@/lib/admin/later";
 import { parseBookingSettings } from "@/lib/domain/settings";
 
 // Server-side validation for every admin form except the rules screen, which
 // has its own file. Form values arrive as strings.
 
-const v = t.validation;
+const v = later.admin.validation;
 
 const trimmed = (max: number) => z.string().trim().max(max, v.tooLong);
 const required = (max: number) => trimmed(max).min(1, v.required);
@@ -142,7 +142,8 @@ export function bookingSettingsErrors(
     const errors: Record<string, string> = {};
     for (const issue of error.issues) {
       const field = String(issue.path[0]);
-      errors[field] = BOOKING_MESSAGES[field] ?? t.common.somethingWrong;
+      errors[field] =
+        BOOKING_MESSAGES[field] ?? later.admin.common.somethingWrong;
     }
     return errors;
   }

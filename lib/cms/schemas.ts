@@ -2,7 +2,7 @@ import { z } from "zod";
 import { findCollection, findPage } from "@/lib/cms/registry";
 import { safeHref, sanitizeLine, sanitizeText } from "@/lib/cms/rich";
 import { reviewBodySchema } from "@/lib/cms/stored";
-import { t } from "@/lib/cms/strings";
+import { later } from "@/lib/admin/later";
 import type {
   BlockData,
   FieldDef,
@@ -15,6 +15,8 @@ import { isItemId } from "@/lib/cms/registry";
 
 // Checks on everything the editor sends. The form is never trusted: only fields
 // in the registry survive, and all text is cleaned here on the server.
+
+const t = later.cms;
 
 const MAX_LENGTH = {
   line: 300,

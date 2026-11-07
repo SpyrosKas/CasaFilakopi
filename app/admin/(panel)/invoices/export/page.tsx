@@ -1,20 +1,21 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { MarkSentForm } from "@/components/admin/invoices/mark-sent-form";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import { loadIndex } from "@/lib/invoicing/data";
 import { reviewOf } from "@/lib/invoicing/export";
 import { applyFilters, filtersSchema } from "@/lib/invoicing/filters";
 import { formatEuro, previousMonth } from "@/lib/invoicing/format";
-
-const s = t.invoices.export;
-const n = t.invoices.selection;
 
 export default async function ExportPage({
   searchParams,
 }: {
   searchParams: Promise<{ month?: string }>;
 }) {
+  const { t } = await adminI18n();
+  const s = t.invoices.export;
+  const n = t.invoices.selection;
+
   const admin = await requireOwner();
   const { month: asked } = await searchParams;
   const month =

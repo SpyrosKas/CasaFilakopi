@@ -1,3 +1,4 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import {
   ActionButton,
   ActionForm,
@@ -12,13 +13,10 @@ import {
   resetTwoStep,
 } from "@/lib/admin/actions/users";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import { loadMembers, type AdminMember } from "@/lib/admin/users-data";
 
-const u = t.ops.users;
-
 /** Anything that makes or unmakes an Owner needs their email typed in full. */
-function Typed({
+async function Typed({
   member,
   action,
   label,
@@ -33,6 +31,8 @@ function Typed({
   role?: "owner" | "staff";
   danger?: boolean;
 }) {
+  const { t } = await adminI18n();
+  const u = t.ops.users;
   return (
     <details>
       <summary className="button button-quiet">{label}</summary>
@@ -56,7 +56,9 @@ function Typed({
   );
 }
 
-function Actions({ member }: { member: AdminMember }) {
+async function Actions({ member }: { member: AdminMember }) {
+  const { t } = await adminI18n();
+  const u = t.ops.users;
   const fields = { id: member.id };
   const isOwner = member.role === "owner";
   return (
@@ -101,6 +103,9 @@ function Actions({ member }: { member: AdminMember }) {
 }
 
 export default async function UsersPage() {
+  const { t } = await adminI18n();
+  const u = t.ops.users;
+
   const admin = await requireOwner();
   const members = await loadMembers(admin);
 

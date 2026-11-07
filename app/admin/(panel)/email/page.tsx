@@ -1,23 +1,15 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
-import { findTemplate } from "@/emails/registry";
+import { findTemplate, templateLabel } from "@/emails/registry";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import { ActionForm, Field } from "@/components/admin/form";
 import { resendConfirmation, retryEmail } from "@/lib/email/admin-actions";
 import { selectTransport } from "@/lib/email/transport";
 import { SKIPPED_PREFIX } from "@/lib/email/worker";
 
-const s = t.email.log;
-
 const STATUSES = ["queued", "sent", "delivered", "bounced", "failed"] as const;
 
 const SHOWN = 100;
-
-const when = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "Europe/Athens",
-  dateStyle: "medium",
-  timeStyle: "short",
-});
 
 function badge(status: string) {
   if (status === "failed" || status === "bounced") return "eml-badge-bad";
@@ -30,6 +22,9 @@ export default async function EmailLogPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const { t, lang, formatStamp } = await adminI18n();
+  const s = t.email.log;
+
   const admin = await requireOwner();
   const { status } = await searchParams;
   const filter = STATUSES.find((value) => value === status);
@@ -152,6 +147,7 @@ export default async function EmailLogPage({
       <ul className="eml-list">
         {rows.map((row) => {
           const skipped = row.last_error?.startsWith(SKIPPED_PREFIX);
+          const known = findTemplate(row.template_key);
           const label = skipped
             ? s.status.skipped
             : (s.status[row.status as keyof typeof s.status] ?? row.status);
@@ -159,7 +155,7 @@ export default async function EmailLogPage({
             <li key={row.id} className="eml-item">
               <div className="eml-item-head">
                 <span>
-                  {findTemplate(row.template_key)?.label ?? row.template_key}
+                  {known ? templateLabel(known, lang) : row.template_key}
                 </span>
                 <span
                   className={`eml-badge ${skipped ? "" : badge(row.status)}`}
@@ -171,7 +167,7 @@ export default async function EmailLogPage({
                 {s.to}: {row.recipient}
               </p>
               <p className="eml-meta">
-                {s.when}: {when.format(new Date(row.created_at))}
+                {s.when}: {formatStamp(row.created_at)}
                 {row.attempts > 1 && ` · ${s.attempts}: ${row.attempts}`}
               </p>
               {row.last_error && (

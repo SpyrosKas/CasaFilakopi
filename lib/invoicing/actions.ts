@@ -1,5 +1,6 @@
 "use server";
 
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -12,7 +13,6 @@ import {
   type ActionState,
 } from "@/lib/admin/form-state";
 import { requireOwner, type AdminContext } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import type { Json } from "@/lib/db/types";
 import { cannotPrint } from "./fonts";
 import {
@@ -34,18 +34,18 @@ import { buildCreditLines, buildPaymentLines } from "./lines";
 import type { SelectionReview } from "./review";
 import { creditSchema, issueSchema, issuerFormSchema } from "./schemas";
 import { existingPdfs, storeInvoicePdf } from "./storage";
+import type { AdminStrings } from "@/lib/admin/strings";
 
 // Every action starts with requireOwner: these are public POST endpoints, and
 // invoices are Owner only. Issuing goes through the database functions alone.
 
-const s = t.invoices;
 const LIST = "/admin/invoices";
 
 const asJson = (value: unknown) => value as NonNullable<Json>;
 
-function databaseMessage(error: unknown): string {
+function databaseMessage(error: unknown, t: AdminStrings): string {
   const code = (error as { message?: string } | null)?.message ?? "";
-  const known: Record<string, string> = s.errors.database;
+  const known: Record<string, string> = t.invoices.errors.database;
   return known[code] ?? t.common.somethingWrong;
 }
 
@@ -67,9 +67,12 @@ export async function issueDocument(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+  const s = t.invoices;
+
   const admin = await requireOwner();
   const parsed = issueSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const form = parsed.data;
 
   const payment = await loadIssuablePayment(admin, form.paymentId);
@@ -131,7 +134,7 @@ export async function issueDocument(
       p_payment_method: payment.method,
     })) as typeof issued;
   } catch (error) {
-    return errorState(databaseMessage(error));
+    return errorState(databaseMessage(error, t));
   }
 
   await tryStorePdf(admin, issued.invoice_id);
@@ -145,9 +148,12 @@ export async function issueCreditNote(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+  const s = t.invoices;
+
   const admin = await requireOwner();
   const parsed = creditSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { invoiceId, amount, reason, expectedCreditedCents } = parsed.data;
   if (cannotPrint(reason).length > 0) {
     return {
@@ -199,7 +205,7 @@ export async function issueCreditNote(
     });
     creditId = (result as { invoice_id: string }).invoice_id;
   } catch (error) {
-    return errorState(databaseMessage(error));
+    return errorState(databaseMessage(error, t));
   }
 
   await tryStorePdf(admin, creditId);
@@ -212,6 +218,9 @@ export async function regeneratePdf(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { t } = await adminI18n();
+  const s = t.invoices;
+
   const admin = await requireOwner();
   const id = String(formData.get("invoiceId"));
   const resolved = await resolveSelection(admin, [id]);
@@ -239,6 +248,9 @@ const signedCents = (row: IndexRow) =>
 
 /** Every document under a filter, on every page of results. */
 export async function selectMatching(query: string): Promise<MatchedSelection> {
+  const { t } = await adminI18n();
+  const s = t.invoices;
+
   const admin = await requireOwner();
   const filters: InvoiceFilters = parseFilters(
     Object.fromEntries(new URLSearchParams(String(query))),
@@ -264,6 +276,9 @@ export type ReviewResult =
   ({ status: "ok" } & SelectionReview) | { status: "error"; message: string };
 
 export async function reviewSelection(ids: string[]): Promise<ReviewResult> {
+  const { t } = await adminI18n();
+  const s = t.invoices;
+
   const admin = await requireOwner();
   const resolved = await resolveSelection(admin, ids);
   if (!resolved.ok) {
@@ -281,6 +296,9 @@ export async function markSent(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { t } = await adminI18n();
+  const s = t.invoices;
+
   const admin = await requireOwner();
   if (formData.get("confirm") !== "yes") {
     return errorState(s.selection.confirmRequired);
@@ -303,7 +321,7 @@ export async function markSent(
     revalidatePath(`${LIST}/export`);
     return okState(s.selection.marked(marked, skipped));
   } catch (error) {
-    return errorState(databaseMessage(error));
+    return errorState(databaseMessage(error, t));
   }
 }
 
@@ -316,9 +334,12 @@ export async function saveInvoicingSettings(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+  const s = t.invoices;
+
   const admin = await requireOwner();
   const parsed = issuerFormSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const { defaultDocType, ...issuer } = parsed.data;
 
   const { settings, stored, isStored, isUnreadable } =
@@ -337,7 +358,7 @@ export async function saveInvoicingSettings(
       issuer: { ...settings.issuer, ...issuer },
     }),
   });
-  if (error) return errorState(databaseMessage(error));
+  if (error) return errorState(databaseMessage(error, t));
 
   revalidatePath(`${LIST}/settings`);
   return okState(t.common.saved);

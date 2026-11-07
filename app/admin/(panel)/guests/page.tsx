@@ -1,18 +1,19 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { Field } from "@/components/admin/form";
 import { Empty, PageHead } from "@/components/admin/ui";
 import { requireAdmin } from "@/lib/admin/session";
 import { loadStayBook } from "@/lib/admin/stay-data";
 import { buildGuests } from "@/lib/admin/stays";
-import { t } from "@/lib/admin/strings";
-
-const g = t.guests;
 
 export default async function GuestsPage({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string | string[] }>;
 }) {
+  const { t } = await adminI18n();
+  const g = t.guests;
+
   const admin = await requireAdmin();
   const asked = (await searchParams).q;
   const search = (typeof asked === "string" ? asked : "").slice(0, 120);

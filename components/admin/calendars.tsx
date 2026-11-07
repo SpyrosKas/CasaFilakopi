@@ -1,5 +1,7 @@
 "use client";
 
+import type { AdminI18n } from "@/lib/admin/i18n";
+import { useAdminI18n } from "@/components/admin/language-provider";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useState, useTransition, type ReactNode } from "react";
@@ -24,23 +26,16 @@ import {
 } from "@/lib/admin/calendar";
 import { idleState } from "@/lib/admin/form-state";
 import {
-  formatDate,
-  formatEuro,
-  formatMonth,
-  nightsWord,
-} from "@/lib/admin/format";
-import { t } from "@/lib/admin/strings";
-import {
   addDays,
   daysBetween,
   eachNight,
   isValidIsoDate,
 } from "@/lib/domain/dates";
 
-const c = t.calendar;
-const r = t.rates;
-
 function WeekHeader() {
+  const { t } = useAdminI18n();
+  const c = t.calendar;
+
   return (
     <>
       {c.weekdays.map((day) => (
@@ -69,13 +64,11 @@ function dayClass(night: NightState, today: string, picked: boolean): string {
     .join(" ");
 }
 
-const describe = (night: NightState) =>
-  c.dayLabel(formatDate(night.date), night.label ?? c.legend[night.kind]);
-
-const blockReasons = Object.entries(c.reasons).map(([value, label]) => ({
-  value,
-  label,
-}));
+const describe = (night: NightState, { t, formatDate }: AdminI18n) =>
+  t.calendar.dayLabel(
+    formatDate(night.date),
+    night.label ?? t.calendar.legend[night.kind],
+  );
 
 export function MonthNav({
   month,
@@ -86,6 +79,9 @@ export function MonthNav({
   hrefFor: (month: string) => string;
   label: string;
 }) {
+  const { t, formatMonth } = useAdminI18n();
+  const c = t.calendar;
+
   return (
     <nav className="month-nav" aria-label={label}>
       <Link
@@ -127,6 +123,10 @@ export function AvailabilityCalendar({
   blocks: (CalendarBlock & { title: string })[];
   firstNight: string | null;
 }) {
+  const i18n = useAdminI18n();
+  const { t, formatDate, nightsWord } = i18n;
+  const c = t.calendar;
+
   const router = useRouter();
   const isReady = useHydrated();
   const [first, setFirst] = useState<string | null>(firstNight);
@@ -197,7 +197,7 @@ export function AvailabilityCalendar({
                 href={night.href}
                 prefetch={false}
                 className={className}
-                aria-label={describe(night)}
+                aria-label={describe(night, i18n)}
               >
                 {body}
               </Link>
@@ -208,7 +208,7 @@ export function AvailabilityCalendar({
               key={night.date}
               type="button"
               className={className}
-              aria-label={describe(night)}
+              aria-label={describe(night, i18n)}
               aria-pressed={isPicked(night.date)}
               disabled={!isReady}
               onClick={() => {
@@ -255,7 +255,10 @@ export function AvailabilityCalendar({
               label={c.reason}
               name="reason"
               defaultValue="owner_use"
-              options={blockReasons}
+              options={Object.entries(c.reasons).map(([value, label]) => ({
+                value,
+                label,
+              }))}
             />
             <Field label={c.note} name="note" hint={c.noteHint} />
           </ActionForm>
@@ -291,6 +294,9 @@ export function AvailabilityCalendar({
 
 /** A function cannot pass from a server page, so this one lives here. */
 export function RatesMonthNav({ month }: { month: string }) {
+  const { t } = useAdminI18n();
+  const r = t.rates;
+
   return (
     <MonthNav
       month={month}
@@ -317,6 +323,9 @@ function WeekdayBoxes({
   chosen: number[];
   onToggle: (day: number) => void;
 }) {
+  const { t } = useAdminI18n();
+  const r = t.rates;
+
   return (
     <div className="weekday-row">
       {WEEK.map((day) => (
@@ -336,10 +345,10 @@ function WeekdayBoxes({
 }
 
 /** Exact, and short enough for a square on a phone. */
-const priceText = (cents: number) =>
-  cents % 100 === 0
-    ? `€${cents / 100}`
-    : `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
+const priceText = (
+  cents: number,
+  { formatRoundEuro, centsToBox }: AdminI18n,
+) => (cents % 100 === 0 ? formatRoundEuro(cents) : centsToBox(cents));
 
 /** Hidden copies of the choices, so the second button sends the same days. */
 function ClearPrices({
@@ -351,6 +360,9 @@ function ClearPrices({
   to: string;
   weekdays: number[];
 }) {
+  const { t, formatDate } = useAdminI18n();
+  const r = t.rates;
+
   const [state, formAction, pending] = useActionState(
     clearDailyPrices,
     idleState,
@@ -409,6 +421,10 @@ export function RatesCalendar({
   today: string;
   children?: ReactNode;
 }) {
+  const i18n = useAdminI18n();
+  const { formatDate, formatEuro, t } = i18n;
+  const r = t.rates;
+
   const isReady = useHydrated();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -449,7 +465,7 @@ export function RatesCalendar({
           >
             <span className="cal-tag">{dayNumber(day.date)}</span>
             <span className={day.isOverride ? "price-set" : "price-normal"}>
-              {priceText(day.cents)}
+              {priceText(day.cents, i18n)}
               {day.isOverride && "•"}
             </span>
           </button>

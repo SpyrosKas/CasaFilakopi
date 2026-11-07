@@ -1,16 +1,18 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { redirect } from "next/navigation";
 import { EnrolForm } from "@/components/admin/enrol-form";
 import { ActionForm, Field } from "@/components/admin/form";
 import { logout } from "@/lib/admin/actions/auth";
 import { verifyCode } from "@/lib/admin/actions/mfa";
 import { resolveAdminSession } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 
 export default async function MfaPage({
   searchParams,
 }: {
   searchParams: Promise<{ next?: string }>;
 }) {
+  const { t } = await adminI18n();
+
   const session = await resolveAdminSession();
   if (session.state === "anonymous" || session.state === "not_admin") {
     redirect("/admin/login");

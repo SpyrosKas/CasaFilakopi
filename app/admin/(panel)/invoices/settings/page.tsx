@@ -1,15 +1,16 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { ActionForm, Field } from "@/components/admin/form";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import { saveInvoicingSettings } from "@/lib/invoicing/actions";
 import { loadActiveSeries, loadInvoicingSetup } from "@/lib/invoicing/data";
 import { isDummyIssuer } from "@/lib/invoicing/settings";
 import { ISSUABLE_DOC_TYPES } from "@/lib/invoicing/types";
 
-const s = t.invoices.settings;
-
 export default async function InvoiceSettingsPage() {
+  const { t } = await adminI18n();
+  const s = t.invoices.settings;
+
   const admin = await requireOwner();
   const { settings, isStored, isUnreadable } = await loadInvoicingSetup(admin);
   const series = await loadActiveSeries(admin);

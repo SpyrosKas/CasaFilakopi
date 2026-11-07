@@ -13,7 +13,9 @@ import {
   type ActionState,
 } from "@/lib/admin/form-state";
 import { requireOwner, type AdminContext } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
+import { adminI18n } from "@/lib/admin/i18n-server";
+import { later } from "@/lib/admin/later";
+import type { AdminStrings } from "@/lib/admin/strings";
 import { createAdminSessionClient } from "@/lib/admin/supabase";
 import {
   findAuthUser,
@@ -28,8 +30,7 @@ import { getPublicEnv } from "@/lib/env";
 // the role is checked in the database before the secret key is used. Anything
 // that makes or unmakes an Owner needs that person's email typed in full.
 
-const u = t.ops.users;
-const v = t.validation;
+const v = later.admin.validation;
 
 const roleSchema = z.enum(["owner", "staff"], { message: v.pick });
 
@@ -46,7 +47,7 @@ const inviteSchema = z
   })
   .refine((form) => form.role !== "owner" || form.confirmEmail === form.email, {
     path: ["confirmEmail"],
-    message: u.typeMismatch,
+    message: later.admin.ops.users.typeMismatch,
   });
 
 const memberSchema = z.object({
@@ -78,6 +79,7 @@ async function readmit(
   admin: AdminContext,
   user: User,
   input: z.output<typeof inviteSchema>,
+  u: AdminStrings["ops"]["users"],
 ): Promise<ActionState> {
   const db = createAdminClient();
   const { data: profile, error } = await db
@@ -116,16 +118,18 @@ export async function inviteAdmin(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { t, say } = await adminI18n();
+  const u = t.ops.users;
   const admin = await requireOwner();
   const parsed = inviteSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
   const input = parsed.data;
 
   await assertAdminRole(admin);
   const db = createAdminClient();
   const known = findAuthUser(await listAuthUsers(db), input.email);
   if (known) {
-    const result = await readmit(admin, known, input);
+    const result = await readmit(admin, known, input, u);
     revalidatePath("/admin/users");
     return result;
   }
@@ -151,7 +155,7 @@ export async function inviteAdmin(
   return okState(u.invited(input.email));
 }
 
-function refusal(error: unknown): ActionState {
+function refusal(error: unknown, u: AdminStrings["ops"]["users"]): ActionState {
   const message = (error as { message?: string }).message;
   if (message === "cannot_change_self") return errorState(u.notYourself);
   if (message === "admin_not_found") return errorState(u.notFound);
@@ -163,6 +167,8 @@ export async function changeAdminRole(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { t } = await adminI18n();
+  const u = t.ops.users;
   const admin = await requireOwner();
   const parsed = memberRoleSchema.safeParse(formFields(formData));
   if (!parsed.success) return errorState(t.common.somethingWrong);
@@ -179,7 +185,7 @@ export async function changeAdminRole(
       p_role: role,
     });
   } catch (error) {
-    return refusal(error);
+    return refusal(error, u);
   }
   revalidatePath("/admin/users");
   return okState(u.done);
@@ -189,6 +195,8 @@ export async function removeAdmin(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { t } = await adminI18n();
+  const u = t.ops.users;
   const admin = await requireOwner();
   const parsed = memberSchema.safeParse(formFields(formData));
   if (!parsed.success) return errorState(t.common.somethingWrong);
@@ -217,7 +225,7 @@ export async function removeAdmin(
   } catch (failure) {
     await auditUser(admin, "admin_unbanned", id);
     await db.auth.admin.updateUserById(id, { ban_duration: "none" });
-    return refusal(failure);
+    return refusal(failure, u);
   }
 
   revalidatePath("/admin/users");
@@ -229,6 +237,8 @@ export async function resetTwoStep(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { t } = await adminI18n();
+  const u = t.ops.users;
   const admin = await requireOwner();
   const parsed = memberSchema.safeParse(formFields(formData));
   if (!parsed.success) return errorState(t.common.somethingWrong);

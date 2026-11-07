@@ -1,16 +1,14 @@
 import { describe, expect, it } from "vitest";
-import {
-  DEFAULT_RULES,
-  describeRules,
-  formatEuros,
-  rulesSchema,
-} from "@/lib/admin/rules";
+import { DEFAULT_RULES, describeRules, rulesSchema } from "@/lib/admin/rules";
 import type { CancellationRules, PaymentRules } from "@/lib/domain/contracts";
 import { calculateRefund } from "@/lib/domain/refund";
+import { i18nFor } from "@/lib/admin/i18n";
 import {
   parseCancellationTiers,
   parsePaymentRules,
 } from "@/lib/domain/settings";
+
+const english = i18nFor("en");
 
 const FULL = { mode: "full", deposit: null, balanceDaysBefore: 0 };
 const DEPOSIT = {
@@ -28,8 +26,12 @@ const tiers = (...pairs: [number, number][]) => ({
 });
 const SEED_TIERS = tiers([30, 100], [0, 0]);
 
+/** The schema holds markers: this is the message Admin shows in English. */
+const worded = <T extends { message: string }>(found: T | undefined) =>
+  found && { ...found, message: english.say(found.message) };
+
 const issue = (payment: unknown, cancellation: unknown = SEED_TIERS) =>
-  rulesSchema.safeParse({ payment, cancellation }).error?.issues[0];
+  worded(rulesSchema.safeParse({ payment, cancellation }).error?.issues[0]);
 
 describe("what can be saved", () => {
   it("saves full payment in the agreed shape", () => {
@@ -235,9 +237,9 @@ describe("non-refundable rules work with calculateRefund", () => {
 
 describe("euro amounts", () => {
   it("writes whole and part euros", () => {
-    expect(formatEuros(100_000)).toBe("€1,000");
-    expect(formatEuros(33_330)).toBe("€333.30");
-    expect(formatEuros(7)).toBe("€0.07");
+    expect(english.formatRoundEuro(100_000)).toBe("€1,000");
+    expect(english.formatRoundEuro(33_330)).toBe("€333.30");
+    expect(english.formatRoundEuro(7)).toBe("€0.07");
   });
 });
 
@@ -259,13 +261,13 @@ describe("guest preview", () => {
   const threeTiers = tiers([30, 100], [7, 50], [0, 0]);
 
   it("explains full payment", () => {
-    expect(describeRules(full, noRefund).payment).toEqual([
+    expect(describeRules(full, noRefund, english).payment).toEqual([
       "You pay the full price when you book.",
     ]);
   });
 
   it("explains a deposit, when the rest is due, and booking late", () => {
-    expect(describeRules(deposit(30, 14), noRefund).payment).toEqual([
+    expect(describeRules(deposit(30, 14), noRefund, english).payment).toEqual([
       "You pay 30% of the booking price when you book.",
       "You pay the rest 14 days before you arrive.",
       "If you book later than that, you pay the full price when you book.",
@@ -273,14 +275,14 @@ describe("guest preview", () => {
   });
 
   it("explains 0 days as paying on arrival", () => {
-    expect(describeRules(deposit(30, 0), noRefund).payment).toEqual([
+    expect(describeRules(deposit(30, 0), noRefund, english).payment).toEqual([
       "You pay 30% of the booking price when you book.",
       "You pay the rest when you arrive.",
     ]);
   });
 
   it("states refunds as a share of the booking price", () => {
-    expect(describeRules(full, threeTiers).cancellation).toEqual([
+    expect(describeRules(full, threeTiers, english).cancellation).toEqual([
       "If you cancel 30 days or more before you arrive, we refund the full booking price.",
       "If you cancel 7 to 29 days before you arrive, we refund 50% of the booking price.",
       "If you cancel less than 7 days before you arrive, we refund nothing.",
@@ -288,31 +290,34 @@ describe("guest preview", () => {
   });
 
   it("adds the final period when there is no line for 0 days", () => {
-    expect(describeRules(full, tiers([30, 100])).cancellation).toEqual([
-      "If you cancel 30 days or more before you arrive, we refund the full booking price.",
-      "If you cancel less than 30 days before you arrive, we refund nothing.",
-    ]);
+    expect(describeRules(full, tiers([30, 100]), english).cancellation).toEqual(
+      [
+        "If you cancel 30 days or more before you arrive, we refund the full booking price.",
+        "If you cancel less than 30 days before you arrive, we refund nothing.",
+      ],
+    );
   });
 
   it("explains a single day and a single line", () => {
     expect(
-      describeRules(full, tiers([2, 100], [1, 50], [0, 0])).cancellation[1],
+      describeRules(full, tiers([2, 100], [1, 50], [0, 0]), english)
+        .cancellation[1],
     ).toBe(
       "If you cancel 1 day before you arrive, we refund 50% of the booking price.",
     );
-    expect(describeRules(full, tiers([0, 100])).cancellation).toEqual([
+    expect(describeRules(full, tiers([0, 100]), english).cancellation).toEqual([
       "If you cancel any time before you arrive, we refund the full booking price.",
     ]);
   });
 
   it("explains a non-refundable rule", () => {
-    expect(describeRules(full, noRefund).cancellation).toEqual([
+    expect(describeRules(full, noRefund, english).cancellation).toEqual([
       "If you cancel any time before you arrive, we refund nothing.",
     ]);
   });
 
   it("gives a worked example for a guest who has paid everything", () => {
-    const { example } = describeRules(full, threeTiers);
+    const { example } = describeRules(full, threeTiers, english);
     expect(example.heading).toBe("Example: a booking of €1,000");
     expect(example.paidInFull).toEqual({
       heading: "If you have paid everything (€1,000)",
@@ -327,7 +332,7 @@ describe("guest preview", () => {
 
   it("shows a deposit-only guest losing the deposit and still owing", () => {
     expect(
-      describeRules(deposit(30, 14), threeTiers).example.depositOnly,
+      describeRules(deposit(30, 14), threeTiers, english).example.depositOnly,
     ).toEqual({
       heading: "If you have paid only the deposit (€300)",
       lines: [
@@ -339,14 +344,18 @@ describe("guest preview", () => {
   });
 
   it("shows part of a deposit coming back when the charge is smaller", () => {
-    const { example } = describeRules(deposit(30, 14), tiers([7, 80], [0, 0]));
+    const { example } = describeRules(
+      deposit(30, 14),
+      tiers([7, 80], [0, 0]),
+      english,
+    );
     expect(example.depositOnly?.lines[0]).toBe(
       "7 days or more before you arrive: you get €100 back and we keep €200.",
     );
   });
 
   it("uses exact cents for a deposit like 33.33%", () => {
-    const { example } = describeRules(deposit(33.33, 14), noRefund);
+    const { example } = describeRules(deposit(33.33, 14), noRefund, english);
     expect(example.depositOnly?.lines).toEqual([
       "Any time before you arrive: we keep the €333.30 and you owe nothing more.",
     ]);

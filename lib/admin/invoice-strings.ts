@@ -3,7 +3,7 @@
 const documentWord = (count: number) =>
   count === 1 ? "1 document" : `${count} documents`;
 
-export const invoiceStrings = {
+export const invoiceEn = {
   title: "Invoices and receipts",
   intro: "Every document issued for a booking.",
   provisional:

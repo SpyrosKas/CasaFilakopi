@@ -377,6 +377,23 @@ test.describe("photos", () => {
         .first(),
     ).toBeVisible();
     expect((await mediaInSection())[0].id).toBe(before[2].id);
+
+    // The photo itself is the handle.
+    const moved = await mediaInSection();
+    const frames = desktopPage.locator(".cms-photo-frame");
+    await frames.nth(2).dragTo(frames.nth(1));
+    await expect(
+      desktopPage
+        .getByRole("status")
+        .filter({ hasText: `Moved to place 2 of ${moved.length}` })
+        .first(),
+    ).toBeVisible();
+    expect((await mediaInSection())[1].id).toBe(moved[2].id);
+
+    // Three to a row on a laptop, so a drag does not cross a whole screen.
+    const first = await cards.nth(0).boundingBox();
+    const third = await cards.nth(2).boundingBox();
+    expect(third!.y).toBe(first!.y);
     await desktop.close();
   });
 

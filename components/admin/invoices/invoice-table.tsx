@@ -1,20 +1,21 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { RowCheckbox } from "@/components/admin/invoices/selection";
-import { t } from "@/lib/admin/strings";
 import type { IndexRow } from "@/lib/invoicing/data";
 import { formatDate, formatEuro } from "@/lib/invoicing/format";
 
-const s = t.invoices;
-const c = s.columns;
-
 /** A table on a computer. Below 900 px the styles turn each row into a card. */
-export function InvoiceTable({
+export async function InvoiceTable({
   rows,
   credited,
 }: {
   rows: IndexRow[];
   credited: Map<string, number>;
 }) {
+  const { t } = await adminI18n();
+  const s = t.invoices;
+  const c = s.columns;
+
   return (
     <table className="inv-table">
       <thead>

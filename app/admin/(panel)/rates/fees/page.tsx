@@ -1,3 +1,4 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import {
   ActionButton,
   ActionForm,
@@ -8,16 +9,7 @@ import {
 import { RatesTabs } from "@/components/admin/rates-tabs";
 import { Badge, Empty, PageHead, Panel } from "@/components/admin/ui";
 import { deleteFee, saveFee } from "@/lib/admin/actions/rates";
-import { centsToBox, formatEuro } from "@/lib/admin/format";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
-
-const r = t.rates;
-
-const KIND_OPTIONS = Object.entries(r.feeKinds).map(([value, label]) => ({
-  value,
-  label,
-}));
 
 interface FeeValues {
   id?: string;
@@ -37,7 +29,10 @@ const nameIn = (fee: FeeValues, locale: "en" | "el") =>
 const percentText = (points: number | null | undefined) =>
   points === null || points === undefined ? "" : String(points / 100);
 
-function FeeFields({ fee }: { fee: FeeValues }) {
+async function FeeFields({ fee }: { fee: FeeValues }) {
+  const { t, centsToBox } = await adminI18n();
+  const r = t.rates;
+
   return (
     <>
       {fee.id && <input type="hidden" name="id" value={fee.id} />}
@@ -55,7 +50,10 @@ function FeeFields({ fee }: { fee: FeeValues }) {
         label={r.feeKind}
         name="kind"
         defaultValue={fee.kind ?? "per_night"}
-        options={KIND_OPTIONS}
+        options={Object.entries(r.feeKinds).map(([value, label]) => ({
+          value,
+          label,
+        }))}
       />
       <div className="field-row">
         <Field
@@ -96,6 +94,9 @@ function FeeFields({ fee }: { fee: FeeValues }) {
 }
 
 export default async function FeesPage() {
+  const { t, formatEuro } = await adminI18n();
+  const r = t.rates;
+
   const admin = await requireOwner();
   const { data: fees, error } = await admin.supabase
     .from("taxes_fees")

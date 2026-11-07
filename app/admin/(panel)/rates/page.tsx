@@ -1,3 +1,4 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import {
   RatesCalendar,
   RatesMonthNav,
@@ -8,21 +9,20 @@ import { RatesTabs } from "@/components/admin/rates-tabs";
 import { PageHead, Panel } from "@/components/admin/ui";
 import { saveBasePrices } from "@/lib/admin/actions/rates";
 import { isMonthKey, monthDates } from "@/lib/admin/calendar";
-import { centsToBox } from "@/lib/admin/format";
 import { requireOwner } from "@/lib/admin/session";
 import { loadBookingSettings } from "@/lib/admin/settings-data";
-import { t } from "@/lib/admin/strings";
 import { addDays, athensDate } from "@/lib/domain/dates";
 import { nightlyPrices } from "@/lib/domain/pricing";
 import { parseBookingSettings } from "@/lib/domain/settings";
-
-const r = t.rates;
 
 export default async function RatesPage({
   searchParams,
 }: {
   searchParams: Promise<{ month?: string | string[] }>;
 }) {
+  const { t, centsToBox } = await adminI18n();
+  const r = t.rates;
+
   const admin = await requireOwner();
   const today = athensDate(new Date());
   const asked = (await searchParams).month;

@@ -1,3 +1,4 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { Field, SelectField } from "@/components/admin/form";
 import {
@@ -18,13 +19,10 @@ import {
   tabOf,
   type StayFilters,
 } from "@/lib/admin/stays";
-import { t } from "@/lib/admin/strings";
 import { athensDate } from "@/lib/domain/dates";
 
-const b = t.bookings;
-
-const asOptions = (labels: Record<string, string>) => [
-  { value: "", label: b.any },
+const asOptions = (labels: Record<string, string>, any: string) => [
+  { value: "", label: any },
   ...Object.entries(labels).map(([value, label]) => ({ value, label })),
 ];
 
@@ -36,6 +34,10 @@ export default async function BookingsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const i18n = await adminI18n();
+  const { t } = i18n;
+  const b = t.bookings;
+
   const admin = await requireAdmin();
   const query = await searchParams;
   const parsed = bookingListSchema.parse({
@@ -123,20 +125,20 @@ export default async function BookingsPage({
               label={b.filterStatus}
               name="status"
               defaultValue={filters.status ?? ""}
-              options={asOptions(t.stay.status)}
+              options={asOptions(t.stay.status, b.any)}
             />
             <SelectField
               label={b.filterSource}
               name="source"
               defaultValue={filters.source ?? ""}
-              options={asOptions(t.stay.source)}
+              options={asOptions(t.stay.source, b.any)}
             />
             <SelectField
               label={b.filterMoney}
               name="money"
               defaultValue={filters.money ?? ""}
               options={[
-                ...asOptions(t.stay.money),
+                ...asOptions(t.stay.money, b.any),
                 // Staff never see amounts, so this could only mislead them.
                 ...(admin.role === "owner"
                   ? [{ value: NO_AMOUNT, label: t.reports.noAmountFilter }]
@@ -167,7 +169,11 @@ export default async function BookingsPage({
         <section className="panel">
           <ul className="rows" data-testid="stay-list">
             {rows.map((stay) => (
-              <StayRow key={stay.id} stay={stay} side={balanceText(stay)} />
+              <StayRow
+                key={stay.id}
+                stay={stay}
+                side={balanceText(stay, i18n)}
+              />
             ))}
           </ul>
         </section>

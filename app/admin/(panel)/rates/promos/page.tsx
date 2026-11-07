@@ -1,3 +1,4 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import {
   ActionButton,
   ActionForm,
@@ -8,11 +9,8 @@ import {
 import { RatesTabs } from "@/components/admin/rates-tabs";
 import { Badge, Empty, PageHead, Panel } from "@/components/admin/ui";
 import { deletePromo, savePromo } from "@/lib/admin/actions/rates";
-import { centsToBox, formatEuro } from "@/lib/admin/format";
+import type { AdminI18n } from "@/lib/admin/i18n";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
-
-const r = t.rates;
 
 interface PromoValues {
   id?: string;
@@ -25,14 +23,21 @@ interface PromoValues {
   is_active?: boolean;
 }
 
-const valueText = (promo: PromoValues) =>
+const valueText = (
+  promo: PromoValues,
+  { centsToBox, formatPercent }: AdminI18n,
+) =>
   promo.value === undefined
     ? ""
     : promo.kind === "percent"
-      ? String(promo.value / 100)
+      ? formatPercent(promo.value).slice(0, -1)
       : centsToBox(promo.value);
 
-function PromoFields({ promo }: { promo: PromoValues }) {
+async function PromoFields({ promo }: { promo: PromoValues }) {
+  const i18n = await adminI18n();
+  const { t } = i18n;
+  const r = t.rates;
+
   return (
     <>
       {promo.id && <input type="hidden" name="id" value={promo.id} />}
@@ -55,7 +60,7 @@ function PromoFields({ promo }: { promo: PromoValues }) {
         label={r.promoValue}
         name="value"
         inputMode="decimal"
-        defaultValue={valueText(promo)}
+        defaultValue={valueText(promo, i18n)}
       />
       <div className="field-row">
         <Field
@@ -87,6 +92,9 @@ function PromoFields({ promo }: { promo: PromoValues }) {
 }
 
 export default async function PromosPage() {
+  const { t, formatEuro, formatPercent } = await adminI18n();
+  const r = t.rates;
+
   const admin = await requireOwner();
   const { data: promos, error } = await admin.supabase
     .from("promo_codes")
@@ -107,7 +115,7 @@ export default async function PromosPage() {
           <p className="muted">
             {r.promoOff(
               promo.kind === "percent"
-                ? `${promo.value / 100}%`
+                ? formatPercent(promo.value)
                 : formatEuro(promo.value),
             )}
             {", "}

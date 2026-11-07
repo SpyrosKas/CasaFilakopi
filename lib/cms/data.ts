@@ -8,7 +8,7 @@ import {
   fixedCollections,
 } from "@/lib/cms/registry";
 import { blockDataSchema, reviewBodySchema } from "@/lib/cms/stored";
-import { t } from "@/lib/cms/strings";
+import { later } from "@/lib/admin/later";
 import type { ListKind } from "@/lib/cms/schemas";
 import type { BlockData, CollectionDef, Lang, PageDef } from "@/lib/cms/types";
 
@@ -116,7 +116,7 @@ async function usageOf(admin: AdminContext, ids: string[]) {
     const placeNames = places.data
       .filter((place) => place.media_id === mediaId)
       .map((place) =>
-        t.photos.place(altOf(place.name).en || altOf(place.name).el),
+        later.cms.photos.place(altOf(place.name).en || altOf(place.name).el),
       );
     return {
       usedElsewhere: [

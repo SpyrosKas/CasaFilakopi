@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { parseEuros } from "@/lib/admin/format";
-import { t } from "@/lib/admin/strings";
+import { later } from "@/lib/admin/later";
 import { daysBetween, isValidIsoDate } from "@/lib/domain/dates";
 
 // Server-side validation for the bookings, calendar, prices and messages
 // actions. Form values arrive as strings.
 
-const v = t.validation;
+const v = later.admin.validation;
 
 /** A range longer than this is a slip of the finger. */
 const MAX_RANGE_DAYS = 731;
@@ -324,7 +324,7 @@ export const restrictionSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["maxStay"],
-        message: t.rates.restrictionMaxBelowMin,
+        message: later.admin.rates.restrictionMaxBelowMin,
       });
     }
     const hasRule =
@@ -337,7 +337,7 @@ export const restrictionSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["form"],
-        message: t.rates.restrictionEmptyRule,
+        message: later.admin.rates.restrictionEmptyRule,
       });
     }
   });
@@ -376,7 +376,7 @@ export const feeSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["percent"],
-        message: t.rates.feePercentNeeded,
+        message: later.admin.rates.feePercentNeeded,
       });
       return z.NEVER;
     }
@@ -384,7 +384,7 @@ export const feeSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["amount"],
-        message: t.rates.feeAmountNeeded,
+        message: later.admin.rates.feeAmountNeeded,
       });
       return z.NEVER;
     }

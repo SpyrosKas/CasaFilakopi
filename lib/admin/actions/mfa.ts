@@ -1,5 +1,6 @@
 "use server";
 
+import { adminI18n } from "@/lib/admin/i18n-server";
 import { redirect } from "next/navigation";
 import { isFreshSignIn } from "@/lib/admin/activity";
 import { writeAudit } from "@/lib/admin/audit";
@@ -17,7 +18,6 @@ import {
   markActive,
   resolveAdminSession,
 } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 
 export interface EnrolState extends ActionState {
   enrolment?: {
@@ -47,6 +47,8 @@ async function enrollingSession() {
 }
 
 export async function startEnrolment(): Promise<EnrolState> {
+  const { t } = await adminI18n();
+
   const { supabase } = await enrollingSession();
 
   // A setup left half done blocks a new one, so it is cleared first.
@@ -81,9 +83,11 @@ export async function finishEnrolment(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const session = await enrollingSession();
   const parsed = enrolConfirmSchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
 
   const { data, error } = await session.supabase.auth.mfa.challengeAndVerify({
     factorId: parsed.data.factorId,
@@ -105,11 +109,13 @@ export async function verifyCode(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const { say, t } = await adminI18n();
+
   const session = await resolveAdminSession();
   if (session.state !== "needs_verify") redirect("/admin");
 
   const parsed = mfaVerifySchema.safeParse(formFields(formData));
-  if (!parsed.success) return fromZodError(parsed.error);
+  if (!parsed.success) return fromZodError(parsed.error, say);
 
   // The password alone must not allow unlimited guesses at a 6-digit code.
   if (!(await claimAttempt("mfa_user", session.userId))) {

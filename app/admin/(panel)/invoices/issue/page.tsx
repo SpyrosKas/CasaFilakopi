@@ -1,12 +1,10 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { z } from "zod";
 import { requireOwner } from "@/lib/admin/session";
-import { t } from "@/lib/admin/strings";
 import { loadIssuablePayments } from "@/lib/invoicing/data";
 import { foldText, PAGE_SIZE } from "@/lib/invoicing/filters";
 import { formatDate, formatEuro } from "@/lib/invoicing/format";
-
-const s = t.invoices.issue;
 
 const paramsSchema = z.object({
   q: z.string().trim().max(100).catch("").default(""),
@@ -18,6 +16,9 @@ export default async function IssueListPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const { t } = await adminI18n();
+  const s = t.invoices.issue;
+
   const admin = await requireOwner();
   const { q, page } = paramsSchema.parse(await searchParams);
 
@@ -65,8 +66,10 @@ export default async function IssueListPage({
                   <span className="hint choice-hint">
                     {t.invoices.paymentKind[payment.kind]},{" "}
                     {formatEuro(payment.amountCents)}. {s.stay}:{" "}
-                    {formatDate(payment.checkIn)} to{" "}
-                    {formatDate(payment.checkOut)}
+                    {t.common.dateRange(
+                      formatDate(payment.checkIn),
+                      formatDate(payment.checkOut),
+                    )}
                     {payment.isRetained && `. ${s.retainedShort}`}
                   </span>
                 </span>

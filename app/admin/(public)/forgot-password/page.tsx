@@ -1,9 +1,11 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import { ActionForm, Field } from "@/components/admin/form";
 import { requestPasswordReset } from "@/lib/admin/actions/auth";
-import { t } from "@/lib/admin/strings";
 
-export default function ForgotPasswordPage() {
+export default async function ForgotPasswordPage() {
+  const { t } = await adminI18n();
+
   return (
     <div className="stack">
       <h1>{t.forgot.title}</h1>

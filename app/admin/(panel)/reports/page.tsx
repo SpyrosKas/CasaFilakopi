@@ -1,3 +1,5 @@
+import type { AdminI18n } from "@/lib/admin/i18n";
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
 import {
   Empty,
@@ -7,7 +9,6 @@ import {
   Stat,
   Tabs,
 } from "@/components/admin/ui";
-import { formatEuro, formatMonth, formatTenths } from "@/lib/admin/format";
 import {
   buildReport,
   monthlyReports,
@@ -17,17 +18,15 @@ import {
 import { requireOwner } from "@/lib/admin/session";
 import { loadBlocks, loadStayBook, toReportInput } from "@/lib/admin/stay-data";
 import { NO_AMOUNT, type BookingSource } from "@/lib/admin/stays";
-import { t } from "@/lib/admin/strings";
 import { addDays, athensDate } from "@/lib/domain/dates";
-
-const r = t.reports;
 
 const IMPORTED: BookingSource[] = ["airbnb", "booking_com", "other"];
 
 const dash = "-";
 
 /** Each figure shows when it is not zero, and the cards add up to Income. */
-function sourceLines(line: SourceLine) {
+function sourceLines(line: SourceLine, { t, formatEuro }: AdminI18n) {
+  const r = t.reports;
   const shown = [
     {
       label: r.sourceBookings,
@@ -66,6 +65,10 @@ export default async function ReportsPage({
 }: {
   searchParams: Promise<{ year?: string; month?: string }>;
 }) {
+  const i18n = await adminI18n();
+  const { t, formatEuro, formatMonth, formatTenths } = i18n;
+  const r = t.reports;
+
   const admin = await requireOwner();
   const now = new Date();
   const today = athensDate(now);
@@ -275,7 +278,7 @@ export default async function ReportsPage({
             {report.bySource.map((line) => (
               <section key={line.source} className="source-card">
                 <h3>{t.stay.source[line.source]}</h3>
-                <MoneyLines lines={sourceLines(line)} />
+                <MoneyLines lines={sourceLines(line, i18n)} />
               </section>
             ))}
           </div>

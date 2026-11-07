@@ -1,10 +1,6 @@
+import { adminI18n } from "@/lib/admin/i18n-server";
 import Link from "next/link";
-import {
-  formatMoment,
-  formatStayDate,
-} from "@/components/admin/integrations/format";
 import { loadChannelAlerts, type FeedAlert } from "@/lib/channels/data";
-import { channelStrings as s } from "@/lib/channels/strings";
 
 /**
  * Double bookings and failing feeds. On the home page and the Channel sync
@@ -15,6 +11,12 @@ export async function ChannelAlertsPanel({
 }: {
   withLink?: boolean;
 }) {
+  const {
+    channels: s,
+    formatYearDate: formatStayDate,
+    formatStamp: formatMoment,
+  } = await adminI18n();
+
   const alerts = await loadChannelAlerts().catch(() => null);
   if (!alerts) {
     return (

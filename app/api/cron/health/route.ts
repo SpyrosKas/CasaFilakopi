@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
+import { i18nFor } from "@/lib/admin/i18n";
 import {
   HEARTBEAT_JOB,
   summariseJobs,
   WATCHED_JOBS,
 } from "@/lib/admin/job-health";
-import { t } from "@/lib/admin/strings";
 import { createAdminClient } from "@/lib/db/admin";
 import { isCronAuthorised } from "@/lib/email/cron-auth";
 import { emailSecrets } from "@/lib/email/env";
@@ -15,6 +15,7 @@ import {
   latestRuns,
   startJob,
 } from "@/lib/email/jobs";
+import { loadEmailSettings } from "@/lib/email/settings";
 import { logError, logInfo } from "@/lib/log";
 
 export const maxDuration = 60;
@@ -39,12 +40,16 @@ async function handle(request: Request) {
   try {
     run = await startJob(db, HEARTBEAT_JOB);
     const now = new Date();
-    const { labels } = t.ops.jobs;
+    // No admin is looking: the label goes into the host's email.
+    const { hostLocale } = await loadEmailSettings(db);
+    const { labels, lateRun } = i18nFor(hostLocale).t.ops.jobs;
     const { stale } = summariseJobs(await latestRuns(db), now);
     const alerted = (
       await Promise.all([
         ...WATCHED_JOBS.map((job) => alertAboutJob(db, job, labels[job], now)),
-        ...stale.map((job) => alertStaleJob(db, job, labels[job], now)),
+        ...stale.map((job) =>
+          alertStaleJob(db, job, labels[job], now, lateRun),
+        ),
       ])
     ).filter(Boolean).length;
     await finishJob(db, run, "success", `alerted ${alerted}`);

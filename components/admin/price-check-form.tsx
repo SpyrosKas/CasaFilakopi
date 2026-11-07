@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdminI18n } from "@/components/admin/language-provider";
 import {
   useActionState,
   useRef,
@@ -8,16 +9,15 @@ import {
   type ReactNode,
 } from "react";
 import { FormContext, FormMessage } from "@/components/admin/form";
-import { MoneyLines } from "@/components/admin/ui";
+import { MoneyLines } from "@/components/admin/panel";
 import { useHydrated } from "@/components/admin/use-hydrated";
 import type { PreviewState } from "@/lib/admin/booking-ops";
 import { idleState } from "@/lib/admin/form-state";
-import { formatEuro } from "@/lib/admin/format";
-import { t } from "@/lib/admin/strings";
-
-const s = t.stayForm;
 
 function PricePanel({ state }: { state: PreviewState }) {
+  const { t, formatEuro } = useAdminI18n();
+  const s = t.stayForm;
+
   const preview = state.preview;
   if (!preview) return null;
   const { previousCents, overpaidCents, totalCents } = preview;
@@ -82,6 +82,9 @@ export function PriceCheckForm({
   submitLabel: string;
   children: ReactNode;
 }) {
+  const { t } = useAdminI18n();
+  const s = t.stayForm;
+
   const form = useRef<HTMLFormElement>(null);
   const [previewState, runPreview, previewing] = useActionState(
     previewAction,

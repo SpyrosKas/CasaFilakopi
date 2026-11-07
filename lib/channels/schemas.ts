@@ -1,7 +1,9 @@
 import { z } from "zod";
-import { channelStrings as s } from "./strings";
+import { later } from "@/lib/admin/later";
 import { SYNC_INTERVALS } from "./settings";
 import { CHANNELS } from "./types";
+
+const s = later.channels;
 
 const checkbox = z
   .literal("on")
