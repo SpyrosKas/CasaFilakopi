@@ -968,6 +968,7 @@ describe("scheduled jobs (T4.32)", () => {
       "complete-finished-bookings",
       "email-queue",
       "email-scheduled",
+      "payments",
       "purge-admin-attempts",
       "release-expired-holds",
     ]);
@@ -1014,5 +1015,57 @@ describe("scheduled jobs (T4.32)", () => {
         c.query(`select public.call_cron_route('/api/cron/email')`),
       ),
     ).rejects.toThrow(/permission denied/);
+  });
+});
+
+describe("disputes", () => {
+  const dispute = async () => {
+    const id = await createHold({ roomId, ...JUNE });
+    const intent = randomUUID();
+    await confirm(id, intent);
+    return { id, intent };
+  };
+  const statusOfPayment = async (intent: string) =>
+    (
+      await db.query(
+        `select status from public.payments where stripe_payment_intent_id = $1`,
+        [intent],
+      )
+    ).rows[0].status as string;
+  const open = async (intent: string) =>
+    (await db.query(`select public.open_dispute($1) as r`, [intent])).rows[0].r;
+  const close = async (intent: string, won: boolean, id = "dp_1") =>
+    (
+      await db.query(`select public.close_dispute($1, $2, $3, 10000) as r`, [
+        intent,
+        `${id}-${intent}`,
+        won,
+      ])
+    ).rows[0].r;
+
+  it("opens once, and a won dispute restores the payment", async () => {
+    const { intent } = await dispute();
+    expect((await open(intent)).outcome).toBe("opened");
+    expect((await open(intent)).outcome).toBe("already_open");
+    expect(await statusOfPayment(intent)).toBe("disputed");
+    expect((await close(intent, true)).outcome).toBe("won");
+    expect(await statusOfPayment(intent)).toBe("succeeded");
+  });
+
+  it("a lost dispute counts as money gone, once only", async () => {
+    const { id, intent } = await dispute();
+    await open(intent);
+    await close(intent, false);
+    await close(intent, false);
+    const { rows } = await db.query(
+      `select count(*)::int as n, sum(amount_cents)::int as cents
+       from public.refunds where booking_id = $1`,
+      [id],
+    );
+    expect(rows[0]).toEqual({ n: 1, cents: 10000 });
+  });
+
+  it("ignores an unknown payment", async () => {
+    expect((await open(randomUUID())).outcome).toBe("unknown");
   });
 });
