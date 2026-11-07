@@ -363,6 +363,25 @@ const en = {
     refundSaved: "Refund recorded.",
     cardRefundLater:
       "Card payments can be refunded from here once online payments are connected. Until then, this booking shows the amount as still to give back.",
+    cardRefund: "Refund to the card",
+    cardRefundIntro: (amount: string) =>
+      `Sends money back to the guest's card through Stripe. Up to ${amount} can go back. If the booking was paid in parts, the refund comes out of each payment in turn.`,
+    cardRefundConfirm:
+      "Send this amount back to the guest's card now? This cannot be undone.",
+    cardRefundSubmit: "Send refund",
+    cardRefundSent:
+      "Refund sent to the guest's card. If a document was issued for this payment, remember to issue a credit note in Invoices.",
+    cardRefundUnclear:
+      "Stripe did not answer clearly, so the refund shows as in progress. It is checked again automatically within a few minutes. Do not send it a second time.",
+    cardRefundFailed: (amount: string) =>
+      `Stripe refused ${amount} of this refund, so that part did not go back. Nothing was recorded for it. Check Stripe, then try again.`,
+    cardNotConnected: "Online payments are not connected yet.",
+    sendLink: "Send payment link",
+    sendLinkHint: (amount: string) =>
+      `Emails the guest a link to pay the ${amount} still owed. They pay on their booking page.`,
+    sendLinkSent: "The payment link is on its way to the guest.",
+    sendLinkNoEmail: "This booking has no guest email address.",
+    sendLinkNothing: "Nothing is left to pay on this booking.",
     errors: {
       dates_unavailable:
         "Those dates are already taken. Please check the calendar and choose others.",
@@ -412,6 +431,12 @@ const en = {
       "Leave this empty if you have not yet. The booking will show the amount as still to give back.",
     cardPart: (amount: string) =>
       `${amount} of this was paid by card. Card refunds will work from here once online payments are connected, and until then it shows as still to give back.`,
+    cardRefundNow: (amount: string) =>
+      `Refund ${amount} to the guest's card now`,
+    cardRefundNowHint:
+      "It goes through Stripe as soon as you confirm. Leave this empty to refund it later from the booking page.",
+    cardFailed:
+      "The booking is cancelled, but Stripe did not take the refund. The amount shows as still to give back. Please refund it from the booking page.",
     confirm: "Yes, cancel this booking",
     keepIt: "Keep the booking",
     done: "Booking cancelled.",

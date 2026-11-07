@@ -15,6 +15,7 @@ import {
 import { t } from "@/lib/admin/strings";
 import { athensDate, daysBetween } from "@/lib/domain/dates";
 import { sumCents } from "@/lib/domain/money";
+import { readStripeSettings } from "@/lib/payments/env";
 
 const c = t.cancel;
 
@@ -58,6 +59,7 @@ export default async function CancelBookingPage({
 
   const plan = planRefund(outcome.refundCents, payments, refunds);
   const manualCents = sumCents(plan.manual.map((row) => row.amountCents));
+  const cardConnected = readStripeSettings() !== null;
 
   return (
     <div className="stack">
@@ -104,7 +106,7 @@ export default async function CancelBookingPage({
         <p className="notice notice-info">{c.nothingMore}</p>
       )}
 
-      {plan.cardCents > 0 && (
+      {plan.cardCents > 0 && !cardConnected && (
         <p className="notice notice-info">
           {c.cardPart(formatEuro(plan.cardCents))}
         </p>
@@ -128,6 +130,14 @@ export default async function CancelBookingPage({
             label={c.gaveBack(formatEuro(manualCents))}
             name="gaveBack"
             hint={c.gaveBackHint}
+          />
+        )}
+        {plan.cardCents > 0 && cardConnected && (
+          <CheckField
+            label={c.cardRefundNow(formatEuro(plan.cardCents))}
+            name="refundCard"
+            hint={c.cardRefundNowHint}
+            defaultChecked
           />
         )}
       </ActionForm>

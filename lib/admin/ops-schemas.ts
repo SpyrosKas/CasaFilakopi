@@ -181,10 +181,18 @@ export const refundSchema = z.object({
   reason: optional(300),
 });
 
+export const cardRefundSchema = z.object({
+  id: z.uuid(),
+  expectedRefunded: expectedCents,
+  amount: positiveEuros,
+  reason: optional(300),
+});
+
 export const cancelSchema = z.object({
   id: z.uuid(),
   reason: optional(300),
   gaveBack: checkbox,
+  refundCard: checkbox,
   expectedRefund: z.string().regex(/^\d+$/).transform(Number),
 });
 

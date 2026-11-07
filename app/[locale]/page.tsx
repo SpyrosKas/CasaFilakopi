@@ -1,6 +1,7 @@
 import { useTranslations } from "next-intl";
 import { setRequestLocale } from "next-intl/server";
 import { use } from "react";
+import { HomeAvailability } from "@/components/site/booking/home-availability";
 import { Gallery } from "@/components/site/gallery";
 import { heroButtonClass, Hero } from "@/components/site/hero";
 import { Icon, type IconName } from "@/components/site/icon";
@@ -131,6 +132,7 @@ export default function HomePage({
         </div>
       </section>
 
+      <HomeAvailability />
       <Reviews locale={locale} />
       <ReserveBand />
     </>

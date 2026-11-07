@@ -42,12 +42,15 @@ export function ActionForm({
   children,
   danger = false,
   resetOnOk = false,
+  confirm,
 }: {
   action: (state: ActionState, formData: FormData) => Promise<ActionState>;
   submitLabel: string;
   pendingLabel: string;
   children: ReactNode;
   danger?: boolean;
+  /** Asked first, for anything that cannot be undone with one tap. */
+  confirm?: string;
   /** Empties the boxes after a save, so a repeat tap cannot add it twice. */
   resetOnOk?: boolean;
 }) {
@@ -62,6 +65,7 @@ export function ActionForm({
   // React clears a form after its action. Sending it from here does not.
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (confirm && !window.confirm(confirm)) return;
     const data = new FormData(event.currentTarget);
     startTransition(() => formAction(data));
   };
