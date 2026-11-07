@@ -241,7 +241,7 @@ export const invoiceStrings = {
     none: "No documents were issued this month.",
     download: "Download ZIP",
     downloadHint:
-      "The ZIP holds every PDF and a spreadsheet that opens in Excel with Greek letters. Downloading does not mark anything as sent.",
+      "The ZIP holds every PDF and an Excel file with a list of the documents and their totals. Downloading does not mark anything as sent.",
     emailLater:
       "Sending straight to the accountant by email will be added later. For now, attach the ZIP to an email.",
     pickSome: "To send only some documents, tick them in the list instead.",

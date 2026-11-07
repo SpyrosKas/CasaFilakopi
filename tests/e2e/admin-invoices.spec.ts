@@ -9,11 +9,13 @@ import {
   type Download,
   type Page,
 } from "@playwright/test";
+import ExcelJS from "exceljs";
 import { strFromU8, unzipSync } from "fflate";
 import { SELECTION_LIMIT } from "@/lib/invoicing/filters";
-import { CSV_HEADERS } from "@/lib/invoicing/csv";
 import { zipEntryName } from "@/lib/invoicing/format";
+import { PROVISIONAL_NOTE } from "@/lib/invoicing/workbook";
 import { pdfText } from "../pdf-text";
+import { columnOf, readWorkbook, rowStarting } from "../read-xlsx";
 import {
   createTestUser,
   db,
@@ -131,11 +133,22 @@ async function save(page: Page, click: () => Promise<void>) {
 const entry = (document: { number: string; id: string }) =>
   zipEntryName(document.number, document.id);
 
-function csvRows(csv: string): string[] {
-  return csv
-    .replace(/^\uFEFF/, "")
-    .trim()
-    .split("\r\n");
+const ExcelValueType = ExcelJS.ValueType;
+
+/** The Documents sheet of the Excel file inside a downloaded ZIP. */
+async function sheetIn(files: Record<string, Uint8Array>) {
+  const name = Object.keys(files).find((file) => file.endsWith(".xlsx"))!;
+  return (await readWorkbook(files[name])).getWorksheet("Documents")!;
+}
+
+/** The first column of every document row, without the header or totals. */
+function documentNumbers(sheet: ExcelJS.Worksheet): string[] {
+  const numbers: string[] = [];
+  sheet.eachRow((row, index) => {
+    const value = String(row.getCell(1).value);
+    if (index > 1 && value !== "Σύνολο / Total") numbers.push(value);
+  });
+  return numbers;
 }
 
 /**
@@ -629,7 +642,7 @@ test.describe("downloading", () => {
       bar().getByRole("button", { name: "Download" }).click(),
     );
     expect(download.suggestedFilename()).toMatch(
-      /^casa-filakopi-selection-.+\.zip$/,
+      /^casa-filakopi-invoices-selection-.+\.zip$/,
     );
 
     const files = unzipSync(await bytesOf(download));
@@ -637,13 +650,15 @@ test.describe("downloading", () => {
     expect(names).toContain(entry(first));
     expect(names).toContain(entry(second));
     expect(names).toHaveLength(3);
+    expect(names.find((name) => name.endsWith(".xlsx"))).toMatch(
+      /^casa-filakopi-invoices-selection-.+\.xlsx$/,
+    );
+    expect(names.some((name) => name.endsWith(".csv"))).toBe(false);
 
-    const csvName = names.find((name) => name.endsWith(".csv"))!;
-    const rows = csvRows(strFromU8(files[csvName]));
-    expect(rows).toHaveLength(3);
-    expect([...files[csvName].slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
-    expect(rows[1]).toContain(first.number);
-    expect(rows.join()).not.toContain(third.number);
+    const sheet = await sheetIn(files);
+    expect(documentNumbers(sheet).sort()).toEqual(
+      [first.number, second.number].sort(),
+    );
 
     // Downloading never marks anything as sent.
     expect((await invoiceRow(first.id)).exported_at).toBeNull();
@@ -665,11 +680,13 @@ test.describe("downloading", () => {
     expect(Object.keys(files)).toContain(entry(first));
     expect(Object.keys(files)).not.toContain(entry(third));
     expect(strFromU8(files["PDF-MISSING.txt"])).toContain(third.number);
-    const csvName = Object.keys(files).find((n) => n.endsWith(".csv"))!;
-    const row = csvRows(strFromU8(files[csvName])).find((line) =>
-      line.includes(third.number),
-    )!;
-    expect(row).toContain("PDF missing");
+    const sheet = await sheetIn(files);
+    expect(
+      rowStarting(sheet, third.number).getCell(columnOf(sheet, "PDF")).value,
+    ).toContain("PDF missing");
+    expect(
+      rowStarting(sheet, first.number).getCell(columnOf(sheet, "PDF")).value,
+    ).toBe(entry(first));
     await clear();
   });
 
@@ -782,8 +799,12 @@ test.describe("select all", () => {
       bar.getByRole("button", { name: "Download anyway" }).click(),
     );
     const files = unzipSync(await bytesOf(download));
-    const csvName = Object.keys(files).find((n) => n.endsWith(".csv"))!;
-    expect(csvRows(strFromU8(files[csvName]))).toHaveLength(28);
+    const sheet = await sheetIn(files);
+    expect(documentNumbers(sheet)).toHaveLength(27);
+    const totals = rowStarting(sheet, "Σύνολο / Total");
+    expect(totals.getCell(columnOf(sheet, "Σύνολο / Total")).result).toBe(
+      11556,
+    );
     expect(strFromU8(files["PDF-MISSING.txt"])).toContain(rows[26].number);
     expect(Object.keys(files).filter((n) => n.endsWith(".pdf"))).toHaveLength(
       2,
@@ -831,12 +852,16 @@ test.describe("the accountant's month", () => {
     );
   });
 
-  test("the ZIP has the right files and a CSV Excel can read", async () => {
+  test("the ZIP has the right files and a real Excel file", async () => {
     await page.goto(`/admin/invoices/export?month=${month}`);
+    await expect(page.getByText(/an Excel file/)).toBeVisible();
+    await expect(page.getByText(/csv/i)).toHaveCount(0);
     const download = await save(page, () =>
       page.getByRole("link", { name: "Download ZIP" }).click(),
     );
-    expect(download.suggestedFilename()).toBe(`casa-filakopi-${month}.zip`);
+    expect(download.suggestedFilename()).toBe(
+      `casa-filakopi-invoices-${month}.zip`,
+    );
 
     const files = unzipSync(await bytesOf(download));
     expect(Object.keys(files).sort()).toEqual(
@@ -844,16 +869,60 @@ test.describe("the accountant's month", () => {
         entry(first),
         entry(second),
         "PDF-MISSING.txt",
-        `casa-filakopi-${month}.csv`,
+        `casa-filakopi-invoices-${month}.xlsx`,
       ].sort(),
     );
-    const csvBytes = files[`casa-filakopi-${month}.csv`];
-    expect([...csvBytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
-    const csv = strFromU8(csvBytes);
-    expect(csv).toContain("ΑΦΜ / VAT number");
-    expect(csv).toContain("'=cmd|Χρήστης");
-    expect(csvRows(csv)).toHaveLength(4);
-    expect(csvRows(csv)[1].split(";")).toContain(`"428,00"`);
+
+    const workbook = await readWorkbook(
+      files[`casa-filakopi-invoices-${month}.xlsx`],
+    );
+    const sheet = workbook.getWorksheet("Documents")!;
+    expect(documentNumbers(sheet)).toHaveLength(3);
+
+    // A guest's name that looks like a formula stays exactly as typed.
+    const hostile = rowStarting(sheet, first.number).getCell(
+      columnOf(sheet, "Πελάτης / Customer"),
+    );
+    expect(hostile.type).toBe(ExcelValueType.String);
+    expect(hostile.value).toBe("=cmd|Χρήστης");
+
+    // Real numbers and dates, not text.
+    const line = rowStarting(sheet, second.number);
+    const amount = line.getCell(columnOf(sheet, "Σύνολο / Total"));
+    expect(amount.type).toBe(ExcelValueType.Number);
+    expect(amount.value).toBe(428);
+    const date = line.getCell(columnOf(sheet, "Ημερομηνία / Date"));
+    expect(date.type).toBe(ExcelValueType.Date);
+    expect((date.value as Date).toISOString().slice(0, 7)).toBe(month);
+
+    // The totals are the database's own figures.
+    const { rows } = await db.query(
+      `select sum(net_cents)::int as net, sum(vat_cents)::int as vat,
+         sum(fee_cents)::int as fee, sum(total_cents)::int as total
+       from public.invoices where id = any($1::uuid[])`,
+      [[first.id, second.id, missing.id]],
+    );
+    const totals = rowStarting(sheet, "Σύνολο / Total");
+    for (const [title, cents] of [
+      ["Καθαρό / Net", rows[0].net],
+      ["ΦΠΑ / VAT", rows[0].vat],
+      ["Τέλη εκτός ΦΠΑ / Fees outside VAT", rows[0].fee],
+      ["Σύνολο / Total", rows[0].total],
+    ] as const) {
+      expect(totals.getCell(columnOf(sheet, title)).result, title).toBe(
+        cents / 100,
+      );
+    }
+
+    // The Summary agrees, and says what the file covers.
+    const summary = workbook.getWorksheet("Summary")!;
+    const cover: unknown[] = [];
+    summary.eachRow((row) => cover.push(row.getCell(1).value));
+    expect(cover).toContain(`Μήνας / Month: ${month}`);
+    expect(cover).toContain(PROVISIONAL_NOTE);
+    expect(rowStarting(summary, "Απόδειξη / Receipt").getCell(6).value).toBe(
+      rows[0].total / 100,
+    );
 
     // The same PDF as in the bucket.
     const stored = await storage.download(first.pdfPath!);
@@ -1416,7 +1485,7 @@ test.describe("VAT from the booking to the accountant", () => {
     expect(share).toContain(squeezed("Τέλος ανθεκτικότητας"));
   });
 
-  test("the CSV says the same, signed, with the right transaction", async () => {
+  test("the Excel file says the same, signed, with the right transaction", async () => {
     const response = await postIds(page.context().request, [
       wholeId,
       depositId,
@@ -1424,13 +1493,11 @@ test.describe("VAT from the booking to the accountant", () => {
       creditId,
     ]);
     const files = unzipSync(await response.body());
-    const csvName = Object.keys(files).find((n) => n.endsWith(".csv"))!;
-    const rows = csvRows(strFromU8(files[csvName]));
-    const cells = (id: string, number: string) => {
-      const row = rows.find((line) => line.startsWith(number));
-      expect(row, id).toBeTruthy();
-      const parts = row!.split(";").map((cell) => cell.replace(/"/g, ""));
-      const at = (header: string) => parts[CSV_HEADERS.indexOf(header)];
+    const sheet = await sheetIn(files);
+    const cells = (number: string) => {
+      const line = rowStarting(sheet, number);
+      const at = (header: string) =>
+        line.getCell(columnOf(sheet, header)).value ?? "";
       return {
         net: at("Καθαρό / Net"),
         vat: at("ΦΠΑ / VAT"),
@@ -1444,38 +1511,83 @@ test.describe("VAT from the booking to the accountant", () => {
     const number = async (id: string) =>
       (await invoiceRow(id)).document_number as string;
 
-    expect(cells(wholeId, await number(wholeId))).toEqual({
-      net: "864,00",
-      vat: "112,32",
-      fee: "15,00",
-      total: "991,32",
+    expect(cells(await number(wholeId))).toEqual({
+      net: 864,
+      vat: 112.32,
+      fee: 15,
+      total: 991.32,
       rates: "13%",
       transaction: whole.intent,
       note: "",
     });
-    const share = cells(depositId, await number(depositId));
+    const share = cells(await number(depositId));
     expect(share).toMatchObject({
-      net: "259,20",
-      vat: "33,70",
-      fee: "4,50",
-      total: "297,40",
+      net: 259.2,
+      vat: 33.7,
+      fee: 4.5,
+      total: 297.4,
       transaction: deposit.intent,
     });
     expect(share.note).toContain("To be confirmed by the accountant");
 
     // A credit note takes its original's Stripe reference, and is negative.
-    const credit = cells(creditId, await number(creditId));
+    const credit = cells(await number(creditId));
     expect(credit).toMatchObject({
-      net: "-259,20",
-      vat: "-33,70",
-      fee: "-4,50",
-      total: "-297,40",
+      net: -259.2,
+      vat: -33.7,
+      fee: -4.5,
+      total: -297.4,
       transaction: whole.intent,
     });
     expect(credit.note).toContain("To be confirmed by the accountant");
 
     // The free-text payment note never reaches the export.
-    expect(rows.join("\n")).not.toContain("free text note");
+    const everything = JSON.stringify(sheet.getSheetValues());
+    expect(everything).not.toContain("free text note");
+
+    // The totals row matches the database, with the credit note taken off.
+    const { rows } = await db.query(
+      `select
+         sum(case when doc_type = 'credit_note' then -total_cents else total_cents end)::int as total,
+         sum(case when doc_type = 'credit_note' then -vat_cents else vat_cents end)::int as vat
+       from public.invoices where id = any($1::uuid[])`,
+      [[wholeId, depositId, balanceId, creditId]],
+    );
+    const totals = rowStarting(sheet, "Σύνολο / Total");
+    expect(totals.getCell(columnOf(sheet, "Σύνολο / Total")).result).toBe(
+      rows[0].total / 100,
+    );
+    expect(totals.getCell(columnOf(sheet, "ΦΠΑ / VAT")).result).toBe(
+      rows[0].vat / 100,
+    );
+  });
+
+  test("the Summary shows the filter a selection was made under", async () => {
+    const number = (await invoiceRow(wholeId)).document_number as string;
+    await page.goto(
+      `/admin/invoices?booking=${encodeURIComponent(whole.reference)}`,
+    );
+    await page.getByRole("button", { name: /^Select all/ }).click();
+    const bar = page.getByTestId("selection-bar");
+    await expect(bar).toContainText("2 selected");
+    const download = await save(page, () =>
+      bar.getByRole("button", { name: "Download" }).click(),
+    );
+    const files = unzipSync(await bytesOf(download));
+    const name = Object.keys(files).find((n) => n.endsWith(".xlsx"))!;
+    const workbook = await readWorkbook(files[name]);
+    const cover: unknown[] = [];
+    workbook
+      .getWorksheet("Summary")!
+      .eachRow((row) => cover.push(row.getCell(1).value));
+    expect(cover).toContain("Επιλεγμένα παραστατικά / Selected documents: 2");
+    expect(cover).toContain(
+      `Φίλτρο / Filter, Κράτηση / Booking: ${whole.reference}`,
+    );
+    expect(documentNumbers(workbook.getWorksheet("Documents")!)).toContain(
+      number,
+    );
+    await bar.getByRole("button", { name: "Clear" }).click();
   });
 });
 

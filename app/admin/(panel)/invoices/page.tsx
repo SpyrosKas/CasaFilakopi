@@ -144,7 +144,7 @@ export default async function InvoicesPage({
       )}
 
       {/* Last on the page, so it stays in view from the top of the page down. */}
-      <SelectionBar />
+      <SelectionBar query={query.slice(1)} />
     </div>
   );
 }
