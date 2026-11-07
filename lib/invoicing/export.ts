@@ -1,12 +1,14 @@
 import "server-only";
 import type { AdminContext } from "@/lib/admin/session";
-import { buildCsv, type CsvRow } from "./csv";
+import { athensDate } from "@/lib/domain/dates";
 import { loadIndex, loadLinesFor, type IndexRow } from "./data";
 import { selectionSchema } from "./filters";
 import { formatPercent, issuedOn, pdfFileName, zipEntryName } from "./format";
 import { needsAccountantCheck, vatBreakdown } from "./lines";
 import { reviewRows, type SelectionReview } from "./review";
+import { isDummyIssuer } from "./settings";
 import { readPdf } from "./storage";
+import { buildWorkbook, TO_CONFIRM_NOTE, type ExportRow } from "./workbook";
 import { zipStream, type ZipEntry } from "./zip";
 
 // The one way documents leave as files. A selection, "Select all" and the
@@ -15,6 +17,13 @@ import { zipStream, type ZipEntry } from "./zip";
 
 export const PDF_MISSING_CELL = "PDF missing / Λείπει το PDF";
 const MISSING_FILE = "PDF-MISSING.txt";
+
+export interface Pack {
+  /** The file name, with no ending. */
+  name: string;
+  /** What the pack covers, for the Summary sheet. */
+  scope: string[];
+}
 
 export type Resolved =
   { ok: true; rows: IndexRow[] } | { ok: false; reason: "invalid" | "unknown" };
@@ -56,11 +65,11 @@ function attachmentHeaders(fileName: string, type: string): HeadersInit {
   };
 }
 
-async function csvRows(
+async function exportRows(
   admin: AdminContext,
   rows: IndexRow[],
   pdfFiles: Map<string, string>,
-): Promise<CsvRow[]> {
+): Promise<ExportRow[]> {
   const lines = await loadLinesFor(
     admin,
     rows.map((row) => row.id),
@@ -72,6 +81,7 @@ async function csvRows(
       docType: row.docType,
       issuedOn: row.issuedOn,
       isProvisional: row.isProvisional,
+      hasDummyIssuer: isDummyIssuer(row.issuer),
       customerName: row.customer.name,
       companyName: row.customer.companyName,
       vatNumber: row.customer.vatNumber,
@@ -90,9 +100,7 @@ async function csvRows(
         .join(", "),
       creditsDocument: row.creditsDocumentNumber ?? "",
       reason: row.reason ?? "",
-      note: needsAccountantCheck(own)
-        ? "Προς επιβεβαίωση από τον λογιστή / To be confirmed by the accountant"
-        : "",
+      note: needsAccountantCheck(own) ? TO_CONFIRM_NOTE : "",
       isSent: row.isSent,
       pdfFile: pdfFiles.get(row.id) ?? PDF_MISSING_CELL,
     };
@@ -100,14 +108,14 @@ async function csvRows(
 }
 
 /**
- * PDFs first, one at a time and only as the reader asks. The CSV and the list
- * of missing files come last, so they say what actually went into the ZIP, even
- * if a file vanished after the warning was shown.
+ * PDFs first, one at a time and only as the reader asks. The Excel file and
+ * the list of missing files come last, so they say what actually went into the
+ * ZIP, even if a file vanished after the warning was shown.
  */
 async function* packEntries(
   admin: AdminContext,
   rows: IndexRow[],
-  name: string,
+  pack: Pack,
 ): AsyncGenerator<ZipEntry> {
   const pdfFiles = new Map<string, string>();
   for (const row of rows) {
@@ -130,17 +138,23 @@ async function* packEntries(
     yield { name: MISSING_FILE, data: new TextEncoder().encode(text) };
   }
 
-  const csv = buildCsv(await csvRows(admin, rows, pdfFiles));
-  yield { name: `${name}.csv`, data: new TextEncoder().encode(csv) };
+  yield {
+    name: `${pack.name}.xlsx`,
+    data: buildWorkbook({
+      rows: await exportRows(admin, rows, pdfFiles),
+      scope: pack.scope,
+      generatedOn: athensDate(new Date()),
+    }),
+  };
 }
 
 export function packResponse(
   admin: AdminContext,
   rows: IndexRow[],
-  name: string,
+  pack: Pack,
 ): Response {
-  return new Response(zipStream(packEntries(admin, rows, name)), {
-    headers: attachmentHeaders(`${name}.zip`, "application/zip"),
+  return new Response(zipStream(packEntries(admin, rows, pack)), {
+    headers: attachmentHeaders(`${pack.name}.zip`, "application/zip"),
   });
 }
 

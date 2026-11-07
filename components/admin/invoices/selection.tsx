@@ -145,7 +145,7 @@ function Warnings({
 
 type Step = "download" | "mark";
 
-export function SelectionBar() {
+export function SelectionBar({ query }: { query: string }) {
   const selected = useSelection();
   const form = useRef<HTMLFormElement>(null);
   const [panel, setPanel] = useState<{
@@ -194,6 +194,7 @@ export function SelectionBar() {
         method="post"
         action="/admin/invoices/export/download"
       >
+        <input type="hidden" name="filter" value={query} />
         {ids.map((id) => (
           <input type="hidden" name="id" value={id} key={id} />
         ))}

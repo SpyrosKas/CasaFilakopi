@@ -6,7 +6,7 @@ import { requireOwner } from "@/lib/admin/session";
 import { t } from "@/lib/admin/strings";
 import { issueCreditNote } from "@/lib/invoicing/actions";
 import { loadIndex } from "@/lib/invoicing/data";
-import { csvAmount, formatEuro } from "@/lib/invoicing/format";
+import { plainAmount, formatEuro } from "@/lib/invoicing/format";
 
 const s = t.invoices.credit;
 
@@ -61,7 +61,7 @@ export default async function CreditNotePage({
               name="amount"
               hint={s.amountHint}
               inputMode="decimal"
-              defaultValue={csvAmount(leftCents)}
+              defaultValue={plainAmount(leftCents)}
             />
             <TextAreaField label={s.reason} name="reason" defaultValue="" />
           </ActionForm>
