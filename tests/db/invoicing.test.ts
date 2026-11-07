@@ -60,11 +60,26 @@ const issue = async (
     already_issued: boolean;
   };
 
-const credit = (id: string, cents: number, reason = "Refund") =>
-  db.query(`select public.issue_credit_note($1, $2::jsonb, $3) as r`, [
+const credited = async (id: string) =>
+  (
+    await db.query(
+      `select coalesce(sum(total_cents), 0)::int as n from public.invoices
+       where credits_invoice_id = $1`,
+      [id],
+    )
+  ).rows[0].n as number;
+
+const credit = async (
+  id: string,
+  cents: number,
+  reason = "Refund",
+  expected?: number,
+) =>
+  db.query(`select public.issue_credit_note($1, $2::jsonb, $3, $4) as r`, [
     id,
     JSON.stringify([LINE(cents)]),
     reason,
+    expected ?? (await credited(id)),
   ]);
 
 const invoice = async (id: string) =>
@@ -170,14 +185,23 @@ describe("issuing", () => {
 });
 
 describe("credit notes (INV-05)", () => {
-  it("links to the original and cannot exceed it, even concurrently", async () => {
+  it("links to the original and cannot exceed it", async () => {
     const { id, paymentId } = await paidBooking();
     const original = await issue(id, paymentId);
 
+    // Six submissions of the same form: one wins, the rest are stale.
     const results = await Promise.allSettled(
-      Array.from({ length: 6 }, () => credit(original.invoice_id, 4000)),
+      Array.from({ length: 6 }, () =>
+        credit(original.invoice_id, 4000, "Refund", 0),
+      ),
     );
-    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(2);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+
+    // Separate, deliberate credits stop at the document total.
+    await credit(original.invoice_id, 4000);
+    await expect(credit(original.invoice_id, 4000)).rejects.toThrow(
+      "credit_exceeds_invoice",
+    );
 
     const { rows } = await db.query(
       `select credits_invoice_id, doc_type, is_provisional from public.invoices
@@ -201,6 +225,68 @@ describe("credit notes (INV-05)", () => {
     await expect(credit(rows[0].r.invoice_id, 50)).rejects.toThrow(
       "invoice_not_creditable",
     );
+  });
+});
+
+describe("review fixes", () => {
+  it("stores the document number and refuses a stale credit note", async () => {
+    const { id, paymentId } = await paidBooking();
+    const original = await issue(id, paymentId);
+    const row = await invoice(original.invoice_id);
+    expect(row.document_number).toBe(original.document_number);
+
+    await credit(original.invoice_id, 100, "First", 0);
+    await expect(
+      credit(original.invoice_id, 100, "Back button", 0),
+    ).rejects.toThrow("credit_already_changed");
+    expect(await credited(original.invoice_id)).toBe(100);
+  });
+
+  it("a used series keeps its prefix, even from the owner", async () => {
+    const prefix = `L-${randomUUID().slice(0, 8)}`;
+    const { rows } = await db.query(
+      `insert into public.invoice_series (doc_type, prefix, is_active, last_number)
+       values ('receipt', $1, false, 3) returning id`,
+      [prefix],
+    );
+    await expect(
+      db.query(
+        `update public.invoice_series set prefix = 'NEW' where id = $1`,
+        [rows[0].id],
+      ),
+    ).rejects.toThrow("invoice_series_in_use");
+  });
+
+  it("an unused series can be renamed at go-live", async () => {
+    const { rows } = await db.query(
+      `insert into public.invoice_series (doc_type, prefix, is_active)
+       values ('receipt', $1, false) returning id`,
+      [`U-${randomUUID().slice(0, 8)}`],
+    );
+    await db.query(
+      `update public.invoice_series set prefix = $2 where id = $1`,
+      [rows[0].id, `V-${randomUUID().slice(0, 8)}`],
+    );
+  });
+
+  it("no signed-in session can clear the provisional flag", async () => {
+    const owner = await createAdmin("owner");
+    await expect(
+      admin(owner.id, "aal2", (c) =>
+        c.query(
+          `update public.settings
+           set value = value || '{"isProvisional": false}' where key = 'invoicing'`,
+        ),
+      ),
+    ).rejects.toThrow("provisional_flag_locked");
+
+    const unchanged = await admin(owner.id, "aal2", (c) =>
+      c.query(
+        `update public.settings
+         set value = value || '{"defaultDocType": "invoice"}' where key = 'invoicing'`,
+      ),
+    );
+    expect(unchanged.rowCount).toBe(1);
   });
 });
 
