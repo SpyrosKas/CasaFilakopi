@@ -347,12 +347,12 @@ Security and tooling:
 - [ ] T4.25 FAQ, legal, testimonials, places, SEO fields (`ADM-17`, `ADM-18`)
 
 **Track CHN** (owns `lib/channels`, `app/admin/integrations`, `app/api/ical`)
-- [ ] T4.26 Provider adapter interface (`CHN-17`)
-- [ ] T4.27 Settings, toggles, URL validation (`CHN-01` to `CHN-05`, `ADM-28`)
-- [ ] T4.28 Import job with UID upsert, sync now (`CHN-06` to `CHN-09`, `JOB-02`)
-- [ ] T4.29 Export feed, token, no loops (`CHN-10` to `CHN-12`)
-- [ ] T4.30 Conflicts, sync logs, alerts, limitation notice (`CHN-13` to `CHN-16`)
-- [ ] T4.31 Fixture-feed tests, then A9 real-feed test (`QA-04`)
+- [x] T4.26 Provider adapter interface (`CHN-17`)
+- [x] T4.27 Settings, toggles, URL validation (`CHN-01` to `CHN-05`, `ADM-28`)
+- [x] T4.28 Import job with UID upsert, sync now (`CHN-06` to `CHN-09`, `JOB-02`)
+- [x] T4.29 Export feed, token, no loops (`CHN-10` to `CHN-12`)
+- [x] T4.30 Conflicts, sync logs, alerts, limitation notice (`CHN-13` to `CHN-16`)
+- [ ] T4.31 Fixture-feed tests, then A9 real-feed test (`QA-04`). Fixture tests done; real feeds outstanding, and they decide whether exporting holds can ever be on
 - [ ] T4.32 Schedule the jobs: `pg_cron` with `pg_net` every 5 minutes calling `/api/cron/*`, secrets in Vault per environment, `CRON_SECRET` in Vercel. Launch blocker: without it nothing syncs (D9 decided)
 
 **Gate 4:** full test-card booking on staging, blocked dates show on the public site, an Airbnb test block arrives in our calendar and ours arrives in Airbnb.
