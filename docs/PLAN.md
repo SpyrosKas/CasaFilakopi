@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** Wave 1: ENGINE and ADMIN merged; WEB is fixing review findings. Track INV started early (D17). Staging database live. After WEB: restart local Supabase, push auth config and seed, connect Vercel keys. YOU: accountant sheet (D4).
+**Status:** Staging live at https://casa-filakopi.vercel.app. WEB, ENGINE, ADMIN merged. INV fixing review findings. DESIGN building on `feat/design`. YOU: create the first Owner account, accountant sheet (D4). Next: MAIL (A4, A5), then Wave 2.
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
@@ -202,7 +202,7 @@ Security and tooling:
 - [x] T2.20 RLS tests for anon, token, staff, owner (`QA-03`)
 - [x] T2.21 Domain function signatures in `lib/domain` (types only)
 - [x] T2.22 Independent reviewer agent audits schema, RPCs and RLS. 5 high and 9 medium findings fixed, each with a regression test (`tests/db/review-regressions.test.ts`)
-- [ ] T2.23 A1, A2, A3: staging live; CI applies migrations to staging (`PLT-01`, `PLT-02`, `PLT-04`). Done: staging project linked, 7 migrations pushed, schema and privileges verified on hosted. Left: auth config, seed, Vercel keys, CI migration step
+- [x] T2.23 A1, A2, A3: staging live; CI applies migrations to staging (`PLT-01`, `PLT-02`, `PLT-04`). Staging live: 8 migrations, seed and auth config pushed and verified; Vercel connected at https://casa-filakopi.vercel.app. Staging leaves out email templates (need custom SMTP) and session limits (need Pro): both to apply with Resend and at launch. CI does not yet apply migrations automatically: LEAD pushes them
 
 **Gate 2, contract freeze:** concurrency and RLS tests green, review findings closed, YOU sign off. Parallel work starts here.
 
