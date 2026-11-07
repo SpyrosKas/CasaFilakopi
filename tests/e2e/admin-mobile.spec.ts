@@ -14,7 +14,6 @@ import {
   addMessage,
   addPayment,
   createFixtureRoom,
-  HOUSE,
   removeFixtures,
 } from "./admin-ops-fixtures";
 
@@ -251,7 +250,7 @@ for (const width of WIDTHS) {
       await db.query(
         `insert into public.seasons (room_id, name, start_date, end_date, nightly_cents)
          values ($1, 'Mobile test', '2041-11-01', '2041-11-30', 20000)`,
-        [HOUSE],
+        [room.id],
       );
       const event = await addExternal(room.airbnb, "2041-03-20", "2041-03-23");
       const message = await addMessage({
@@ -289,7 +288,6 @@ for (const width of WIDTHS) {
           await check(page, `${label}-open`);
         }
       }
-      await db.query(`delete from public.seasons where name = 'Mobile test'`);
       await removeFixtures();
     });
 

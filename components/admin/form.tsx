@@ -13,6 +13,7 @@ import {
   type ReactNode,
   type SelectHTMLAttributes,
 } from "react";
+import { useHydrated } from "@/components/admin/use-hydrated";
 import { idleState, type ActionState } from "@/lib/admin/form-state";
 
 export const FormContext = createContext<ActionState>(idleState);
@@ -54,6 +55,7 @@ export function ActionForm({
   const [state, formAction, pending] = useActionState(action, idleState);
   const [, startTransition] = useTransition();
   const form = useRef<HTMLFormElement>(null);
+  const isReady = useHydrated();
 
   useEffect(() => {
     if (resetOnOk && state.status === "ok") form.current?.reset();
@@ -80,7 +82,7 @@ export function ActionForm({
         <button
           type="submit"
           className={danger ? "button button-danger" : "button"}
-          disabled={pending}
+          disabled={pending || !isReady}
         >
           {pending ? pendingLabel : submitLabel}
         </button>
@@ -141,6 +143,7 @@ export function TextAreaField({
   const error = useContext(FormContext).fieldErrors?.[name];
   // Unique per form: a page can hold the same field several times.
   const id = useId();
+  const isReady = useHydrated();
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
@@ -150,6 +153,7 @@ export function TextAreaField({
         name={name}
         rows={rows}
         defaultValue={defaultValue}
+        readOnly={!isReady}
         aria-invalid={error ? true : undefined}
       />
       {error && <p className="field-error">{error}</p>}
@@ -242,6 +246,7 @@ export function ActionButton({
   confirm?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, idleState);
+  const isReady = useHydrated();
   const className = {
     main: "button",
     quiet: "button button-quiet",
@@ -258,7 +263,11 @@ export function ActionButton({
       {Object.entries(fields).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}
-      <button type="submit" className={className} disabled={pending}>
+      <button
+        type="submit"
+        className={className}
+        disabled={pending || !isReady}
+      >
         {pending ? pendingLabel : label}
       </button>
       {state.status === "error" && <FormMessage state={state} />}
