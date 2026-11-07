@@ -15,7 +15,25 @@ export default defineConfig({
   globalSetup: "./tests/e2e/global-setup.ts",
   timeout: 60_000,
   workers: 1,
-  use: { baseURL: `http://localhost:${port}` },
+  use: {
+    baseURL: `http://localhost:${port}`,
+    // Admin defaults to Greek; these checks read the English screens.
+    storageState: {
+      cookies: [
+        {
+          name: "admin_lang",
+          value: "en",
+          domain: "localhost",
+          path: "/",
+          expires: -1,
+          httpOnly: false,
+          secure: false,
+          sameSite: "Lax",
+        },
+      ],
+      origins: [],
+    },
+  },
   webServer: [
     {
       command: "node tests/e2e/supabase-proxy.mjs",
