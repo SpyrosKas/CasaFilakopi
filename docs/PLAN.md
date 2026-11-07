@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** Usage limit hit; resume after 05:20. Merged: WEB, ENGINE, ADMIN, INV with Excel, DESIGN. Reviewed, fixes pending on branches: `feat/admin-ops`, `feat/channels`, `feat/cms` (review running), `feat/mail` (review running). Not started: PAY, Greek admin, drafts, T4.32 cron, hardening. Staging needs migrations 10 to 13 after merge. Run full Playwright once on a quiet database.
+**Status:** All tracks built and reviewed. `dev-booking` local holds CMS, PAY, OPS; held back from origin until staging imports run, because `feat/cms` needs photos and text in Supabase first. `integration` branch carries the same for CI. Greek admin merges next. YOU next: run imports, Google Workspace, Resend, Stripe test mode, Vault secrets.
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
@@ -308,9 +308,9 @@ Security and tooling:
 
 **Track MAIL** (owns `emails`, `lib/email`)
 - [ ] T3.21 A4, A5: domain verified with SPF, DKIM, DMARC (`EML-01`, `PLT-08`)
-- [ ] T3.22 Queue, retries, logging, Resend webhooks (`EML-07`, `EML-08`, `JOB-05`)
-- [ ] T3.23 Branded base layout, per-language (`EML-04`, `EML-05`)
-- [ ] T3.24 Contact flow: save, notify, reply-to, auto-reply, Turnstile, rate limit (`CNT-01` to `CNT-04`, `CNT-07`)
+- [x] T3.22 Queue, retries, logging, Resend webhooks (`EML-07`, `EML-08`, `JOB-05`)
+- [x] T3.23 Branded base layout, per-language (`EML-04`, `EML-05`)
+- [x] T3.24 Contact flow: save, notify, reply-to, auto-reply, Turnstile, rate limit (`CNT-01` to `CNT-04`, `CNT-07`)
 
 **Gate 3:** public site matches the old one, pricing tests green, admin login works. YOU approve the visual diff.
 
@@ -318,38 +318,38 @@ Security and tooling:
 
 **Track PAY + checkout** (owns `app/[locale]/book`, `app/api/stripe`, `lib/payments`)
 - [ ] T4.1 A6: Stripe test mode; webhook forwarding by CLI
-- [ ] T4.2 Availability search and calendar widget (`WEB-04`, `WEB-05`)
-- [ ] T4.3 Checkout flow, server-side reprice, terms stored with version (`BKG-06`, `BKG-07`, `BKG-08`, `CMP-03`)
-- [ ] T4.4 Hold 35 min, Checkout Session 30 min (`BKG-09`, `BKG-10`, `PAY-01`)
-- [ ] T4.5 Webhook: signature, idempotent, all events (`PAY-04`, `PAY-05`, `BKG-12`). LEAD adds the dispute open/close RPC
-- [ ] T4.6 Failed or abandoned payment (`PAY-10`)
-- [ ] T4.7 Paid-after-hold-lost: auto-refund and alert
-- [ ] T4.8 Confirmation page and emails (`EML-02`, `EML-03`)
-- [ ] T4.9 Guest token page: view, pay balance, cancel, message (`BKG-15`, `SUP-15`, `CNT-06`)
-- [ ] T4.10 Balance links and reminders (`PAY-03`, `JOB-03`)
+- [x] T4.2 Availability search and calendar widget (`WEB-04`, `WEB-05`)
+- [x] T4.3 Checkout flow, server-side reprice, terms stored with version (`BKG-06`, `BKG-07`, `BKG-08`, `CMP-03`)
+- [x] T4.4 Hold 35 min, Checkout Session 30 min (`BKG-09`, `BKG-10`, `PAY-01`)
+- [x] T4.5 Webhook: signature, idempotent, all events (`PAY-04`, `PAY-05`, `BKG-12`). LEAD adds the dispute open/close RPC
+- [x] T4.6 Failed or abandoned payment (`PAY-10`)
+- [x] T4.7 Paid-after-hold-lost: auto-refund and alert
+- [x] T4.8 Confirmation page and emails (`EML-02`, `EML-03`)
+- [x] T4.9 Guest token page: view, pay balance, cancel, message (`BKG-15`, `SUP-15`, `CNT-06`)
+- [x] T4.10 Balance links and reminders (`PAY-03`, `JOB-03`)
 - [ ] T4.11 Integration tests with Stripe CLI (`QA-04`)
 
 **Track ADMIN-OPS** (owns `app/admin/bookings`, `app/admin/calendar`)
-- [ ] T4.12 Dashboard (`ADM-05`)
-- [ ] T4.13 Availability calendar and blocking (`AVL-02`, `AVL-03`, `AVL-06`, `AVL-10`)
-- [ ] T4.14 Rates calendar, bulk edit (`AVL-07`, `ADM-11`)
-- [ ] T4.15 Restrictions, taxes, promos, policies (`ADM-12`, `ADM-13`)
-- [ ] T4.16 Bookings list and detail, export (`ADM-06`, `ADM-07`, `ADM-09`)
-- [ ] T4.17 Booking actions: manual, modify, cancel, refund, payment (`ADM-08`, `BKG-17`, `BKG-18`, `PAY-06`, `PAY-07`, `PAY-11`)
-- [ ] T4.18 Messages inbox (`CNT-05`, `ADM-21`)
-- [ ] T4.18a Yorgos can read all guest messages and replies in Admin, and they also reach `host@miloscasa.com`
-- [ ] T4.18b Write-to-guest box on any booking or message: pick a template or type freely, send, and it is logged on the booking. Replies come back to `host@miloscasa.com`
+- [x] T4.12 Dashboard (`ADM-05`)
+- [x] T4.13 Availability calendar and blocking (`AVL-02`, `AVL-03`, `AVL-06`, `AVL-10`)
+- [x] T4.14 Rates calendar, bulk edit (`AVL-07`, `ADM-11`)
+- [x] T4.15 Restrictions, taxes, promos, policies (`ADM-12`, `ADM-13`)
+- [x] T4.16 Bookings list and detail, export (`ADM-06`, `ADM-07`, `ADM-09`)
+- [x] T4.17 Booking actions: manual, modify, cancel, refund, payment (`ADM-08`, `BKG-17`, `BKG-18`, `PAY-06`, `PAY-07`, `PAY-11`)
+- [x] T4.18 Messages inbox (`CNT-05`, `ADM-21`)
+- [x] T4.18a Yorgos can read all guest messages and replies in Admin, and they also reach `host@miloscasa.com`
+- [x] T4.18b Write-to-guest box on any booking or message: pick a template or type freely, send, and it is logged on the booking. Replies come back to `host@miloscasa.com`
 
 **Track CMS** (owns `app/admin/content`, `app/admin/media`, `scripts/migrate-media`)
-- [ ] T4.19 Migrate 68 images to `media` bucket and rewrite references (`SUP-17`, `SUP-18`)
-- [ ] T4.20 Next Image loader with transforms (`SUP-19`)
-- [ ] T4.21 Move hardcoded text into DB (`MIG-07`, `WEB-07`)
+- [x] T4.19 Migrate 68 images to `media` bucket and rewrite references (`SUP-17`, `SUP-18`)
+- [x] T4.20 Next Image loader with transforms (`SUP-19`)
+- [x] T4.21 Move hardcoded text into DB (`MIG-07`, `WEB-07`)
 - [ ] T4.22 Greek translation drafts for HOST review (`WEB-06`)
-- [ ] T4.23 Page editor, draft/publish/preview, revalidation (`ADM-15`, `ADM-19`, `WEB-08`)
-- [ ] T4.24 Media library, upload, alt text, safe delete (`SUP-20`, `ADM-16`)
-- [ ] T4.24a Per-section photo manager: upload from phone or computer, delete, drag to rearrange, choose cover, and it appears on the site without a developer (`ADM-14`, `ADM-16`, `WEB-08`)
-- [ ] T4.24b Oversized phone photos auto-resized on upload, and any photo stays usable on mobile layouts
-- [ ] T4.25 FAQ, legal, testimonials, places, SEO fields (`ADM-17`, `ADM-18`)
+- [x] T4.23 Page editor, draft/publish/preview, revalidation (`ADM-15`, `ADM-19`, `WEB-08`)
+- [x] T4.24 Media library, upload, alt text, safe delete (`SUP-20`, `ADM-16`)
+- [x] T4.24a Per-section photo manager: upload from phone or computer, delete, drag to rearrange, choose cover, and it appears on the site without a developer (`ADM-14`, `ADM-16`, `WEB-08`)
+- [x] T4.24b Oversized phone photos auto-resized on upload, and any photo stays usable on mobile layouts
+- [x] T4.25 FAQ, legal, testimonials, places, SEO fields (`ADM-17`, `ADM-18`)
 
 **Track CHN** (owns `lib/channels`, `app/admin/integrations`, `app/api/ical`)
 - [x] T4.26 Provider adapter interface (`CHN-17`)
@@ -375,13 +375,13 @@ Security and tooling:
 - [x] T5.7a Download one document, or select several or all matching a filter, as a PDF or a ZIP plus Excel file. Marking as sent stays a separate step
 
 **Track OPS**
-- [ ] T5.8 Editable email templates, remaining emails (`EML-02`, `EML-03`, `EML-06`, `EML-09`, `ADM-27`)
-- [ ] T5.8a Scheduled messages: Yorgos sets rules like "7 days before arrival" or "1 day after check-out", per language, on/off, plus one-off sends at a chosen date on a single booking
+- [x] T5.8 Editable email templates, remaining emails (`EML-02`, `EML-03`, `EML-06`, `EML-09`, `ADM-27`)
+- [x] T5.8a Scheduled messages: Yorgos sets rules like "7 days before arrival" or "1 day after check-out", per language, on/off, plus one-off sends at a chosen date on a single booking
 - [ ] T5.8b Automatic guest emails verified end to end: booking confirmation, payment confirmation, reminders, and invoice/receipt once D4 is answered
 - [ ] T5.9 All scheduled jobs with logging and alerts (`JOB-01`, `JOB-04`, `JOB-07`, `JOB-09`)
-- [ ] T5.10 Guests, GDPR export/anonymise, retention (`ADM-20`, `CMP-01`, `CMP-02`, `JOB-08`). Anonymise must cover `bookings.guest_*` and `special_requests`, `email_logs`, `contact_messages`, `external_events.guest_*`, `stripe_events.payload`
-- [ ] T5.11 Reports, user management, languages (`ADM-23`, `ADM-29`, `ADM-30`)
-- [ ] T5.12 SEO: sitemap, hreflang, schema.org (`WEB-09`); analytics after consent (`WEB-13`); registry number (`WEB-15`, `CMP-05`)
+- [x] T5.10 Guests, GDPR export/anonymise, retention (`ADM-20`, `CMP-01`, `CMP-02`, `JOB-08`). Anonymise must cover `bookings.guest_*` and `special_requests`, `email_logs`, `contact_messages`, `external_events.guest_*`, `stripe_events.payload`
+- [x] T5.11 Reports, user management, languages (`ADM-23`, `ADM-29`, `ADM-30`)
+- [x] T5.12 SEO: sitemap, hreflang, schema.org (`WEB-09`); analytics after consent (`WEB-13`); registry number (`WEB-15`, `CMP-05`)
 
 **Gate 5:** every spec ID is either ticked or explicitly descoped in the Decisions log.
 
@@ -389,11 +389,11 @@ Security and tooling:
 
 - [ ] T6.1 Playwright E2E: booking, contact, manual booking, block, cancel with refund, sync conflict (`QA-05`)
 - [ ] T6.2 Lighthouse 90+ and WCAG 2.1 AA in CI (`WEB-01`, `WEB-14`, `QA-07`)
-- [ ] T6.3 Security headers, CSP, Zod, rate limits (`PLT-05`)
+- [x] T6.3 Security headers, CSP, Zod, rate limits (`PLT-05`)
 - [ ] T6.4 Full `/security-review`; independent review of payment and RLS paths
 - [ ] T6.5 Sentry, uptime, structured logs (`PLT-06`, `PLT-07`)
 - [ ] T6.6 Backup and tested restore on staging (`SUP-10`)
-- [ ] T6.7 README, runbook, ER diagram, host guide in Greek and English (`DOC-01` to `DOC-04`)
+- [x] T6.7 README, runbook, ER diagram, host guide in Greek and English (`DOC-01` to `DOC-04`)
 - [ ] T6.8 Late-payment and double-webhook drills
 
 - [ ] T6.9 HOST sets real starting values for payment and cancellation rules in Admin
