@@ -60,7 +60,12 @@ function findLayoutProblems(minTap: number): LayoutProblem[] {
       return { el: target, box: target.getBoundingClientRect() };
     })
     // checkVisibility also skips what is inside a closed <details>.
-    .filter(({ el, box }) => box.width > 0 && el.checkVisibility());
+    .filter(({ el, box }) => box.width > 0 && el.checkVisibility())
+    .filter(({ el, box }) => {
+      // A tall bar scrolls inside itself, clipping what lies past its edge.
+      const bar = el.closest(".inv-bar");
+      return !bar || box.bottom <= bar.getBoundingClientRect().bottom + 1;
+    });
 
   for (const { el, box } of targets) {
     if (box.height < minTap - 0.5 || box.width < minTap - 0.5) {
