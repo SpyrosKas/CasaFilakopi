@@ -9,6 +9,7 @@ import {
 } from "react";
 import { FormContext, FormMessage } from "@/components/admin/form";
 import { MoneyLines } from "@/components/admin/ui";
+import { useHydrated } from "@/components/admin/use-hydrated";
 import type { PreviewState } from "@/lib/admin/booking-ops";
 import { idleState } from "@/lib/admin/form-state";
 import { formatEuro } from "@/lib/admin/format";
@@ -93,6 +94,7 @@ export function PriceCheckForm({
   const [isStale, setIsStale] = useState(false);
   const [lastRun, setLastRun] = useState<"preview" | "submit">("preview");
   const [, startTransition] = useTransition();
+  const isReady = useHydrated();
 
   const state = lastRun === "submit" ? submitState : previewState;
   const shown = isStale
@@ -129,7 +131,7 @@ export function PriceCheckForm({
         <button
           type="button"
           className={shown ? "button button-quiet" : "button"}
-          disabled={previewing}
+          disabled={previewing || !isReady}
           onClick={preview}
         >
           {previewing ? s.checking : s.check}

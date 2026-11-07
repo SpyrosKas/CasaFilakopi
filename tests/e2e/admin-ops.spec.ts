@@ -96,6 +96,72 @@ test.afterAll(async () => {
   await releaseSharedSettings();
 });
 
+test.describe("a page that is slow to load", () => {
+  let id: string;
+
+  /** Holds back the page's scripts, as a poor phone signal does. */
+  const slowScripts = (target: Page) =>
+    target.route("**/_next/static/**", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await route.continue();
+    });
+
+  test.beforeAll(async () => {
+    id = await addBooking({
+      roomId: room.id,
+      checkIn: addDays(today, 150),
+      checkOut: addDays(today, 152),
+      notes: "The old note",
+    });
+  });
+
+  test.afterEach(async () => {
+    // A held-back script may still be waiting, so its route is left to lapse.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+  });
+
+  test("keeps what was typed and never loses a save", async () => {
+    await slowScripts(page);
+    const refused: number[] = [];
+    const watch = (response: { status(): number }) => {
+      if (response.status() >= 500) refused.push(response.status());
+    };
+    page.on("response", watch);
+
+    await page.goto(`/admin/bookings/${id}`, { waitUntil: "commit" });
+    await page
+      .getByRole("textbox", { name: "Your private notes" })
+      .fill("Typed on a slow phone");
+    await page.getByRole("button", { name: "Save notes" }).click();
+    await expect(page.getByText("Notes saved.")).toBeVisible({
+      timeout: 30_000,
+    });
+    const { rows } = await db.query(
+      `select internal_notes from public.bookings where id = $1`,
+      [id],
+    );
+    expect(rows[0].internal_notes).toBe("Typed on a slow phone");
+
+    await page.goto("/admin/rates?month=2043-02", { waitUntil: "commit" });
+    await page.getByLabel("From", { exact: true }).fill("2043-02-01");
+    await page.getByLabel("Until, and including").fill("2043-02-03");
+    await page.getByLabel(/^Price per night/).fill("321");
+    await page.getByRole("button", { name: "Set this price" }).click();
+    await expect(page.getByText("Saved for 3 nights.")).toBeVisible({
+      timeout: 30_000,
+    });
+    const saved = await db.query(
+      `select count(*)::int as n from public.rate_overrides
+       where room_id = $1 and night between '2043-02-01' and '2043-02-03'`,
+      [HOUSE],
+    );
+    expect(saved.rows[0].n).toBe(3);
+
+    page.off("response", watch);
+    expect(refused).toEqual([]);
+  });
+});
+
 test.describe("settings in plain words", () => {
   test("same-day bookings is a time, stored as the same hour", async () => {
     await page.goto("/admin/booking");
@@ -163,9 +229,16 @@ test.describe("home", () => {
     await expect(panel("Leaving today")).toContainText("Leaving Today");
     await expect(panel("In the house now")).toContainText("Leaving Today");
     await expect(panel("Next arrivals")).toContainText("Coming Soon");
-    await expect(panel("Guests who still owe money")).toContainText("€400.00");
+    // Home lists the oldest five, and this database is shared, so the figure
+    // is checked on the guest's own row.
+    await expect(
+      page.getByRole("heading", { name: "Guests who still owe money" }),
+    ).toBeVisible();
     await expect(page.getByText("Income this month")).toBeVisible();
     await expect(page.getByText("Unread messages")).toBeVisible();
+
+    await page.goto("/admin/bookings?q=Arriving+Today");
+    await expect(page.getByTestId("stay-list")).toContainText("€400.00 due");
   });
 
   test("shows a sync alert for imported dates that clash", async () => {
@@ -176,7 +249,7 @@ test.describe("home", () => {
        where c.external_event_id = e.id and e.calendar_id = $1`,
       [room.airbnb],
     );
-    await page.reload();
+    await page.goto("/admin");
     await expect(page.getByText("Calendar sync needs a look")).toBeVisible();
     // Soonest first, so a clash next month is not lost among later ones.
     await expect(page.locator("section.notice-bad")).toContainText(

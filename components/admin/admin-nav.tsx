@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useHydrated } from "@/components/admin/use-hydrated";
 import { logout } from "@/lib/admin/actions/auth";
 import { t } from "@/lib/admin/strings";
 
@@ -38,6 +39,7 @@ const isHere = (pathname: string, href: string) =>
 
 export function AdminNav({ isOwner }: { isOwner: boolean }) {
   const [open, setOpen] = useState(false);
+  const isReady = useHydrated();
   const pathname = usePathname();
 
   const links = [
@@ -71,7 +73,11 @@ export function AdminNav({ isOwner }: { isOwner: boolean }) {
           ))}
           <li>
             <form action={logout}>
-              <button type="submit" className="menu-signout">
+              <button
+                type="submit"
+                className="menu-signout"
+                disabled={!isReady}
+              >
                 {t.nav.signOut}
               </button>
             </form>
