@@ -55,12 +55,15 @@ const PRODUCTION_HOSTS = ["miloscasa.com", "www.miloscasa.com"];
 /**
  * Only production is indexed. Staging and previews carry noindex, decided from
  * the environment so a copied deployment cannot end up in search results by
- * accident: the production host, or an explicit NEXT_PUBLIC_INDEXABLE=true.
+ * accident. On Vercel the deployment itself must be production, whatever its
+ * address says. Then it takes the production host, or NEXT_PUBLIC_INDEXABLE=true.
  */
 export function isIndexable(
   siteUrl: string | undefined,
   flag: string | undefined,
+  vercelEnv: string | undefined,
 ): boolean {
+  if (vercelEnv && vercelEnv !== "production") return false;
   if (flag === "true") return true;
   if (!siteUrl || !URL.canParse(siteUrl)) return false;
   return PRODUCTION_HOSTS.includes(new URL(siteUrl).hostname);

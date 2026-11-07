@@ -254,7 +254,7 @@ export function AvailabilityCalendar({
               defaultValue="owner_use"
               options={blockReasons}
             />
-            <Field label={c.note} name="note" />
+            <Field label={c.note} name="note" hint={c.noteHint} />
           </ActionForm>
           <button type="button" className="button button-quiet" onClick={reset}>
             {c.clearPick}

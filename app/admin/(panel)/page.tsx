@@ -121,21 +121,27 @@ export default async function AdminHomePage() {
         </section>
       )}
 
-      {jobs && (jobs.failed.length > 0 || jobs.siteSilent) && (
-        <section
-          className="notice notice-bad"
-          role="status"
-          data-testid="job-health"
-        >
-          <h2>{j.title}</h2>
-          {jobs.failed.map(({ job, at }) => (
-            <p key={job}>
-              {j.failed(j.labels[job], formatDate(at.slice(0, 10)))}
-            </p>
-          ))}
-          {jobs.siteSilent && <p>{j.siteSilent}</p>}
-        </section>
-      )}
+      {jobs &&
+        (jobs.failed.length > 0 ||
+          jobs.stale.length > 0 ||
+          jobs.siteSilent) && (
+          <section
+            className="notice notice-bad"
+            role="status"
+            data-testid="job-health"
+          >
+            <h2>{j.title}</h2>
+            {jobs.failed.map(({ job, at }) => (
+              <p key={job}>
+                {j.failed(j.labels[job], formatDate(at.slice(0, 10)))}
+              </p>
+            ))}
+            {jobs.stale.map((job) => (
+              <p key={job}>{j.stale(j.labels[job])}</p>
+            ))}
+            {jobs.siteSilent && <p>{j.siteSilent}</p>}
+          </section>
+        )}
 
       {plan.moneyHeld.length > 0 && (
         <section className="panel" data-testid="money-held">

@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import type { User } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -14,31 +15,45 @@ import {
 import { requireOwner, type AdminContext } from "@/lib/admin/session";
 import { t } from "@/lib/admin/strings";
 import { createAdminSessionClient } from "@/lib/admin/supabase";
-import { findAuthUser, listAuthUsers } from "@/lib/admin/users-data";
+import {
+  findAuthUser,
+  findMember,
+  listAuthUsers,
+} from "@/lib/admin/users-data";
 import { createAdminClient } from "@/lib/db/admin";
 import { getPublicEnv } from "@/lib/env";
 
 // T5.11. The first Owner is created by hand (runbook). After that, this is the
 // only way in: signups are off. requireOwner runs first in every action, then
-// callAdminRpc checks the role in the database before the secret key is used.
+// the role is checked in the database before the secret key is used. Anything
+// that makes or unmakes an Owner needs that person's email typed in full.
 
 const u = t.ops.users;
 const v = t.validation;
 
 const roleSchema = z.enum(["owner", "staff"], { message: v.pick });
 
-const inviteSchema = z.object({
-  displayName: z.string().trim().min(1, v.required).max(80, v.tooLong),
-  email: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .pipe(z.email(v.email).max(254, v.email)),
-  role: roleSchema,
-});
+const inviteSchema = z
+  .object({
+    displayName: z.string().trim().min(1, v.required).max(80, v.tooLong),
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .pipe(z.email(v.email).max(254, v.email)),
+    role: roleSchema,
+    confirmEmail: z.string().trim().toLowerCase().optional(),
+  })
+  .refine((form) => form.role !== "owner" || form.confirmEmail === form.email, {
+    path: ["confirmEmail"],
+    message: u.typeMismatch,
+  });
 
-const memberSchema = z.object({ id: z.uuid() });
-const memberRoleSchema = z.object({ id: z.uuid(), role: roleSchema });
+const memberSchema = z.object({
+  id: z.uuid(),
+  confirmEmail: z.string().optional(),
+});
+const memberRoleSchema = memberSchema.extend({ role: roleSchema });
 
 const confirmUrl = () =>
   `${getPublicEnv().NEXT_PUBLIC_SITE_URL}/admin/auth/confirm`;
@@ -46,10 +61,18 @@ const confirmUrl = () =>
 /** About a hundred years: Supabase has no "for ever". */
 const BAN_FOR_EVER = "876000h";
 
+const typed = (value: string | undefined, email: string) =>
+  value?.trim().toLowerCase() === email.toLowerCase();
+
+const auditUser = (admin: AdminContext, action: string, id: string) =>
+  writeAudit(admin, { action, entity: "admin_user", entityId: id });
+
 /**
- * Someone removed earlier keeps their auth account, so they are let back in.
- * Anyone who already set a password chooses a new one; anyone who never
- * answered their first invitation gets it again.
+ * Someone removed earlier keeps their auth account, and with it an old password
+ * and any authenticator. They are let back in with the password replaced by a
+ * random one and every old session ended, so they must choose a new password
+ * from the email. Anyone who never answered their first invitation gets it
+ * again. An authenticator they had stays until an Owner resets it.
  */
 async function readmit(
   admin: AdminContext,
@@ -65,11 +88,14 @@ async function readmit(
   if (error) throw error;
   if (profile) return errorState(u.alreadyAdmin);
 
+  await auditUser(admin, "admin_unbanned", user.id);
   const { error: unban } = await db.auth.admin.updateUserById(user.id, {
     ban_duration: "none",
+    password: randomBytes(32).toString("base64url"),
   });
   if (unban) return errorState(u.inviteFailed);
 
+  await callAdminRpc(admin, "delete_auth_sessions", { p_user_id: user.id });
   await callAdminRpc(admin, "add_admin", {
     p_user_id: user.id,
     p_role: input.role,
@@ -129,6 +155,7 @@ function refusal(error: unknown): ActionState {
   const message = (error as { message?: string }).message;
   if (message === "cannot_change_self") return errorState(u.notYourself);
   if (message === "admin_not_found") return errorState(u.notFound);
+  if (message === "last_owner") return errorState(u.lastOwner);
   throw error;
 }
 
@@ -139,11 +166,17 @@ export async function changeAdminRole(
   const admin = await requireOwner();
   const parsed = memberRoleSchema.safeParse(formFields(formData));
   if (!parsed.success) return errorState(t.common.somethingWrong);
+  const { id, role, confirmEmail } = parsed.data;
+
+  await assertAdminRole(admin);
+  const member = await findMember(createAdminClient(), id);
+  if (!member) return errorState(u.notFound);
+  if (!typed(confirmEmail, member.email)) return errorState(u.typeMismatch);
 
   try {
     await callAdminRpc(admin, "change_admin_role", {
-      p_user_id: parsed.data.id,
-      p_role: parsed.data.role,
+      p_user_id: id,
+      p_role: role,
     });
   } catch (error) {
     return refusal(error);
@@ -159,20 +192,33 @@ export async function removeAdmin(
   const admin = await requireOwner();
   const parsed = memberSchema.safeParse(formFields(formData));
   if (!parsed.success) return errorState(t.common.somethingWrong);
+  const { id, confirmEmail } = parsed.data;
+  if (id === admin.userId) return errorState(u.notYourself);
 
-  try {
-    await callAdminRpc(admin, "remove_admin", { p_user_id: parsed.data.id });
-  } catch (error) {
-    return refusal(error);
+  await assertAdminRole(admin);
+  const db = createAdminClient();
+  const member = await findMember(db, id);
+  if (!member) return errorState(u.notFound);
+  if (member.role === "owner" && !typed(confirmEmail, member.email)) {
+    return errorState(u.typeMismatch);
   }
 
-  // The role row is gone, which already ends all access. Deleting the account
-  // would rewrite issued_by on immutable invoices, so it is switched off.
-  const { error } = await createAdminClient().auth.admin.updateUserById(
-    parsed.data.id,
-    { ban_duration: BAN_FOR_EVER },
-  );
+  // Ban first, so no new session can start while the old ones are ended.
+  // Deleting the account would rewrite issued_by on immutable invoices.
+  await auditUser(admin, "admin_banned", id);
+  const { error } = await db.auth.admin.updateUserById(id, {
+    ban_duration: BAN_FOR_EVER,
+  });
   if (error) throw error;
+
+  try {
+    await callAdminRpc(admin, "delete_auth_sessions", { p_user_id: id });
+    await callAdminRpc(admin, "remove_admin", { p_user_id: id });
+  } catch (failure) {
+    await auditUser(admin, "admin_unbanned", id);
+    await db.auth.admin.updateUserById(id, { ban_duration: "none" });
+    return refusal(failure);
+  }
 
   revalidatePath("/admin/users");
   return okState(u.done);
@@ -190,6 +236,8 @@ export async function resetTwoStep(
   if (id === admin.userId) return errorState(u.notYourself);
 
   await assertAdminRole(admin);
+  await auditUser(admin, "two_step_reset", id);
+
   const mfa = createAdminClient().auth.admin.mfa;
   const { data, error } = await mfa.listFactors({ userId: id });
   if (error) throw error;
@@ -200,12 +248,8 @@ export async function resetTwoStep(
     });
     if (removed) throw removed;
   }
+  await callAdminRpc(admin, "delete_auth_sessions", { p_user_id: id });
 
-  await writeAudit(admin, {
-    action: "two_step_reset",
-    entity: "admin_user",
-    entityId: id,
-  });
   revalidatePath("/admin/users");
   return okState(u.done);
 }

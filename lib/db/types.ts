@@ -863,6 +863,9 @@ isOneToOne: false
 "current_admin_role":
 { Args: Record<PropertyKey, never>; Returns: Database["public"]['Enums']["admin_role"]
                            },
+"delete_auth_sessions":
+{ Args: { "p_actor": string,"p_user_id": string }; Returns: number
+                           },
 "fail_confirmation":
 { Args: { "p_booking": Omit<Database["public"]['Tables']["bookings"]['Row'], Database["public"]['Tables']["bookings"]['ComputedFields']> }; Returns: undefined
                            },
@@ -875,11 +878,11 @@ isOneToOne: false
 "finish_invoice":
 { Args: { "p_actor": string,"p_doc_type": Database["public"]['Enums']["invoice_doc_type"],"p_invoice_id": string }; Returns: Json
                            },
+"has_open_money":
+{ Args: { "p_booking_ids": (string)[] }; Returns: boolean
+                           },
 "house_today":
 { Args: Record<PropertyKey, never>; Returns: string
-                           },
-"identity_needles":
-{ Args: { "p_emails": (string)[],"p_names": (string)[],"p_phones": (string)[] }; Returns: (string)[]
                            },
 "is_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
@@ -900,7 +903,7 @@ isOneToOne: false
 { Args: { "p_actor"?: string,"p_invoice_ids": (string)[] }; Returns: number
                            },
 "matching_external_events":
-{ Args: { "p_emails": (string)[],"p_names": (string)[],"p_phones": (string)[] }; Returns: {
+{ Args: { "p_emails": (string)[],"p_phones": (string)[] }; Returns: {
               "amount_cents": number | null,
 "anonymized_at": string | null,
 "calendar_id": string,
@@ -941,6 +944,9 @@ isOneToOne: false
 "open_dispute":
 { Args: { "p_payment_intent_id": string }; Returns: Json
                            },
+"phone_keys":
+{ Args: { "p_phones": (string)[] }; Returns: (string)[]
+                           },
 "public_availability":
 { Args: { "p_from": string,"p_room_id": string,"p_to": string }; Returns: {
               "is_available": boolean,"night": string
@@ -980,7 +986,7 @@ isOneToOne: false
 { Args: { "p_actor"?: string,"p_is_non_refundable": boolean,"p_payment": Json,"p_tiers": Json }; Returns: undefined
                            },
 "scrub_personal_data":
-{ Args: { "p_booking_ids": (string)[],"p_emails": (string)[],"p_event_ids": (string)[],"p_names": (string)[],"p_phones": (string)[] }; Returns: Json
+{ Args: { "p_booking_ids": (string)[],"p_emails": (string)[],"p_event_ids": (string)[],"p_phones": (string)[] }; Returns: Json
                            },
 "secure_claim":
 { Args: { "p_booking": Omit<Database["public"]['Tables']["bookings"]['Row'], Database["public"]['Tables']["bookings"]['ComputedFields']> }; Returns: boolean

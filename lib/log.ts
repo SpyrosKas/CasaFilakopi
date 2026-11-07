@@ -9,10 +9,14 @@
 export type LogFields = Record<string, unknown>;
 
 /** A code, an id or a count. Anything with an @ or a space is not a code. */
-const SAFE_TEXT = /^[A-Za-z0-9_.:/-]{1,80}$/;
+const SAFE_TEXT = /^[A-Za-z0-9_.:-]{1,80}$/;
 
 const EMAIL = /[^\s@"'<>]+@[^\s@"'<>]+/g;
 const LONG_NUMBER = /\+?\d[\d\s()-]{6,}\d/g;
+// Addresses first: a guest link or calendar link holds a secret in its path.
+const URL_TEXT = /[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi;
+const SECRET_PATH =
+  /\/(?:(?:en|el)\/)?booking\/[^\s"'<>]+|\/api\/ical\/[^\s"'<>]+/gi;
 
 export function safeFields(fields: LogFields): Record<string, unknown> {
   const safe: Record<string, unknown> = {};
@@ -28,6 +32,8 @@ export function safeFields(fields: LogFields): Record<string, unknown> {
 
 export function maskText(text: string): string {
   return text
+    .replace(URL_TEXT, "[url]")
+    .replace(SECRET_PATH, "[link]")
     .replace(EMAIL, "[email]")
     .replace(LONG_NUMBER, "[number]")
     .slice(0, 300);

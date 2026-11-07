@@ -1,3 +1,4 @@
+import { logError, logWarn } from "@/lib/log";
 import {
   BOOKING_PLACEHOLDERS,
   findTemplate,
@@ -524,9 +525,7 @@ export async function processQueue(
     // Nothing is claimed, so no attempt is used up while Resend is not set up.
     result.status = "not_configured";
     result.waiting = await countWaiting(db);
-    console.warn(
-      `email: no transport (RESEND_API_KEY missing), ${result.waiting} queued`,
-    );
+    logWarn("email.no_transport", { waiting: result.waiting });
     return result;
   }
 
@@ -585,7 +584,7 @@ export async function processQueue(
         result.claimed -= 1;
         result.status = "config_error";
         result.configError = error.message;
-        console.error(`EMAIL STOPPED, check the Resend key: ${error.message}`);
+        await logError("email.stopped", error);
         break;
       }
       result[await handleFailure(db, row, error, clock())] += 1;

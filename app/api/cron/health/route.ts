@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
-import { DATABASE_JOBS, HEARTBEAT_JOB } from "@/lib/admin/job-health";
+import {
+  HEARTBEAT_JOB,
+  summariseJobs,
+  WATCHED_JOBS,
+} from "@/lib/admin/job-health";
 import { t } from "@/lib/admin/strings";
 import { createAdminClient } from "@/lib/db/admin";
 import { isCronAuthorised } from "@/lib/email/cron-auth";
 import { emailSecrets } from "@/lib/email/env";
-import { alertAboutJob, finishJob, startJob } from "@/lib/email/jobs";
+import {
+  alertAboutJob,
+  alertStaleJob,
+  finishJob,
+  latestRuns,
+  startJob,
+} from "@/lib/email/jobs";
 import { logError, logInfo } from "@/lib/log";
 
 export const maxDuration = 60;
@@ -29,12 +39,13 @@ async function handle(request: Request) {
   try {
     run = await startJob(db, HEARTBEAT_JOB);
     const now = new Date();
+    const { labels } = t.ops.jobs;
+    const { stale } = summariseJobs(await latestRuns(db), now);
     const alerted = (
-      await Promise.all(
-        DATABASE_JOBS.map((job) =>
-          alertAboutJob(db, job, t.ops.jobs.labels[job], now),
-        ),
-      )
+      await Promise.all([
+        ...WATCHED_JOBS.map((job) => alertAboutJob(db, job, labels[job], now)),
+        ...stale.map((job) => alertStaleJob(db, job, labels[job], now)),
+      ])
     ).filter(Boolean).length;
     await finishJob(db, run, "success", `alerted ${alerted}`);
     logInfo("job_health.done", { alerted });

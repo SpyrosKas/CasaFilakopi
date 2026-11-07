@@ -85,7 +85,7 @@
 Κάποιος επισκέπτης μπορεί να σας ζητήσει τα δεδομένα του ή να ζητήσει να διαγραφεί. Στους **Επισκέπτες**, ανοίξτε τον επισκέπτη:
 
 - **Κατέβασμα δεδομένων:** ένα αρχείο Excel με ό,τι έχουμε γι' αυτόν. Μέσα είναι και οι δικές σας σημειώσεις, οπότε διαβάστε το πριν το στείλετε.
-- **Διαγραφή στοιχείων:** σβήνει όνομα, email, τηλέφωνο, μηνύματα και σημειώσεις. **Δεν αναιρείται.** Τα τιμολόγια μένουν, γιατί το απαιτεί η φορολογική νομοθεσία. Δεν γίνεται όσο υπάρχει διαμονή σε εξέλιξη ή μελλοντική.
+- **Διαγραφή στοιχείων:** σβήνει όνομα, email, τηλέφωνο, μηνύματα και σημειώσεις. **Δεν αναιρείται.** Τα τιμολόγια μένουν, γιατί το απαιτεί η φορολογική νομοθεσία. Δεν γίνεται όσο υπάρχει διαμονή σε εξέλιξη ή μελλοντική, ούτε όσο μια πληρωμή ή επιστροφή είναι ανοιχτή ή λείπει το παραστατικό μιας πληρωμής.
 
 Το σύστημα διαγράφει αυτόματα τα στοιχεία των επισκεπτών 5 χρόνια μετά την αναχώρησή τους.
 
@@ -189,7 +189,7 @@ Keep these links private. Anyone who has one can see your dates.
 A guest may ask for a copy of their data, or ask to be removed. In **Guests**, open the guest:
 
 - **Download their data:** an Excel file with everything we hold. It includes your own notes, so read it before you send it.
-- **Remove their details:** erases name, email, phone, messages and notes. **This cannot be undone.** Invoices stay, because tax rules require them. It is refused while a stay is happening or still to come.
+- **Remove their details:** erases name, email, phone, messages and notes. **This cannot be undone.** Invoices stay, because tax rules require them. It is refused while a stay is happening or still to come, or while a payment or refund is open or a payment has no document.
 
 The system removes guests' details by itself 5 years after they leave.
 

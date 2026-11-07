@@ -511,7 +511,7 @@ describe("provider failures", () => {
     });
     expect(calls).toHaveLength(1);
     expect(error).toHaveBeenCalledWith(
-      expect.stringContaining("EMAIL STOPPED"),
+      expect.stringContaining("email.stopped"),
     );
     error.mockRestore();
 
