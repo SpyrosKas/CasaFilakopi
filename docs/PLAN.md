@@ -57,6 +57,7 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | D15 | Schema changes from the spec | Decided | `booking_nights` dropped (stay range plus `price_breakdown`). `room_photos` became `media_placements`, per section. `email_queue` merged into `email_logs`. `rate_overrides` is the spec's `rates` |
 | D16 | Paid hold on dates an import has already sold | Decided | Automatic refund plus host alert (`dates_lost`). Nothing-due-now bookings confirm through `confirm_without_payment` |
 | D17 | Build invoicing before the accountant answers | Decided | Yes. Dummy business details, every document marked provisional and not sent to guests until D4 is confirmed. PDFs in the private `invoices` bucket. Admin filters by month, transaction, booking. myDATA mode Off: Yorgos exports to the accountant, who uploads. VAT and document types stay data |
+| D18 | Modernise the design | Decided, on trial | Owner asked for a more modern look and a language selector with flags. Built on `feat/design` for comparison; overrides "keep the look" (MIG-03) if approved. Resolves the button contrast question |
 | D14 | Launch target | Proposed | Live before the 2027 season bookings start (aim for March 2027) |
 
 ---
