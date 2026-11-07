@@ -85,6 +85,21 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | Exporting checkout holds to channels | Off until real feeds are checked, because a hold could return as a false conflict and trigger a wrong refund (D16) |
 | Contact details | Public details come from Text and photos. Property keeps legal details and the internal notification address, relabelled so the two cannot be confused |
 
+### CMS review findings to fix before merging `feat/cms` (aa45931)
+
+Send to the CMS agent (a7e15ead742227a56) on resume. Access, XSS and draft leaks are sound.
+- D1 High: failed upload can leave a live section pointing at a deleted file. Roll back correctly and await `sectionResult` (`lib/cms/actions/photos.ts`).
+- D2 High: two tabs overwrite each other's text. Save with `where updated_at = loaded value`, then show the page-changed message.
+- D3: refuse publishing blank titles and contact fields.
+- D4: at runtime throw instead of caching built-in fallback text, so Next keeps the last good page.
+- D5: remove temp files in `finally`, and add a daily `cms/` cleanup job.
+- D6: document imports before first deploy, and add a named production path for T7.2.
+- D7: resolve the `package.json` conflict.
+- D8: 404 page uses a fixed photo. D9: keep fallback `site/` files or use a code asset.
+- D10: contact column `min-width: 0`, `nextOrder` max + 1, `safeHref` backslash, URLs with `)`, link prompt error, audit failure after publish, publish race, `beforeunload` on list and alt forms.
+- Tests: run `cms-static.spec.ts` in CI with `CMS_STATIC_CHECK`, cover `limitInputPixels`, failure paths, removed admin.
+- To check: real iPhone HEIC upload.
+
 ### Working defaults (D27, 2026-11-07)
 
 Used for the autonomous block. Each can change later; YOU or HOST confirm them before launch. Anything Yorgos edits in Admin is only a starting value.
