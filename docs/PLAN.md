@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** Staging live at https://casa-filakopi.vercel.app. WEB, ENGINE, ADMIN merged. INV fixing review findings. DESIGN building on `feat/design`. YOU: create the first Owner account, accountant sheet (D4). Next: MAIL (A4, A5), then Wave 2.
+**Status:** Usage limit hit; resume after 05:20. Merged: WEB, ENGINE, ADMIN, INV with Excel, DESIGN. Reviewed, fixes pending on branches: `feat/admin-ops`, `feat/channels`, `feat/cms` (review running), `feat/mail` (review running). Not started: PAY, Greek admin, drafts, T4.32 cron, hardening. Staging needs migrations 10 to 13 after merge. Run full Playwright once on a quiet database.
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
@@ -49,7 +49,7 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | D6 | Payment mode and cancellation rules | **Decided** | Yorgos edits these any time in Admin. Two modes: **Full payment (default)** or **Deposit**, where he sets the percentage and days before arrival the rest is due; 0 days means pay on arrival. Booking on or after the due date pays in full. Refund tiers are a percentage of the booking: charge = total minus refund percent, refund = paid minus charge, floored at 0, and any shortfall shows as still owed. Changes apply to new bookings only; each booking keeps a snapshot |
 | D7 | Languages at launch | Proposed | Greek + English |
 | D8 | Styling (spec open decision 1) | Proposed | Keep existing `bootstrap.css` and `style.css` as global CSS; replace jQuery, Bootstrap JS and AOS behaviour with small React components |
-| D9 | Scheduler (open decision 2) | Proposed | `pg_cron` calling SQL or secured Next.js routes. Vercel Hobby cron is too limited |
+| D9 | Scheduler (open decision 2) | **Decided** | `pg_cron` calling SQL or secured Next.js routes. Vercel Hobby cron is too limited |
 | D10 | Hosting (open decision 3) | **Decided** | Vercel (Pro at launch). Database on managed Supabase: Pro for production (Free has no backups and pauses), Free for staging |
 | D11 | Stripe surface (PAY-01) | Proposed | Hosted Checkout Sessions |
 | D12 | Repo layout | Proposed | Next.js at repo root; static site moved to `legacy/` on `dev-booking` as the visual baseline, deleted after cutover |
@@ -61,9 +61,65 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | D19 | Airbnb and Booking.com bookings | Decided | Shown in Admin with their source. iCal gives dates, so Yorgos adds guest contacts and the amount by hand, and they then count in reports. A channel manager such as Beds24 stays an option for later |
 | D20 | Accountant timing | Decided | Accountant answers once everything is finished. Documents stay provisional until then, and that step remains a launch blocker for real invoices |
 | D21 | Export format | Decided | Real Excel file (.xlsx) replaces CSV, after the owner tested Excel on a Mac |
+| D22 | Guest mailbox | Decided | `host@miloscasa.com` becomes a real Google Workspace mailbox, replacing Namecheap forwarding, so Yorgos replies from that address. DNS stays in Namecheap. Resend sends from `mail.miloscasa.com` |
+| D23 | Working alone | Decided 2026-11-07 | LEAD may merge reviewed work, push to `dev-booking` and apply migrations to staging during the 6-hour block. `master`, live site and DNS stay untouched |
+| D24 | Late cancellation on a deposit | Decided | Yorgos keeps the deposit and the shortfall is not chased. `stillOwedCents` is not shown to guests or collected |
+| D25 | Admin language | Decided | Greek by default with an EN/EL switch. Greek text reviewed by HOST |
+| D26 | FAQ, house rules, legal drafts | Decided | LEAD drafts them in Greek and English as unpublished drafts, using only known facts. Legal text needs professional review before publishing |
 | D14 | Launch target | Proposed | Live before the 2027 season bookings start (aim for March 2027) |
 
 ---
+
+### Decided during the autonomous block (D28, 2026-11-07)
+
+| Topic | Decision |
+|---|---|
+| Partial refund on a live or finished booking | Goodwill. It never creates a debt, and it reduces income |
+| Money to give back | Shows on Yorgos's Home page |
+| New exports | Real Excel files, as D21 |
+| ADR | What the guest pays for the house, after promo |
+| Staff powers | As built; no Staff at launch |
+| Empty channel feed | Releases only after 6 hours and two or more empty reads, with an alert. Any release of a future stay alerts Yorgos |
+| Stale sync alert | 3 hours June to September, 6 hours otherwise |
+| Closures made only on Airbnb | Do not copy to Booking.com; Yorgos blocks dates in Admin |
+| Exporting checkout holds to channels | Off until real feeds are checked, because a hold could return as a false conflict and trigger a wrong refund (D16) |
+| Contact details | Public details come from Text and photos. Property keeps legal details and the internal notification address, relabelled so the two cannot be confused |
+
+### CMS review findings to fix before merging `feat/cms` (aa45931)
+
+Send to the CMS agent (a7e15ead742227a56) on resume. Access, XSS and draft leaks are sound.
+- D1 High: failed upload can leave a live section pointing at a deleted file. Roll back correctly and await `sectionResult` (`lib/cms/actions/photos.ts`).
+- D2 High: two tabs overwrite each other's text. Save with `where updated_at = loaded value`, then show the page-changed message.
+- D3: refuse publishing blank titles and contact fields.
+- D4: at runtime throw instead of caching built-in fallback text, so Next keeps the last good page.
+- D5: remove temp files in `finally`, and add a daily `cms/` cleanup job.
+- D6: document imports before first deploy, and add a named production path for T7.2.
+- D7: resolve the `package.json` conflict.
+- D8: 404 page uses a fixed photo. D9: keep fallback `site/` files or use a code asset.
+- D10: contact column `min-width: 0`, `nextOrder` max + 1, `safeHref` backslash, URLs with `)`, link prompt error, audit failure after publish, publish race, `beforeunload` on list and alt forms.
+- Tests: run `cms-static.spec.ts` in CI with `CMS_STATIC_CHECK`, cover `limitInputPixels`, failure paths, removed admin.
+- To check: real iPhone HEIC upload.
+
+### Working defaults (D27, 2026-11-07)
+
+Used for the autonomous block. Each can change later; YOU or HOST confirm them before launch. Anything Yorgos edits in Admin is only a starting value.
+
+| Area | Default |
+|---|---|
+| Public email | `host@miloscasa.com`; Yorgos's personal Yahoo removed from the site. Phone and WhatsApp stay |
+| Default language | English, with Greek chosen from the browser or the flags. Admin is Greek first (D25) |
+| Sender | Name "Casa Filakopi", from `bookings@mail.miloscasa.com`, reply-to `host@miloscasa.com`. Each guest gets their booking's language |
+| Reminders | Balance request at the due date plus one reminder 3 days later. Pre-arrival email 3 days before. Thank-you built but off |
+| Payment | Stripe hosted Checkout, EUR, Apple Pay and Google Pay on; hold 35 min, session 30 min |
+| Late refund | Tiers as seeded: 100% until 30 days out, then 0% |
+| Pricing rules | Extra-guest fee per guest per night, children counted, promos also discount cleaning, taxes never discounted |
+| Booking rules | Horizon 18 months, same-day until 12:00, Friday and Saturday weekend, minimum stay set by Yorgos |
+| Prices, capacity, fees | Remain placeholders until HOST enters real ones (T6.9) |
+| Analytics | None at launch, so no analytics cookies. Setting stays available |
+| Data retention | Guest data anonymised 5 years after check-out, except what tax rules require. Confirm with ACC (question 15) |
+| Accounts | Yorgos Owner, plus Spyros as a second Owner for lost-phone recovery. No Staff at launch; the role is built |
+| Vrbo/HomeAway | Sync available as "Other iCal", off until HOST confirms the listing is active |
+| Launch | March 2027 target. Real invoices wait for ACC (D20) |
 
 ## 3. How we work (multi-agent model)
 
@@ -295,6 +351,7 @@ Security and tooling:
 - [ ] T4.29 Export feed, token, no loops (`CHN-10` to `CHN-12`)
 - [ ] T4.30 Conflicts, sync logs, alerts, limitation notice (`CHN-13` to `CHN-16`)
 - [ ] T4.31 Fixture-feed tests, then A9 real-feed test (`QA-04`)
+- [ ] T4.32 Schedule the jobs: `pg_cron` with `pg_net` every 5 minutes calling `/api/cron/*`, secrets in Vault per environment, `CRON_SECRET` in Vercel. Launch blocker: without it nothing syncs (D9 decided)
 
 **Gate 4:** full test-card booking on staging, blocked dates show on the public site, an Airbnb test block arrives in our calendar and ours arrives in Airbnb.
 
@@ -308,7 +365,7 @@ Security and tooling:
 - [ ] T5.5 myDATA adapter, retries (`INV-08`, `INV-09`, `JOB-06`)
 - [ ] T5.6 OTA booking invoices (`INV-10`)
 - [x] T5.7 List, export, settings (`INV-11`, `INV-12`, `ADM-22`, `ADM-26`)
-- [x] T5.7a Download one document, or select several or all matching a filter, as a PDF or a ZIP plus CSV. Marking as sent stays a separate step
+- [x] T5.7a Download one document, or select several or all matching a filter, as a PDF or a ZIP plus Excel file. Marking as sent stays a separate step
 
 **Track OPS**
 - [ ] T5.8 Editable email templates, remaining emails (`EML-02`, `EML-03`, `EML-06`, `EML-09`, `ADM-27`)

@@ -52,6 +52,11 @@ describe("overbooking protection (QA-02)", () => {
     );
     expect(won).toHaveLength(1);
     expect(lost).toHaveLength(49);
+    expect(
+      lost
+        .map((r) => r.reason.message)
+        .filter((m) => m !== "dates_unavailable"),
+    ).toEqual([]);
     expect(lost.every((r) => r.reason.message === "dates_unavailable")).toBe(
       true,
     );

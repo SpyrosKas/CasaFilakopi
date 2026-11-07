@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  csvAmount,
+  plainAmount,
   formatDate,
   formatEuro,
   formatPercent,
@@ -30,9 +30,9 @@ describe("money", () => {
     expect(formatEuro(-3390)).toBe("-33,90 €");
   });
 
-  it("keeps export amounts plain", () => {
-    expect(csvAmount(123456)).toBe("1234,56");
-    expect(csvAmount(-5)).toBe("-0,05");
+  it("keeps an amount plain for a form box", () => {
+    expect(plainAmount(123456)).toBe("1234,56");
+    expect(plainAmount(-5)).toBe("-0,05");
   });
 
   it("reads what is typed, with a comma or a point", () => {

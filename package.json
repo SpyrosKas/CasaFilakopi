@@ -42,6 +42,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
+    "exceljs": "4.4.0",
     "pdfjs-dist": "6.5.438",
     "pg": "^8.23.1",
     "prettier": "^3.9.10",
