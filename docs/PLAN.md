@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** Staging live at https://casa-filakopi.vercel.app. WEB, ENGINE, ADMIN merged. INV fixing review findings. DESIGN building on `feat/design`. YOU: create the first Owner account, accountant sheet (D4). Next: MAIL (A4, A5), then Wave 2.
+**Status:** Working alone until the Google Workspace, Resend and Stripe session (D23). Merged: WEB, ENGINE, ADMIN, INV, DESIGN. Running: INV Excel, ADMIN-OPS, CMS, CHN. Next: MAIL, PAY, then Greek admin, drafts, hardening.
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
@@ -62,6 +62,10 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | D20 | Accountant timing | Decided | Accountant answers once everything is finished. Documents stay provisional until then, and that step remains a launch blocker for real invoices |
 | D21 | Export format | Decided | Real Excel file (.xlsx) replaces CSV, after the owner tested Excel on a Mac |
 | D22 | Guest mailbox | Decided | `host@miloscasa.com` becomes a real Google Workspace mailbox, replacing Namecheap forwarding, so Yorgos replies from that address. DNS stays in Namecheap. Resend sends from `mail.miloscasa.com` |
+| D23 | Working alone | Decided 2026-11-07 | LEAD may merge reviewed work, push to `dev-booking` and apply migrations to staging during the 6-hour block. `master`, live site and DNS stay untouched |
+| D24 | Late cancellation on a deposit | Decided | Yorgos keeps the deposit and the shortfall is not chased. `stillOwedCents` is not shown to guests or collected |
+| D25 | Admin language | Decided | Greek by default with an EN/EL switch. Greek text reviewed by HOST |
+| D26 | FAQ, house rules, legal drafts | Decided | LEAD drafts them in Greek and English as unpublished drafts, using only known facts. Legal text needs professional review before publishing |
 | D14 | Launch target | Proposed | Live before the 2027 season bookings start (aim for March 2027) |
 
 ---
