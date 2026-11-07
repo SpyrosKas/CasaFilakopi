@@ -4,7 +4,9 @@ import {
   createContext,
   useActionState,
   useContext,
+  useEffect,
   useId,
+  useRef,
   useTransition,
   type FormEvent,
   type InputHTMLAttributes,
@@ -39,15 +41,23 @@ export function ActionForm({
   pendingLabel,
   children,
   danger = false,
+  resetOnOk = false,
 }: {
   action: (state: ActionState, formData: FormData) => Promise<ActionState>;
   submitLabel: string;
   pendingLabel: string;
   children: ReactNode;
   danger?: boolean;
+  /** Empties the boxes after a save, so a repeat tap cannot add it twice. */
+  resetOnOk?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, idleState);
   const [, startTransition] = useTransition();
+  const form = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (resetOnOk && state.status === "ok") form.current?.reset();
+  }, [resetOnOk, state]);
 
   // React clears a form after its action. Sending it from here does not.
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -59,6 +69,7 @@ export function ActionForm({
   return (
     <FormContext.Provider value={state}>
       <form
+        ref={form}
         action={formAction}
         onSubmit={onSubmit}
         noValidate
@@ -76,6 +87,12 @@ export function ActionForm({
       </form>
     </FormContext.Provider>
   );
+}
+
+/** For a group of boxes, such as weekdays, which has no field of its own. */
+export function FieldError({ name }: { name: string }) {
+  const error = useContext(FormContext).fieldErrors?.[name];
+  return error ? <p className="field-error">{error}</p> : null;
 }
 
 interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {

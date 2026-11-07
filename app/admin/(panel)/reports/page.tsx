@@ -12,18 +12,54 @@ import {
   buildReport,
   monthlyReports,
   yearsWithData,
+  type SourceLine,
 } from "@/lib/admin/reports";
 import { requireOwner } from "@/lib/admin/session";
 import { loadBlocks, loadStayBook, toReportInput } from "@/lib/admin/stay-data";
-import type { BookingSource } from "@/lib/admin/stays";
+import { NO_AMOUNT, type BookingSource } from "@/lib/admin/stays";
 import { t } from "@/lib/admin/strings";
-import { athensDate } from "@/lib/domain/dates";
+import { addDays, athensDate } from "@/lib/domain/dates";
 
 const r = t.reports;
 
 const IMPORTED: BookingSource[] = ["airbnb", "booking_com", "other"];
 
 const dash = "-";
+
+/** Each figure shows when it is not zero, and the cards add up to Income. */
+function sourceLines(line: SourceLine) {
+  const shown = [
+    {
+      label: r.sourceBookings,
+      value: String(line.bookings),
+      on: line.bookings,
+    },
+    { label: r.sourceNights, value: String(line.nights), on: line.nights },
+    {
+      label: r.sourceBooked,
+      value: formatEuro(line.bookedCents ?? 0),
+      on: line.bookedCents ?? 0,
+    },
+    {
+      label: r.sourceReceived,
+      value: formatEuro(line.receivedCents),
+      on: line.receivedCents,
+    },
+    {
+      label: r.sourceEntered,
+      value: formatEuro(line.enteredCents),
+      on: line.enteredCents,
+    },
+    {
+      label: r.noAmountFilter,
+      value: String(line.noAmount),
+      on: line.noAmount,
+    },
+  ];
+  return shown
+    .filter((row) => row.on !== 0)
+    .map(({ label, value }) => ({ label, value }));
+}
 
 export default async function ReportsPage({
   searchParams,
@@ -103,7 +139,12 @@ export default async function ReportsPage({
         <p className="notice notice-warn" data-testid="no-amount">
           {r.noAmount(report.noAmount.stays, report.noAmount.nights)}{" "}
           <Link
-            href="/admin/bookings?tab=upcoming&money=dates_only"
+            href={`/admin/bookings?${new URLSearchParams({
+              tab: report.noAmount.tab,
+              money: NO_AMOUNT,
+              from: report.from,
+              to: addDays(report.to, -1),
+            })}`}
             prefetch={false}
             className="text-link"
           >
@@ -234,34 +275,7 @@ export default async function ReportsPage({
             {report.bySource.map((line) => (
               <section key={line.source} className="source-card">
                 <h3>{t.stay.source[line.source]}</h3>
-                <MoneyLines
-                  lines={[
-                    { label: r.sourceBookings, value: String(line.bookings) },
-                    { label: r.sourceNights, value: String(line.nights) },
-                    ...(line.bookedCents === null
-                      ? []
-                      : [
-                          {
-                            label: r.sourceBooked,
-                            value: formatEuro(line.bookedCents),
-                          },
-                        ]),
-                    ...(IMPORTED.includes(line.source) &&
-                    line.bookedCents === null
-                      ? [
-                          {
-                            label: r.sourceEntered,
-                            value: formatEuro(line.enteredCents),
-                          },
-                        ]
-                      : [
-                          {
-                            label: r.sourceReceived,
-                            value: formatEuro(line.receivedCents),
-                          },
-                        ]),
-                  ]}
-                />
+                <MoneyLines lines={sourceLines(line)} />
               </section>
             ))}
           </div>
@@ -301,12 +315,14 @@ export default async function ReportsPage({
         <p className="muted small">{r.chartNote}</p>
       </Panel>
 
-      <a
+      <Link
         href={`/admin/reports/export?year=${year}`}
+        prefetch={false}
+        download
         className="button button-quiet"
       >
         {r.export}
-      </a>
+      </Link>
     </div>
   );
 }

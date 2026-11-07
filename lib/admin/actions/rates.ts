@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { writeAudit } from "@/lib/admin/audit";
 import {
   errorState,
   formFields,
@@ -72,12 +71,6 @@ export async function setDailyPrices(
   );
   if (error) return errorState(t.common.somethingWrong);
 
-  // rate_overrides has no audit trigger, so one line records the whole change.
-  await writeAudit(admin, {
-    action: "set_daily_prices",
-    entity: "rate_overrides",
-    after: { from, to, weekdays, nightly_cents: price, nights: nights.length },
-  });
   refreshRates();
   return okState(t.rates.applied(nights.length));
 }
@@ -105,11 +98,6 @@ export async function clearDailyPrices(
     .select("night");
   if (error) return errorState(t.common.somethingWrong);
 
-  await writeAudit(admin, {
-    action: "clear_daily_prices",
-    entity: "rate_overrides",
-    after: { from, to, weekdays, nights: data.length },
-  });
   refreshRates();
   return okState(t.rates.cleared(data.length));
 }

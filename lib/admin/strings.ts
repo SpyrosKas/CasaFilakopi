@@ -139,6 +139,10 @@ const en = {
     next: "Next arrivals",
     nextEmpty: "No arrivals in the next 60 days.",
     balances: "Guests who still owe money",
+    giveBack: "Money to give back",
+    moneyHeld: "Money on a booking that did not finish",
+    moneyHeldHint:
+      "The guest paid but the booking was not confirmed. Please check each one.",
     balancesEmpty: "Nobody owes anything.",
     messages: "Unread messages",
     occupancy: "Nights booked this month",
@@ -156,7 +160,7 @@ const en = {
       `${channel} could not be read the last ${count} times, so its newest bookings may be missing.`,
     andMore: (count: number) => `And ${count} more.`,
     addManual: "Add a booking",
-    invoices: "Invoices",
+    invoices: "Invoices and receipts",
   },
   stay: {
     noName: "Name not given",
@@ -249,7 +253,7 @@ const en = {
     any: "Any",
     apply: "Show results",
     clear: "Clear filters",
-    export: "Download as a spreadsheet",
+    export: "Download as an Excel file",
     exported: {
       reference: "Booking number",
       status: "Status",
@@ -308,6 +312,10 @@ const en = {
     notes: "Your private notes",
     notesEmpty: "No notes on this booking.",
     notesHint: "Only you and your team see these.",
+    notesSave: "Save notes",
+    notesSaved: "Notes saved.",
+    moneyHeld:
+      "Money is held on this booking, which was never confirmed. Please check it and give the money back if needed.",
     messages: "Messages from this guest",
     messagesEmpty: "No messages from this guest yet.",
     history: "History",
@@ -369,6 +377,8 @@ const en = {
       event_not_found: "This booking could not be found.",
     } as Record<string, string>,
     notYetArrived: "This cannot be done before the day of arrival.",
+    moneyMoved:
+      "The money on this booking has just changed, so nothing was saved. Please check the page and try again.",
     notThisStatus:
       "This booking cannot take a payment. Please reload the page.",
     cardNotHere: "Card payments can only be refunded through online payments.",
@@ -568,7 +578,7 @@ const en = {
     closing: "Saving...",
     pickFirst: "Tap the first night you want to close.",
     pickLast: (date: string) =>
-      `First night ${date}. Tap the last night, or close just this one.`,
+      `First night ${date}. Tap the last night, in any month, or close just this one.`,
     picked: (from: string, to: string, nights: string) =>
       `${from} to ${to}, ${nights}`,
     clearPick: "Start again",
@@ -608,6 +618,9 @@ const en = {
     price: "Price per night, in euros",
     apply: "Set this price",
     clear: "Go back to the normal price",
+    clearConfirm: (from: string, to: string) =>
+      `Go back to the normal price from ${from} to ${to}? Prices set on these days will be removed.`,
+    confirmFree: "Yes, I want €0 here",
     applied: (count: number) =>
       `Saved for ${count} ${count === 1 ? "night" : "nights"}.`,
     cleared: (count: number) =>
@@ -718,6 +731,9 @@ const en = {
       archived: "Messages you archive are kept here.",
     },
     unread: "Unread",
+    older: "Older messages",
+    newer: "Newer messages",
+    pageOf: (page: number, pages: number) => `Page ${page} of ${pages}`,
     backToList: "All messages",
     received: "Received",
     dates: "Dates they asked about",
@@ -784,7 +800,7 @@ const en = {
       `Of ${available} nights open for booking`,
     averageNight: "Average price per night",
     averageNightHint: (nights: number) =>
-      `${nights} nights of your own bookings, before cleaning and fees`,
+      `What guests paid for ${nights} nights of your own bookings, after promo codes, before fees`,
     averageStay: "Average stay",
     averageStayValue: (nights: string) => `${nights} nights`,
     sourceHeading: "By where they came from",
@@ -797,13 +813,15 @@ const en = {
     noAmount: (stays: number, nights: number) =>
       `${stays} Airbnb or Booking.com ${stays === 1 ? "stay" : "stays"} (${nights} ${nights === 1 ? "night" : "nights"}) ${stays === 1 ? "has" : "have"} no amount. ${stays === 1 ? "It counts" : "They count"} in nights and bookings, but not in income, until you add the amount.`,
     noAmountLink: "See these bookings",
+    noAmountFilter: "No amount yet",
     chartHeading: "Income by month",
     chartNote:
       "Received, plus amounts you entered. Refunds can make a month negative, shown as zero here.",
     chartLabel: (month: string, amount: string) => `${month}: ${amount}`,
     none: "None",
-    export: "Download this year as a spreadsheet",
-    csv: {
+    export: "Download this year as an Excel file",
+    sheet: {
+      wholeYear: "Whole year",
       month: "Month",
       payments: "Payments received (EUR)",
       refunds: "Refunds given back (EUR)",
@@ -987,6 +1005,9 @@ const en = {
       "This cannot be more than the adults and children added together.",
     holdMinutes: (min: number) => `Must be a whole number from ${min} to 240.`,
     cutoffHour: "Please choose a time from the list.",
+    zeroPrice:
+      "This would make the night free. Tick the box below if you mean it.",
+    oneLine: "Please keep this on one line.",
     date: "Please choose a date.",
     dateOrder: "This must be after the first date.",
     tooLongRange: "Please choose two years or less.",

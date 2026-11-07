@@ -9,8 +9,13 @@ import { mailHref, telHref, whatsappHref } from "@/lib/admin/contact";
 import { centsToBox, formatEuro, parseEuros } from "@/lib/admin/format";
 import { messageTemplates } from "@/lib/admin/message-templates";
 import {
+  basePricesSchema,
+  blockSchema,
   bulkRatesSchema,
+  changeDatesSchema,
+  clearRatesSchema,
   feeSchema,
+  messageSchema,
   promoSchema,
   restrictionSchema,
 } from "@/lib/admin/ops-schemas";
@@ -20,6 +25,7 @@ import {
   dayPlan,
   filterStays,
   moneyState,
+  NO_AMOUNT,
   planRefund,
   stayFromBooking,
   stayFromExternal,
@@ -540,6 +546,109 @@ describe("forms", () => {
         .success,
     ).toBe(false);
     expect(restrictionSchema.parse({ ...dates, minStay: "3" }).minStay).toBe(3);
+  });
+});
+
+describe("what a message may contain", () => {
+  it("refuses a line break in a subject", () => {
+    const message = {
+      target: "booking",
+      id: "00000000-0000-4000-8000-000000000001",
+      body: "Hello",
+    };
+    expect(
+      messageSchema.safeParse({ ...message, subject: "Hi\r\nBcc: x@y.test" })
+        .success,
+    ).toBe(false);
+    expect(
+      messageSchema.safeParse({ ...message, subject: "Your stay" }).success,
+    ).toBe(true);
+  });
+});
+
+describe("a blank date", () => {
+  it("is a plain form error, not a crash", () => {
+    const weekdays = ["1"];
+    expect(
+      clearRatesSchema.safeParse({ from: "", to: "", weekdays }).success,
+    ).toBe(false);
+    expect(
+      blockSchema.safeParse({ from: "", lastNight: "", reason: "other" })
+        .success,
+    ).toBe(false);
+    expect(
+      changeDatesSchema.safeParse({
+        id: "00000000-0000-4000-8000-000000000001",
+        checkIn: "",
+        checkOut: "",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("a free night", () => {
+  const range = { from: "2027-06-01", to: "2027-06-02", weekdays: ["1"] };
+
+  it("needs saying twice", () => {
+    expect(bulkRatesSchema.safeParse({ ...range, price: "0" }).success).toBe(
+      false,
+    );
+    expect(
+      bulkRatesSchema.safeParse({ ...range, price: "0", confirmFree: "on" })
+        .success,
+    ).toBe(true);
+    const base = { cleaning: "0", extraGuest: "0" };
+    expect(basePricesSchema.safeParse({ ...base, base: "0" }).success).toBe(
+      false,
+    );
+    expect(basePricesSchema.safeParse({ ...base, base: "100" }).success).toBe(
+      true,
+    );
+  });
+});
+
+describe("the no amount filter", () => {
+  it("finds only imports with nothing entered", () => {
+    const filters = {
+      tab: "upcoming" as const,
+      search: "",
+      from: null,
+      to: null,
+      status: null,
+      source: null,
+      money: NO_AMOUNT,
+    };
+    const stay = importedStay("2027-08-01", "2027-08-03");
+    expect(
+      filterStays(
+        [
+          stay,
+          { ...stay, id: "paid", enteredCents: 100 },
+          bookingStay({ id: "own" }),
+        ],
+        filters,
+        TODAY,
+      ).map((row) => row.id),
+    ).toEqual([stay.id]);
+  });
+});
+
+describe("money with no booking behind it (D7)", () => {
+  it("is listed for the host, and a refund due too", () => {
+    const expired = stayFromBooking(
+      { ...BASE_BOOKING, id: "gone", status: "expired" },
+      [{ status: "succeeded", amount_cents: 500 }],
+      [],
+    );
+    const dropped = stayFromBooking(
+      { ...BASE_BOOKING, id: "over", total_cents: 500 },
+      [{ status: "succeeded", amount_cents: 800 }],
+      [],
+    );
+    const plan = dayPlan([expired, dropped], TODAY);
+    expect(plan.moneyHeld.map((row) => row.id)).toEqual(["gone"]);
+    expect(plan.toGiveBack.map((row) => row.id)).toEqual(["over"]);
+    expect(dropped.toRefundCents).toBe(300);
   });
 });
 

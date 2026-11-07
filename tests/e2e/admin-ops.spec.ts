@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { formatDate, formatStay } from "@/lib/admin/format";
 import { addDays, athensDate } from "@/lib/domain/dates";
+import { readWorkbook, rowStarting } from "../read-xlsx";
 import {
   createTestUser,
   db,
@@ -187,6 +188,45 @@ test.describe("home", () => {
     );
   });
 
+  test("shows money to give back and money on a broken booking", async () => {
+    const cancelled = await addBooking({
+      roomId: room.id,
+      status: "cancelled",
+      checkIn: addDays(today, 35),
+      checkOut: addDays(today, 37),
+      name: "Owed Back",
+      totalCents: 60000,
+      cancelledAt: new Date().toISOString(),
+    });
+    await addPayment(cancelled, 60000, { method: "card" });
+    const expired = await addBooking({
+      roomId: room.id,
+      status: "expired",
+      checkIn: addDays(today, 38),
+      checkOut: addDays(today, 40),
+      name: "Paid Too Late",
+      totalCents: 25000,
+    });
+    await addPayment(expired, 25000, { method: "card" });
+
+    await page.goto("/admin");
+    await expect(page.getByTestId("give-back")).toContainText("Owed Back");
+    await expect(page.getByTestId("give-back")).toContainText("€600.00");
+    await expect(page.getByTestId("money-held")).toContainText("Paid Too Late");
+
+    const file = await page.request.get("/admin/bookings/export");
+    const book = await readWorkbook(await file.body());
+    const names: unknown[] = [];
+    book.worksheets[0].eachRow((row) => names.push(row.getCell(4).value));
+    expect(names).toContain("Paid Too Late");
+
+    await page.goto(`/admin/bookings/${expired}`);
+    await expect(page.getByText(/Money is held on this booking/)).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "What to do next" }),
+    ).toHaveCount(0);
+  });
+
   test("the menu marks one page only", async () => {
     await page.goto("/admin/bookings");
     await expect(page.locator('.tabbar [aria-current="page"]')).toHaveText(
@@ -290,10 +330,16 @@ test.describe("bookings list", () => {
     await expect(page.getByTestId("stay-list")).toHaveCount(0);
   });
 
-  test("downloads a spreadsheet, for the Owner only", async () => {
+  test("downloads an Excel file, for the Owner only", async () => {
     const owned = await page.request.get("/admin/bookings/export");
-    expect(owned.headers()["content-type"]).toContain("text/csv");
-    expect(await owned.text()).toContain("Coming Soon");
+    expect(owned.headers()["content-type"]).toContain("spreadsheetml");
+    expect(owned.headers()["content-disposition"]).toContain(".xlsx");
+
+    const book = await readWorkbook(await owned.body());
+    const names: unknown[] = [];
+    book.worksheets[0].eachRow((row) => names.push(row.getCell(4).value));
+    expect(names).toContain("Coming Soon");
+    expect(names).not.toContain("Never Paid");
 
     const refused = await staffPage.request.get("/admin/bookings/export", {
       maxRedirects: 0,
@@ -332,7 +378,9 @@ test.describe("one booking", () => {
     await expect(
       page.getByRole("link", { name: "Email", exact: true }),
     ).toHaveAttribute("href", "mailto:maria.ops@example.test");
-    await expect(page.getByText("Likes the upstairs room")).toBeVisible();
+    await expect(
+      page.getByRole("textbox", { name: "Your private notes" }),
+    ).toHaveValue("Likes the upstairs room");
     await expect(page.getByText("€600.00", { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "History" })).toBeVisible();
     await expect(
@@ -340,9 +388,29 @@ test.describe("one booking", () => {
     ).toHaveAttribute("href", "/admin/invoices");
   });
 
+  test("private notes can be changed, by Staff too", async () => {
+    await staffPage.goto(`/admin/bookings/${id}`);
+    await staffPage
+      .getByRole("textbox", { name: "Your private notes" })
+      .fill("Allergic to cats");
+    await staffPage.getByRole("button", { name: "Save notes" }).click();
+    await expect(staffPage.getByText("Notes saved.")).toBeVisible();
+    const { rows } = await db.query(
+      `select internal_notes from public.bookings where id = $1`,
+      [id],
+    );
+    expect(rows[0].internal_notes).toBe("Allergic to cats");
+    await db.query(
+      `update public.bookings set internal_notes = 'Likes the upstairs room' where id = $1`,
+      [id],
+    );
+  });
+
   test("Staff can work the booking but not open documents", async () => {
     await staffPage.goto(`/admin/bookings/${id}`);
-    await expect(staffPage.getByText("Likes the upstairs room")).toBeVisible();
+    await expect(
+      staffPage.getByRole("textbox", { name: "Your private notes" }),
+    ).toHaveValue("Likes the upstairs room");
     await expect(
       staffPage.getByRole("link", { name: /Open invoices/ }),
     ).toHaveCount(0);
@@ -553,6 +621,35 @@ test.describe("changing dates", () => {
     expect(claim.rows[0].stay).toBe("[2043-04-05,2043-04-09)");
   });
 
+  test("keeps the booking's own promo, even if it has since expired", async () => {
+    const code = `OPS-${randomUUID().slice(0, 8)}`;
+    await db.query(
+      `insert into public.promo_codes
+         (code, kind, value, valid_to, max_uses, used_count, is_active)
+       values ($1, 'percent', 1000, '2020-01-01', 1, 1, false)`,
+      [code],
+    );
+    const promoted = await addBooking({
+      roomId: HOUSE,
+      checkIn: "2043-05-20",
+      checkOut: "2043-05-22",
+      totalCents: 25600,
+      promo: { code },
+    });
+    await page.goto(`/admin/bookings/${promoted}/change`);
+    await page.getByLabel("Departure date").fill("2043-05-24");
+    await page.getByRole("button", { name: "See the price" }).click();
+    // 4 nights is 480, cleaning 40, so 52 off. Then 8 climate fee.
+    await expect(
+      page.locator(".money-line").filter({ hasText: "Discount" }),
+    ).toContainText("-€52.00");
+    await expect(
+      page.locator(".money-line").filter({ hasText: "Booking price" }).first(),
+    ).toContainText("€476.00");
+    await expect(page.getByText(/no longer works/)).toHaveCount(0);
+    await db.query(`delete from public.promo_codes where code = $1`, [code]);
+  });
+
   test("refuses dates that are taken and changes nothing", async () => {
     await newDates("2043-04-19", "2043-04-22");
     await page.getByRole("button", { name: "Save the new dates" }).click();
@@ -608,6 +705,42 @@ test.describe("money on a booking", () => {
     await expect(page.locator(".notice-bad")).toContainText("more than");
   });
 
+  test("a second tab cannot record the same payment twice", async ({
+    browser,
+  }) => {
+    const twice = await addBooking({
+      roomId: room.id,
+      checkIn: addDays(today, 210),
+      checkOut: addDays(today, 212),
+      totalCents: 30000,
+    });
+    const other = await staffSession(browser, staff);
+    const form = (target: Page) =>
+      target.locator(".panel").filter({ hasText: "is still to pay" });
+
+    await page.goto(`/admin/bookings/${twice}`);
+    await other.goto(`/admin/bookings/${twice}`);
+    await form(page).getByLabel("Amount in euros").fill("100");
+    await form(page).getByRole("button", { name: "Record a payment" }).click();
+    await expect(page.getByRole("status").first()).toContainText(
+      "Payment recorded",
+    );
+    // The form empties, so a repeat tap has nothing to send.
+    await expect(form(page).getByLabel("Amount in euros")).toHaveValue("");
+
+    await form(other).getByLabel("Amount in euros").fill("100");
+    await form(other).getByRole("button", { name: "Record a payment" }).click();
+    await expect(other.locator(".notice-bad")).toContainText(
+      "has just changed",
+    );
+    const { rows } = await db.query(
+      `select count(*)::int as n from public.payments where booking_id = $1`,
+      [twice],
+    );
+    expect(rows[0].n).toBe(1);
+    await other.context().close();
+  });
+
   test("records money given back, as Staff, up to what was paid", async () => {
     await staffPage.goto(`/admin/bookings/${id}`);
     const panel = staffPage.locator(".panel").filter({
@@ -641,6 +774,33 @@ test.describe("money on a booking", () => {
         reason: "Goodwill",
       },
     ]);
+  });
+
+  test("a goodwill refund leaves no debt behind", async () => {
+    await page.goto(`/admin/bookings/${id}`);
+    // 300.00 less the 100.50 received. The 50 given back changes nothing.
+    await expect(
+      page.locator(".money-line").filter({ hasText: "Still to pay" }),
+    ).toContainText("€199.50");
+    await expect(
+      page.locator(".money-line").filter({ hasText: "Refunded" }),
+    ).toContainText("€50.00");
+  });
+
+  test("no money warning on a cancelled booking", async () => {
+    const gone = await addBooking({
+      roomId: room.id,
+      status: "cancelled",
+      checkIn: addDays(today, 220),
+      checkOut: addDays(today, 222),
+      name: "No Warning",
+      cancelledAt: new Date().toISOString(),
+    });
+    await page.goto(`/admin/bookings/${gone}`);
+    await expect(page.locator(".badge-warn")).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "What to do next" }),
+    ).toHaveCount(0);
   });
 });
 
@@ -885,6 +1045,24 @@ test.describe("calendar", () => {
     expect(left.rows[0].n).toBe(0);
   });
 
+  test("closes a range across two months in one go", async () => {
+    await page.goto("/admin/calendar?month=2043-09");
+    await day(page, "2043-09-29").click();
+    await page.getByRole("link", { name: "Next month" }).click();
+    await expect(page).toHaveURL(/month=2043-10/);
+    await day(page, "2043-10-02").click();
+    await expect(page.getByText(/4 nights/)).toBeVisible();
+    await page.getByRole("button", { name: "Close these dates" }).click();
+    await expect(day(page, "2043-10-01")).toHaveClass(/night-block/);
+
+    const { rows } = await db.query(
+      `select end_date::text from public.availability_blocks
+       where room_id = $1 and start_date = '2043-09-29'`,
+      [HOUSE],
+    );
+    expect(rows).toEqual([{ end_date: "2043-10-03" }]);
+  });
+
   test("will not run a range across a booking", async () => {
     await addBooking({
       roomId: HOUSE,
@@ -948,14 +1126,41 @@ test.describe("prices and rules", () => {
 
     await page.reload();
     await expect(page.locator(".price-set")).toHaveCount(10);
+    // The exact price, not a rounded one.
+    await expect(page.locator(".price-set").first()).toContainText("150.50");
 
     await page.getByLabel("From", { exact: true }).fill("2043-10-01");
     await page.getByLabel("Until, and including").fill("2043-10-31");
+    const asked = page.waitForEvent("dialog");
     await page
       .getByRole("button", { name: "Go back to the normal price" })
       .click();
+    expect((await asked).message()).toContain(formatDate("2043-10-31"));
     await expect(page.getByText(/10 days went back/)).toBeVisible();
     expect((await count()).n).toBe(0);
+  });
+
+  test("a day price of zero needs saying twice", async () => {
+    await page.goto("/admin/rates?month=2043-10");
+    await page.getByLabel("From", { exact: true }).fill("2043-10-05");
+    await page.getByLabel("Until, and including").fill("2043-10-05");
+    await page.getByLabel(/^Price per night/).fill("0");
+    await page.getByRole("button", { name: "Set this price" }).click();
+    await expect(page.getByText(/make the night free/)).toBeVisible();
+    const { rows } = await db.query(
+      `select count(*)::int as n from public.rate_overrides
+       where room_id = $1 and night = '2043-10-05'`,
+      [HOUSE],
+    );
+    expect(rows[0].n).toBe(0);
+  });
+
+  test("clearing with no dates says what is missing", async () => {
+    await page.goto("/admin/rates?month=2043-10");
+    await page
+      .getByRole("button", { name: "Go back to the normal price" })
+      .click();
+    await expect(page.getByText("Please choose a date.").first()).toBeVisible();
   });
 
   test("a season can be added, and cannot overlap another", async () => {
@@ -1056,7 +1261,10 @@ test.describe("prices and rules", () => {
     );
     expect(promo.rows).toEqual([{ kind: "percent", value: 1250 }]);
 
+    // The form emptied after saving, so a repeat tap adds nothing.
+    await expect(addPromo.getByLabel("Code", { exact: true })).toHaveValue("");
     await addPromo.getByLabel("Code", { exact: true }).fill(code.toLowerCase());
+    await addPromo.getByLabel(/^Percentage, or amount/).fill("12,5");
     await addPromo.getByRole("button", { name: "Add a code" }).click();
     await expect(addPromo.locator(".notice-bad")).toContainText(
       "already exists",
@@ -1224,6 +1432,23 @@ test.describe("messages", () => {
     await expect.poll(async () => (await stored()).status).toBe("archived");
   });
 
+  test("shows older messages instead of cutting them off", async () => {
+    for (let index = 0; index < 31; index += 1) {
+      await addMessage({
+        name: `Older ${index}`,
+        email: "older@example.test",
+        message: "An old message",
+        status: "archived",
+      });
+    }
+    await page.goto("/admin/messages?tab=archived");
+    await page.getByRole("link", { name: "Older messages" }).click();
+    await expect(page).toHaveURL(/page=2/);
+    await expect(
+      page.getByRole("link", { name: "Newer messages" }),
+    ).toBeVisible();
+  });
+
   test("explains an empty box", async () => {
     await page.goto("/admin/messages?tab=archived");
     await expect(page.locator("main")).toContainText(/Archived/);
@@ -1287,6 +1512,16 @@ test.describe("income and reports", () => {
     await expect(source("Airbnb")).toContainText("€500.00");
   });
 
+  test("the no amount link lists exactly those stays", async () => {
+    await page.goto("/admin/reports?year=2019&month=8");
+    await text("no-amount").getByRole("link").click();
+    await expect(page).toHaveURL(/tab=past/);
+    await expect(page).toHaveURL(/money=no_amount/);
+    const rows = page.getByTestId("stay-list").getByRole("listitem");
+    await expect(rows).toHaveCount(1);
+    await expect(rows).toContainText("Booking.com");
+  });
+
   test("the whole year adds up", async () => {
     await page.goto("/admin/reports?year=2019&month=all");
     const total = text("income")
@@ -1295,21 +1530,18 @@ test.describe("income and reports", () => {
     await expect(total).toContainText("€1,600.00");
   });
 
-  test("downloads the year as a spreadsheet", async () => {
+  test("downloads the year as an Excel file", async () => {
     const response = await page.request.get("/admin/reports/export?year=2019");
     expect(response.headers()["content-disposition"]).toContain(
-      "casa-filakopi-report-2019.csv",
+      "casa-filakopi-report-2019.xlsx",
     );
-    const lines = (await response.text()).split("\r\n");
-    expect(lines).toHaveLength(14);
-    const august = lines.find((row) => row.startsWith("2019-08"))!;
-    expect(august.split(",").slice(1, 6)).toEqual([
-      "400",
-      "200",
-      "200",
-      "500",
-      "700",
+    const book = await readWorkbook(await response.body());
+    const sheet = book.worksheets[0];
+    const august = rowStarting(sheet, "2019-08");
+    expect([2, 3, 4, 5, 6].map((n) => august.getCell(n).value)).toEqual([
+      400, 200, 200, 500, 700,
     ]);
+    expect(rowStarting(sheet, "Whole year").getCell(6).value).toBe(1600);
   });
 
   test("Staff are turned away", async () => {

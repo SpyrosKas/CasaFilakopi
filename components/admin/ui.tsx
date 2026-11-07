@@ -183,6 +183,9 @@ const MONEY_TONE: Record<MoneyState, Tone> = {
   dates_only: "plain",
 };
 
+/** A booking that ended owes nothing, so it gets no money warning (D9). */
+const OPEN_MONEY: StayStatus[] = ["confirmed", "checked_in", "completed"];
+
 export function StayBadges({ stay }: { stay: Stay }) {
   return (
     <span className="row-badges">
@@ -193,8 +196,8 @@ export function StayBadges({ stay }: { stay: Stay }) {
       {stay.kind === "external" ? (
         <Badge>{t.stay.datesOnly}</Badge>
       ) : (
-        stay.status !== "pending_payment" &&
-        stay.status !== "expired" && (
+        (OPEN_MONEY.includes(stay.status) ||
+          stay.moneyState === "disputed") && (
           <Badge tone={MONEY_TONE[stay.moneyState]}>
             {t.stay.money[stay.moneyState]}
           </Badge>

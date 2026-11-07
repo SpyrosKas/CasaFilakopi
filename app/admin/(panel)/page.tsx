@@ -116,6 +116,44 @@ export default async function AdminHomePage() {
         </section>
       )}
 
+      {plan.moneyHeld.length > 0 && (
+        <section className="panel" data-testid="money-held">
+          <h2>{h.moneyHeld}</h2>
+          <p className="notice notice-bad">{h.moneyHeldHint}</p>
+          <ul className="rows">
+            {plan.moneyHeld.slice(0, MAX_LISTED).map((stay) => (
+              <StayRow
+                key={stay.id}
+                stay={stay}
+                side={formatEuro(stay.money.paidCents)}
+              />
+            ))}
+          </ul>
+          {plan.moneyHeld.length > MAX_LISTED && (
+            <p className="muted small">
+              {h.andMore(plan.moneyHeld.length - MAX_LISTED)}
+            </p>
+          )}
+        </section>
+      )}
+
+      {plan.toGiveBack.length > 0 && (
+        <Panel title={h.giveBack}>
+          <div data-testid="give-back">
+            <StayList
+              stays={plan.toGiveBack.slice(0, MAX_LISTED)}
+              empty=""
+              side={(stay) => formatEuro(stay.toRefundCents)}
+            />
+          </div>
+          {plan.toGiveBack.length > MAX_LISTED && (
+            <p className="muted small">
+              {h.andMore(plan.toGiveBack.length - MAX_LISTED)}
+            </p>
+          )}
+        </Panel>
+      )}
+
       <div className="stats">
         <Stat
           label={h.messages}

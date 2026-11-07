@@ -6,6 +6,7 @@ import {
   ActionForm,
   Field,
   SelectField,
+  TextAreaField,
 } from "@/components/admin/form";
 import { GuestMessages, SentMessages } from "@/components/admin/guest-log";
 import {
@@ -22,6 +23,7 @@ import {
   markStay,
   recordPayment,
   recordRefund,
+  saveNotes,
 } from "@/lib/admin/actions/bookings";
 import {
   formatDate,
@@ -39,7 +41,11 @@ import {
   loadMessagesForBooking,
   type HistoryEntry,
 } from "@/lib/admin/stay-data";
-import { refundableOf, stayFromBooking } from "@/lib/admin/stays";
+import {
+  holdsMoneyUnconfirmed,
+  refundableOf,
+  stayFromBooking,
+} from "@/lib/admin/stays";
 import { ADMIN_LANGUAGE, t } from "@/lib/admin/strings";
 import type { PriceBreakdown } from "@/lib/domain/contracts";
 import { athensDate } from "@/lib/domain/dates";
@@ -104,11 +110,7 @@ export default async function BookingPage({
   const isOpen =
     booking.status === "confirmed" || booking.status === "checked_in";
   const hasArrivedDate = booking.check_in <= today;
-  const overpaidCents =
-    isOpen && stay.money.paidCents > booking.total_cents
-      ? stay.money.paidCents - booking.total_cents
-      : 0;
-  const giveBack = stay.toRefundCents + overpaidCents;
+  const giveBack = stay.toRefundCents;
 
   const refundable = payments.flatMap((row) => {
     const left = refundableOf(row, refunds);
@@ -136,6 +138,10 @@ export default async function BookingPage({
         }
       />
       <StayBadges stay={stay} />
+
+      {holdsMoneyUnconfirmed(stay) && (
+        <p className="notice notice-bad">{d.moneyHeld}</p>
+      )}
 
       {stay.money.disputedCents > 0 && (
         <p className="notice notice-bad">{d.disputed}</p>
@@ -204,7 +210,7 @@ export default async function BookingPage({
             </dl>
           </Panel>
 
-          {(isOpen || hasCardMoney) && (
+          {isOpen && (
             <Panel title={a.heading}>
               <div className="card-actions">
                 {booking.status === "confirmed" && hasArrivedDate && (
@@ -223,15 +229,13 @@ export default async function BookingPage({
                     pendingLabel={t.common.saving}
                   />
                 )}
-                {isOpen && (
-                  <Link
-                    href={`${href}/change`}
-                    prefetch={false}
-                    className="button button-quiet"
-                  >
-                    {a.changeDates}
-                  </Link>
-                )}
+                <Link
+                  href={`${href}/change`}
+                  prefetch={false}
+                  className="button button-quiet"
+                >
+                  {a.changeDates}
+                </Link>
                 {booking.status === "confirmed" && hasArrivedDate && (
                   <ActionButton
                     action={markStay}
@@ -242,24 +246,32 @@ export default async function BookingPage({
                     confirm={a.noShowConfirm}
                   />
                 )}
-                {isOpen && (
-                  <Link
-                    href={`${href}/cancel`}
-                    prefetch={false}
-                    className="button button-danger"
-                  >
-                    {a.cancel}
-                  </Link>
-                )}
+                <Link
+                  href={`${href}/cancel`}
+                  prefetch={false}
+                  className="button button-danger"
+                >
+                  {a.cancel}
+                </Link>
               </div>
             </Panel>
           )}
 
           <Panel title={d.notes}>
-            <p className="muted small">{d.notesHint}</p>
-            <p className="message-text">
-              {booking.internal_notes ?? d.notesEmpty}
-            </p>
+            <ActionForm
+              action={saveNotes}
+              submitLabel={d.notesSave}
+              pendingLabel={t.common.saving}
+            >
+              <input type="hidden" name="id" value={id} />
+              <TextAreaField
+                label={d.notes}
+                name="notes"
+                hint={d.notesHint}
+                defaultValue={booking.internal_notes ?? ""}
+                rows={3}
+              />
+            </ActionForm>
           </Panel>
         </div>
 
@@ -350,8 +362,14 @@ export default async function BookingPage({
                 action={recordPayment}
                 submitLabel={a.recordPayment}
                 pendingLabel={t.common.saving}
+                resetOnOk
               >
                 <input type="hidden" name="id" value={id} />
+                <input
+                  type="hidden"
+                  name="expectedReceived"
+                  value={stay.money.receivedCents}
+                />
                 <Field label={a.amount} name="amount" inputMode="decimal" />
                 <SelectField
                   label={a.method}
@@ -373,8 +391,14 @@ export default async function BookingPage({
                   action={recordRefund}
                   submitLabel={a.recordRefund}
                   pendingLabel={t.common.saving}
+                  resetOnOk
                 >
                   <input type="hidden" name="id" value={id} />
+                  <input
+                    type="hidden"
+                    name="expectedRefunded"
+                    value={stay.money.refundedCents}
+                  />
                   <SelectField
                     label={a.refundPayment}
                     name="paymentId"

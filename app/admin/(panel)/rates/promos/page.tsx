@@ -144,6 +144,7 @@ export default async function PromosPage() {
           action={savePromo}
           submitLabel={r.promoAdd}
           pendingLabel={t.common.saving}
+          resetOnOk
         >
           <PromoFields promo={{}} />
         </ActionForm>

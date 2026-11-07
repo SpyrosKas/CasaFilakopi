@@ -73,6 +73,8 @@ export interface BookingFields {
   confirmedAt?: string;
   cancelledAt?: string | null;
   locale?: string;
+  /** The code stored on the booking, as a real checkout leaves it. */
+  promo?: { code: string };
 }
 
 const HOLDS_THE_HOUSE = ["confirmed", "checked_in", "completed"];
@@ -101,7 +103,7 @@ export async function addBooking(fields: BookingFields): Promise<string> {
     dueNowCents: 0,
     balanceCents: total,
     balanceDueOn: null,
-    promoCode: null,
+    promoCode: fields.promo?.code ?? null,
   };
   const guest = await db.query(
     `insert into public.guests (full_name) values ($1) returning id`,
@@ -171,12 +173,15 @@ export async function addRefund(
   bookingId: string,
   paymentId: string,
   amountCents: number,
-  at: string,
+  /** When the money left. */
+  settledAt: string,
+  /** When the refund was started, if earlier. */
+  startedAt = settledAt,
 ): Promise<void> {
   await db.query(
-    `insert into public.refunds (booking_id, payment_id, amount_cents, status, created_at)
-     values ($1, $2, $3, 'succeeded', $4)`,
-    [bookingId, paymentId, amountCents, at],
+    `insert into public.refunds (booking_id, payment_id, amount_cents, status, created_at, settled_at)
+     values ($1, $2, $3, 'succeeded', $4, $5)`,
+    [bookingId, paymentId, amountCents, startedAt, settledAt],
   );
 }
 
@@ -203,11 +208,12 @@ export async function addMessage(fields: {
   name: string;
   email: string;
   message: string;
+  status?: string;
 }): Promise<string> {
   const { rows } = await db.query(
-    `insert into public.contact_messages (name, email, message)
-     values ($1, $2, $3) returning id`,
-    [fields.name, fields.email, fields.message],
+    `insert into public.contact_messages (name, email, message, status)
+     values ($1, $2, $3, $4) returning id`,
+    [fields.name, fields.email, fields.message, fields.status ?? "new"],
   );
   contactMessages.add(rows[0].id);
   return rows[0].id;
@@ -297,7 +303,14 @@ export async function addReportYear(room: FixtureRoom): Promise<void> {
     cancelledAt: "2019-08-01T10:00:00Z",
   });
   const paid = await addPayment(c, 30000, { at: "2019-07-01T10:00:00Z" });
-  await addRefund(c, paid, 20000, "2019-08-01T10:00:00Z");
+  // Started in July, but the money left in August.
+  await addRefund(
+    c,
+    paid,
+    20000,
+    "2019-08-01T10:00:00Z",
+    "2019-07-25T10:00:00Z",
+  );
 
   await addBooking({
     ...common,

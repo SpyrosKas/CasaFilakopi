@@ -1,11 +1,14 @@
-import Link from "next/link";
-import { RatesCalendar, type PriceDay } from "@/components/admin/calendars";
-import { ActionForm, Field } from "@/components/admin/form";
+import {
+  RatesCalendar,
+  RatesMonthNav,
+  type PriceDay,
+} from "@/components/admin/calendars";
+import { ActionForm, CheckField, Field } from "@/components/admin/form";
 import { RatesTabs } from "@/components/admin/rates-tabs";
 import { PageHead, Panel } from "@/components/admin/ui";
 import { saveBasePrices } from "@/lib/admin/actions/rates";
-import { isMonthKey, monthDates, shiftMonth } from "@/lib/admin/calendar";
-import { centsToBox, formatMonth } from "@/lib/admin/format";
+import { isMonthKey, monthDates } from "@/lib/admin/calendar";
+import { centsToBox } from "@/lib/admin/format";
 import { requireOwner } from "@/lib/admin/session";
 import { loadBookingSettings } from "@/lib/admin/settings-data";
 import { t } from "@/lib/admin/strings";
@@ -87,25 +90,7 @@ export default async function RatesPage({
       <PageHead title={r.title} intro={r.intro} />
       <RatesTabs current="calendar" isOwner />
 
-      <nav className="month-nav" aria-label={r.title}>
-        <Link
-          href={`/admin/rates?month=${shiftMonth(month, -1)}`}
-          prefetch={false}
-          className="month-step"
-          aria-label={t.calendar.previous}
-        >
-          {t.calendar.previousShort}
-        </Link>
-        <span className="month-title">{formatMonth(month)}</span>
-        <Link
-          href={`/admin/rates?month=${shiftMonth(month, 1)}`}
-          prefetch={false}
-          className="month-step"
-          aria-label={t.calendar.next}
-        >
-          {t.calendar.nextShort}
-        </Link>
-      </nav>
+      <RatesMonthNav month={month} />
 
       <RatesCalendar key={month} month={month} days={days} today={today} />
 
@@ -134,6 +119,7 @@ export default async function RatesPage({
             hint={r.extraGuestHint(room.base_occupancy)}
             defaultValue={centsToBox(room.extra_guest_fee_cents)}
           />
+          <CheckField label={r.confirmFree} name="confirmFree" />
         </ActionForm>
       </Panel>
     </div>

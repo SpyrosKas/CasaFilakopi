@@ -114,6 +114,7 @@ export default async function SeasonsPage() {
           action={saveSeason}
           submitLabel={r.seasonAdd}
           pendingLabel={t.common.saving}
+          resetOnOk
         >
           <SeasonFields season={{}} />
         </ActionForm>

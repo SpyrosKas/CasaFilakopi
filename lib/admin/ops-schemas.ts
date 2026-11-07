@@ -96,6 +96,13 @@ const weekdays = z
 
 export const idSchema = z.object({ id: z.uuid() });
 
+/**
+ * Zod still runs checks across fields after one of them has failed, so a
+ * blank date reaches here and must not reach the date arithmetic.
+ */
+const bothDates = (first: string, second: string) =>
+  isValidIsoDate(first) && isValidIsoDate(second);
+
 const stayDates = {
   checkIn: date,
   checkOut: date,
@@ -105,6 +112,7 @@ function datesInOrder<T extends { checkIn: string; checkOut: string }>(
   value: T,
   ctx: z.RefinementCtx,
 ) {
+  if (!bothDates(value.checkIn, value.checkOut)) return;
   if (value.checkOut <= value.checkIn) {
     ctx.addIssue({
       code: "custom",
@@ -149,8 +157,17 @@ export const transitionSchema = z.object({
   to: z.enum(["checked_in", "completed", "no_show"]),
 });
 
+const expectedCents = z.string().regex(/^\d+$/).transform(Number);
+
+export const notesSchema = z.object({
+  id: z.uuid(),
+  notes: trimmed(2000),
+});
+
 export const paymentSchema = z.object({
   id: z.uuid(),
+  /** What the form saw, so a second tab or a repeat tap cannot pay twice. */
+  expectedReceived: expectedCents,
   amount: positiveEuros,
   method: z.enum(["cash", "bank_transfer", "pos"], v.pick),
   note: optional(300),
@@ -158,6 +175,7 @@ export const paymentSchema = z.object({
 
 export const refundSchema = z.object({
   id: z.uuid(),
+  expectedRefunded: expectedCents,
   paymentId: z.uuid(v.pick),
   amount: positiveEuros,
   reason: optional(300),
@@ -182,7 +200,8 @@ export const externalDetailsSchema = z.object({
 export const messageSchema = z.object({
   target: z.enum(["booking", "external", "contact"]),
   id: z.uuid(),
-  subject: required(160),
+  // A line break in a subject can add mail headers.
+  subject: required(160).regex(/^[^\r\n]*$/, v.oneLine),
   body: required(5000),
 });
 
@@ -202,6 +221,7 @@ export const blockSchema = z
     note: optional(200),
   })
   .superRefine((value, ctx) => {
+    if (!bothDates(value.from, value.lastNight)) return;
     if (value.lastNight < value.from) {
       ctx.addIssue({
         code: "custom",
@@ -221,6 +241,7 @@ function rangeInOrder(
   value: { from: string; to: string },
   ctx: z.RefinementCtx,
 ) {
+  if (!bothDates(value.from, value.to)) return;
   if (value.to < value.from) {
     ctx.addIssue({ code: "custom", path: ["to"], message: v.dateOrder });
   } else if (daysBetween(value.from, value.to) > MAX_RANGE_DAYS) {
@@ -234,17 +255,37 @@ const bulkBase = z.object({
   weekdays: weekdays.min(1, v.weekdays),
 });
 
+/** A free night is possible, but never by a slip of the finger (D12). */
+function zeroNeedsConfirming(
+  cents: number,
+  isConfirmed: boolean,
+  path: string,
+  ctx: z.RefinementCtx,
+) {
+  if (cents === 0 && !isConfirmed) {
+    ctx.addIssue({ code: "custom", path: [path], message: v.zeroPrice });
+  }
+}
+
 export const bulkRatesSchema = bulkBase
-  .extend({ price: euros })
-  .superRefine(rangeInOrder);
+  .extend({ price: euros, confirmFree: checkbox })
+  .superRefine(rangeInOrder)
+  .superRefine((value, ctx) =>
+    zeroNeedsConfirming(value.price, value.confirmFree, "price", ctx),
+  );
 
 export const clearRatesSchema = bulkBase.superRefine(rangeInOrder);
 
-export const basePricesSchema = z.object({
-  base: euros,
-  cleaning: euros,
-  extraGuest: euros,
-});
+export const basePricesSchema = z
+  .object({
+    base: euros,
+    cleaning: euros,
+    extraGuest: euros,
+    confirmFree: checkbox,
+  })
+  .superRefine((value, ctx) =>
+    zeroNeedsConfirming(value.base, value.confirmFree, "base", ctx),
+  );
 
 export const seasonSchema = z
   .object({

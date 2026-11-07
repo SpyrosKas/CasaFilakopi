@@ -2,7 +2,11 @@ import Link from "next/link";
 import { Badge, Empty, PageHead, Tabs } from "@/components/admin/ui";
 import { formatStamp } from "@/lib/admin/format";
 import { requireAdmin } from "@/lib/admin/session";
-import { loadMessages } from "@/lib/admin/stay-data";
+import {
+  countMessages,
+  loadMessagePage,
+  MESSAGES_PER_PAGE,
+} from "@/lib/admin/stay-data";
 import { t } from "@/lib/admin/strings";
 
 const m = t.messages;
@@ -11,23 +15,33 @@ const TABS = ["new", "replied", "archived"] as const;
 export default async function MessagesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string | string[] }>;
+  searchParams: Promise<{
+    tab?: string | string[];
+    page?: string | string[];
+  }>;
 }) {
   const admin = await requireAdmin();
-  const asked = (await searchParams).tab;
-  const tab = TABS.find((name) => name === asked) ?? "new";
+  const query = await searchParams;
+  const tab = TABS.find((name) => name === query.tab) ?? "new";
+  const asked = Number(query.page);
+  const page = Number.isSafeInteger(asked) && asked > 1 ? asked : 1;
 
-  const all = await loadMessages(admin);
-  const rows = all.filter((row) => row.status === tab);
+  const [{ rows, total }, ...counts] = await Promise.all([
+    loadMessagePage(admin, tab, page),
+    ...TABS.map((name) => countMessages(admin, name)),
+  ]);
+  const pages = Math.max(Math.ceil(total / MESSAGES_PER_PAGE), 1);
+  const pageHref = (target: number) =>
+    `/admin/messages?tab=${tab}&page=${target}`;
 
   return (
     <div className="stack">
       <PageHead title={m.title} intro={m.intro} />
       <Tabs
-        items={TABS.map((name) => ({
+        items={TABS.map((name, index) => ({
           href: `/admin/messages?tab=${name}`,
           label: m.tabs[name],
-          count: all.filter((row) => row.status === name).length,
+          count: counts[index],
           active: name === tab,
         }))}
       />
@@ -60,6 +74,28 @@ export default async function MessagesPage({
             ))}
           </ul>
         </section>
+      )}
+      {pages > 1 && (
+        <nav className="button-row" aria-label={m.pageOf(page, pages)}>
+          {page > 1 && (
+            <Link
+              href={pageHref(page - 1)}
+              prefetch={false}
+              className="button button-quiet"
+            >
+              {m.newer}
+            </Link>
+          )}
+          {page < pages && (
+            <Link
+              href={pageHref(page + 1)}
+              prefetch={false}
+              className="button button-quiet"
+            >
+              {m.older}
+            </Link>
+          )}
+        </nav>
       )}
     </div>
   );

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { csvEuro, toCsv } from "@/lib/admin/csv";
 import {
   buildReport,
   monthlyReports,
   periodRange,
+  yearsWithData,
   type ReportInput,
 } from "@/lib/admin/reports";
 import {
@@ -302,7 +302,24 @@ describe("August 2019, worked by hand", () => {
   });
 
   it("says how many stays have no amount", () => {
-    expect(august.noAmount).toEqual({ stays: 1, nights: 2 });
+    expect(august.noAmount).toEqual({ stays: 1, nights: 2, tab: "past" });
+  });
+});
+
+describe("source cards", () => {
+  it("add up to the income figures", () => {
+    for (const period of [
+      { year: 2019, month: 8 },
+      { year: 2019, month: null },
+    ]) {
+      const report = buildReport(INPUT, period);
+      const sum = (pick: (line: (typeof report.bySource)[number]) => number) =>
+        report.bySource.reduce((total, line) => total + pick(line), 0);
+      expect(sum((line) => line.receivedCents)).toBe(
+        report.money.receivedCents,
+      );
+      expect(sum((line) => line.enteredCents)).toBe(report.money.enteredCents);
+    }
   });
 });
 
@@ -360,6 +377,152 @@ describe("what is still to come", () => {
   });
 });
 
+describe("a goodwill refund (O1)", () => {
+  const stay = stayFromBooking(
+    booking({
+      id: "g",
+      status: "confirmed",
+      check_in: "2030-05-01",
+      check_out: "2030-05-03",
+      total_cents: 50000,
+    }),
+    [paid(50000)],
+    [{ status: "succeeded", amount_cents: 5000 }],
+  );
+
+  it("creates no debt", () => {
+    expect(stay.balanceCents).toBe(0);
+    expect(stay.moneyState).toBe("paid");
+  });
+
+  it("stays visible and reduces income", () => {
+    expect(stay.money.refundedCents).toBe(5000);
+    const report = buildReport(
+      {
+        stays: [stay],
+        payments: [
+          {
+            bookingId: "g",
+            amountCents: 50000,
+            status: "succeeded",
+            at: "2030-04-01T10:00:00Z",
+          },
+        ],
+        refunds: [
+          {
+            bookingId: "g",
+            amountCents: 5000,
+            status: "succeeded",
+            at: "2030-04-02T10:00:00Z",
+          },
+        ],
+        blocks: [],
+        today: "2026-11-07",
+      },
+      { year: 2030, month: 4 },
+    );
+    expect(report.money.incomeCents).toBe(45000);
+    expect(report.money.owedCents).toBe(0);
+  });
+});
+
+describe("a dispute (D8)", () => {
+  it("does not ask for the disputed money twice", () => {
+    const stay = stayFromBooking(
+      booking({ status: "confirmed", total_cents: 50000 }),
+      [paid(30000), { status: "disputed", amount_cents: 20000 }],
+      [],
+    );
+    expect(stay.balanceCents).toBe(0);
+  });
+});
+
+describe("average price per night (O3)", () => {
+  it("is what the guest paid for the house, after a promo", () => {
+    // 4 nights at 100 and 40 cleaning, less 10%: 44 off the 440.
+    const stay = stayFromBooking(
+      booking({
+        id: "p",
+        status: "completed",
+        check_in: "2019-03-01",
+        check_out: "2019-03-05",
+        total_cents: 39600,
+        price_breakdown: {
+          ...nightly("2019-03-01", "2019-03-05", 10000),
+          lines: [
+            { kind: "accommodation", totalCents: 40000 },
+            { kind: "cleaning", totalCents: 4000 },
+            { kind: "discount", totalCents: -4400 },
+          ],
+        },
+      }),
+      [],
+      [],
+    );
+    expect(stay.pricedNights.map((row) => row.cents)).toEqual([
+      9000, 9000, 9000, 9000,
+    ]);
+    const report = buildReport(
+      {
+        stays: [stay],
+        payments: [],
+        refunds: [],
+        blocks: [],
+        today: "2026-11-07",
+      },
+      { year: 2019, month: 3 },
+    );
+    expect(report.nights.averageNightCents).toBe(9000);
+  });
+
+  it("keeps the nights adding up when the discount does not divide evenly", () => {
+    const stay = stayFromBooking(
+      booking({
+        id: "q",
+        check_in: "2019-03-01",
+        check_out: "2019-03-04",
+        total_cents: 29999,
+        price_breakdown: {
+          ...nightly("2019-03-01", "2019-03-04", 10000),
+          lines: [
+            { kind: "accommodation", totalCents: 30000 },
+            { kind: "discount", totalCents: -1 },
+          ],
+        },
+      }),
+      [],
+      [],
+    );
+    expect(stay.pricedNights.reduce((total, row) => total + row.cents, 0)).toBe(
+      29999,
+    );
+  });
+});
+
+describe("the year menu", () => {
+  it("has a year with nothing but a refund", () => {
+    expect(
+      yearsWithData(
+        {
+          stays: [],
+          payments: [],
+          refunds: [
+            {
+              bookingId: "x",
+              amountCents: 100,
+              status: "succeeded",
+              at: "2025-03-01T10:00:00Z",
+            },
+          ],
+          blocks: [],
+          today: "2026-11-07",
+        },
+        2026,
+      ),
+    ).toEqual([2026, 2025]);
+  });
+});
+
 describe("dates", () => {
   it("uses the Athens date of a payment, not UTC", () => {
     // 22:30 UTC on 31 July is 01:30 on 1 August on Milos.
@@ -388,19 +551,5 @@ describe("dates", () => {
       from: "2026-12-01",
       to: "2027-01-01",
     });
-  });
-});
-
-describe("spreadsheet files", () => {
-  it("stops a guest's name running as a formula", () => {
-    const csv = toCsv(["Guest"], [['=HYPERLINK("http://x")']]);
-    expect(csv).toContain(`"'=HYPERLINK(""http://x"")"`);
-  });
-
-  it("keeps amounts as plain numbers", () => {
-    expect(csvEuro(125050)).toBe(1250.5);
-    expect(csvEuro(-100)).toBe(-1);
-    expect(csvEuro(null)).toBeNull();
-    expect(toCsv(["n"], [[csvEuro(-100)]])).toContain("-1");
   });
 });

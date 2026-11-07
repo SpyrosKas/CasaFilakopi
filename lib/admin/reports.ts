@@ -1,4 +1,11 @@
-import { isRealStay, type BookingSource, type Stay } from "@/lib/admin/stays";
+import {
+  isMissingAmount,
+  isRealStay,
+  tabOf,
+  type BookingSource,
+  type Stay,
+  type StayTab,
+} from "@/lib/admin/stays";
 import { athensDate, eachNight } from "@/lib/domain/dates";
 import { sumCents } from "@/lib/domain/money";
 
@@ -90,7 +97,7 @@ export interface Report {
     available: number;
     /** Tenths of a percent: 666 is 66.6%. Null with nothing to divide by. */
     occupancyTenths: number | null;
-    /** House price per night, own bookings only. */
+    /** What guests paid per night for the house, after promos (O3). */
     averageNightCents: number | null;
     /** How many nights that average covers. */
     pricedNights: number;
@@ -98,7 +105,12 @@ export interface Report {
     averageStayTenths: number | null;
   };
   bySource: SourceLine[];
-  noAmount: { stays: number; nights: number };
+  noAmount: {
+    stays: number;
+    nights: number;
+    /** Where the first of them is listed. */
+    tab: StayTab;
+  };
 }
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -207,7 +219,7 @@ export function buildReport(input: ReportInput, period: Period): Report {
 
   const own = arriving.filter((stay) => stay.kind === "booking");
   const imported = arriving.filter((stay) => stay.kind === "external");
-  const missing = imported.filter((stay) => stay.enteredCents === null);
+  const missing = imported.filter(isMissingAmount);
   const cancelledStays = stays.filter(isCancelled);
   const cancelledArrivals = cancelledStays.filter((stay) =>
     inPeriod(stay.checkIn),
@@ -280,6 +292,7 @@ export function buildReport(input: ReportInput, period: Period): Report {
     noAmount: {
       stays: missing.length,
       nights: sumCents(missing.map((stay) => stay.nights)),
+      tab: (missing[0] && tabOf(missing[0], today)) ?? "upcoming",
     },
   };
 }
@@ -290,7 +303,7 @@ export interface MonthBar {
   report: Report;
 }
 
-/** One report per month of a year, for the chart and the CSV file. */
+/** One report per month of a year, for the chart and the Excel file. */
 export function monthlyReports(input: ReportInput, year: number): MonthBar[] {
   return Array.from({ length: 12 }, (_, index) => ({
     month: index + 1,
@@ -305,7 +318,7 @@ export function yearsWithData(input: ReportInput, thisYear: number): number[] {
   for (const stay of input.stays) {
     if (stay.status !== "expired") years.add(Number(stay.checkIn.slice(0, 4)));
   }
-  for (const move of input.payments) {
+  for (const move of [...input.payments, ...input.refunds]) {
     years.add(Number(athensDate(new Date(move.at)).slice(0, 4)));
   }
   return [...years].sort((a, b) => b - a);

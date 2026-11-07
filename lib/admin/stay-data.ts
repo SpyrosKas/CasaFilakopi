@@ -1,4 +1,5 @@
 import "server-only";
+import { assertAdminRole } from "@/lib/admin/audit";
 import type { MoneyMove, ReportInput } from "@/lib/admin/reports";
 import type { AdminContext } from "@/lib/admin/session";
 import {
@@ -10,6 +11,7 @@ import {
   type Stay,
 } from "@/lib/admin/stays";
 import type { CalendarBlock } from "@/lib/admin/calendar";
+import { createAdminClient } from "@/lib/db/admin";
 import { athensDate } from "@/lib/domain/dates";
 
 // Reads for the operations screens, through the admin's own client, so the
@@ -43,26 +45,52 @@ const PAYMENT_COLUMNS =
   "id, booking_id, kind, method, status, amount_cents, note, paid_at, created_at";
 
 const REFUND_COLUMNS =
-  "id, booking_id, payment_id, amount_cents, status, reason, created_at";
+  "id, booking_id, payment_id, amount_cents, status, reason, created_at, settled_at";
 
 const EXTERNAL_COLUMNS =
-  "id, start_date, end_date, summary, guest_name, guest_email, guest_phone, guest_notes, amount_cents, created_at, external_calendars ( channel ), inventory_claims ( is_conflicted )";
+  "id, start_date, end_date, summary, guest_name, guest_email, guest_phone, guest_notes, created_at, external_calendars ( channel ), inventory_claims ( is_conflicted )";
 
-type ExternalRow = Omit<ExternalInput, "channel" | "is_conflicted"> & {
+type ExternalRow = Omit<
+  ExternalInput,
+  "channel" | "is_conflicted" | "amount_cents"
+> & {
   external_calendars: { channel: ExternalInput["channel"] } | null;
   inventory_claims:
     { is_conflicted: boolean } | { is_conflicted: boolean }[] | null;
 };
 
-function toExternalStay(row: ExternalRow, admin: AdminContext): Stay {
+function toExternalStay(
+  row: ExternalRow,
+  amounts: ReadonlyMap<string, number | null>,
+): Stay {
   const claim = [row.inventory_claims].flat()[0];
   return stayFromExternal({
     ...row,
-    // Staff work with these bookings but the amount is the Owner's.
-    amount_cents: admin.role === "owner" ? row.amount_cents : null,
+    amount_cents: amounts.get(row.id) ?? null,
     channel: row.external_calendars?.channel ?? "other_ical",
     is_conflicted: claim?.is_conflicted ?? false,
   });
+}
+
+const NO_AMOUNTS: ReadonlyMap<string, number | null> = new Map();
+
+/**
+ * Signed-in sessions cannot read the amount on an import at all. It is the
+ * Owner's, so it comes through the secret key, only for the Owner, after the
+ * database has confirmed the role. Staff get nothing to leak.
+ */
+async function loadAmounts(
+  admin: AdminContext,
+  id?: string,
+): Promise<ReadonlyMap<string, number | null>> {
+  if (admin.role !== "owner") return NO_AMOUNTS;
+  await assertAdminRole(admin);
+  const client = createAdminClient();
+  const rows = await readAll((from, to) => {
+    const query = client.from("external_events").select("id, amount_cents");
+    return (id ? query.eq("id", id) : query).order("id").range(from, to);
+  });
+  return new Map(rows.map((row) => [row.id, row.amount_cents]));
 }
 
 export async function loadPayments(admin: AdminContext): Promise<PaymentRow[]> {
@@ -93,7 +121,7 @@ export interface StayBook {
 
 /** Every stay at the house. One house makes for a short list. */
 export async function loadStayBook(admin: AdminContext): Promise<StayBook> {
-  const [bookings, payments, refunds, events] = await Promise.all([
+  const [bookings, payments, refunds, events, amounts] = await Promise.all([
     readAll((from, to) =>
       admin.supabase
         .from("bookings")
@@ -114,6 +142,7 @@ export async function loadStayBook(admin: AdminContext): Promise<StayBook> {
           error: unknown;
         }>,
     ),
+    loadAmounts(admin),
   ]);
 
   const paymentsOf = Map.groupBy(payments, (row) => row.booking_id);
@@ -127,7 +156,7 @@ export async function loadStayBook(admin: AdminContext): Promise<StayBook> {
           refundsOf.get(row.id) ?? [],
         ),
       ),
-      ...events.map((row) => toExternalStay(row, admin)),
+      ...events.map((row) => toExternalStay(row, amounts)),
     ],
     payments,
     refunds,
@@ -169,7 +198,8 @@ export function toReportInput(
     bookingId: row.booking_id,
     amountCents: row.amount_cents,
     status: row.status,
-    at: row.created_at,
+    // The day the money left, which can be after the refund was started.
+    at: row.settled_at ?? row.created_at,
   }));
   return {
     stays: book.stays,
@@ -218,7 +248,11 @@ export async function loadExternalStay(
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
-  return data ? toExternalStay(data as unknown as ExternalRow, admin) : null;
+  if (!data) return null;
+  return toExternalStay(
+    data as unknown as ExternalRow,
+    await loadAmounts(admin, id),
+  );
 }
 
 export interface SentMessage {
@@ -283,14 +317,37 @@ export async function loadContactEmails(admin: AdminContext, id: string) {
 const MESSAGE_COLUMNS =
   "id, name, email, phone, dates_of_interest, message, locale, booking_id, status, is_read, created_at";
 
-export async function loadMessages(admin: AdminContext) {
-  const { data, error } = await admin.supabase
+export const MESSAGES_PER_PAGE = 30;
+
+export type MessageStatus = "new" | "replied" | "archived";
+
+/** One page of a box. Nothing is cut off: older ones are a tap away. */
+export async function loadMessagePage(
+  admin: AdminContext,
+  status: MessageStatus,
+  page: number,
+) {
+  const start = (page - 1) * MESSAGES_PER_PAGE;
+  const { data, error, count } = await admin.supabase
     .from("contact_messages")
-    .select(MESSAGE_COLUMNS)
+    .select(MESSAGE_COLUMNS, { count: "exact" })
+    .eq("status", status)
     .order("created_at", { ascending: false })
-    .limit(500);
+    .range(start, start + MESSAGES_PER_PAGE - 1);
   if (error) throw error;
-  return data;
+  return { rows: data, total: count ?? 0 };
+}
+
+export async function countMessages(
+  admin: AdminContext,
+  status: MessageStatus,
+): Promise<number> {
+  const { count, error } = await admin.supabase
+    .from("contact_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("status", status);
+  if (error) throw error;
+  return count ?? 0;
 }
 
 export async function loadMessage(admin: AdminContext, id: string) {
@@ -313,17 +370,36 @@ export async function countUnread(admin: AdminContext): Promise<number> {
   return count ?? 0;
 }
 
+/** A % or _ in an address is a plain character here, not a wildcard. */
+const exactly = (text: string) => text.replace(/[\\%_]/g, "\\$&");
+
 export async function loadMessagesForBooking(
   admin: AdminContext,
   bookingId: string,
   email: string | null,
 ) {
-  const all = await loadMessages(admin);
-  const wanted = email?.toLowerCase();
-  return all.filter(
-    (row) =>
-      row.booking_id === bookingId ||
-      (wanted && row.email.toLowerCase() === wanted),
+  const newestFirst = { ascending: false };
+  const linked = admin.supabase
+    .from("contact_messages")
+    .select(MESSAGE_COLUMNS)
+    .eq("booking_id", bookingId)
+    .order("created_at", newestFirst);
+  const sameEmail = admin.supabase
+    .from("contact_messages")
+    .select(MESSAGE_COLUMNS)
+    .ilike("email", exactly(email ?? ""))
+    .order("created_at", newestFirst);
+  const [first, second] = await Promise.all([
+    linked,
+    email ? sameEmail : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (first.error) throw first.error;
+  if (second.error) throw second.error;
+  const byId = new Map(
+    [...first.data, ...second.data].map((row) => [row.id, row]),
+  );
+  return [...byId.values()].sort((a, b) =>
+    b.created_at.localeCompare(a.created_at),
   );
 }
 

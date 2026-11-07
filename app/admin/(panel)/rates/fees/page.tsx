@@ -148,6 +148,7 @@ export default async function FeesPage() {
           action={saveFee}
           submitLabel={r.feeAdd}
           pendingLabel={t.common.saving}
+          resetOnOk
         >
           <FeeFields fee={{}} />
         </ActionForm>

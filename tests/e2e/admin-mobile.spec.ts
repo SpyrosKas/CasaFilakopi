@@ -2,6 +2,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import {
   authAdmin,
   createTestUser,
+  db,
   deleteCreatedUsers,
   enrolOwner,
   signInWithPassword,
@@ -13,6 +14,7 @@ import {
   addMessage,
   addPayment,
   createFixtureRoom,
+  HOUSE,
   removeFixtures,
 } from "./admin-ops-fixtures";
 
@@ -98,19 +100,18 @@ function findLayoutProblems(minTap: number): LayoutProblem[] {
     }
   }
 
-  // At the very bottom of the page, nothing may be left behind the bar.
+  // At the very bottom of the page, nothing may be left behind the bar. The
+  // bar only sits at the bottom on a phone: on a computer it is the side list.
   const bar = document.querySelector("[data-pinned]");
-  const main = document.querySelector("main");
-  if (bar && main && getComputedStyle(bar).top === "auto") {
+  if (bar && bar.getBoundingClientRect().top > 0) {
+    const row = bar.querySelector(".tabbar-row") ?? bar;
     const start = window.scrollY;
     window.scrollTo(0, document.documentElement.scrollHeight);
-    const barTop = bar.getBoundingClientRect().top;
-    const hidden = targets.filter(
-      ({ el }) =>
-        !isPinned(el) && el.getBoundingClientRect().bottom > barTop + 0.5,
-    );
-    for (const { el } of hidden) {
-      problems.push({ kind: "behind the bottom bar", detail: name(el) });
+    const barTop = row.getBoundingClientRect().top;
+    for (const { el } of targets) {
+      if (!isPinned(el) && el.getBoundingClientRect().bottom > barTop + 0.5) {
+        problems.push({ kind: "behind the bottom bar", detail: name(el) });
+      }
     }
     window.scrollTo(0, start);
   }
@@ -241,6 +242,11 @@ for (const width of WIDTHS) {
         totalCents: 123400,
       });
       await addPayment(stay, 23400);
+      await db.query(
+        `insert into public.seasons (room_id, name, start_date, end_date, nightly_cents)
+         values ($1, 'Mobile test', '2041-11-01', '2041-11-30', 20000)`,
+        [HOUSE],
+      );
       const event = await addExternal(room.airbnb, "2041-03-20", "2041-03-23");
       const message = await addMessage({
         name: "Someone",
@@ -270,7 +276,14 @@ for (const width of WIDTHS) {
       ]) {
         await page.goto(path);
         await check(page, label);
+        // Filters and edit boxes must fit once they are open as well.
+        if (width === 320) {
+          const closed = page.locator("details:not([open]) > summary");
+          while ((await closed.count()) > 0) await closed.first().click();
+          await check(page, `${label}-open`);
+        }
       }
+      await db.query(`delete from public.seasons where name = 'Mobile test'`);
       await removeFixtures();
     });
 

@@ -423,6 +423,29 @@ test("Staff are refused the Owner's price actions, changing nothing", async () =
   expect(await fingerprint()).toEqual(before);
 });
 
+test("a forged refund of a card payment is refused", async () => {
+  // Same request, with the cash payment swapped for a card one.
+  const card = await addPayment(bookingId, 500, { method: "card" });
+  const action = shared.recordRefund;
+  const forged = {
+    ...action,
+    body: Buffer.from(
+      action.body.toString("latin1").replaceAll(cashPaymentId, card),
+      "latin1",
+    ),
+  };
+  expect(forged.body.equals(action.body)).toBe(false);
+
+  const response = await replay(staffContext.request, forged);
+  expect(await response.text()).toContain("only be refunded through online");
+  const { rows } = await db.query(
+    `select count(*)::int as n from public.refunds where payment_id = $1`,
+    [card],
+  );
+  expect(rows[0].n).toBe(0);
+  await db.query(`delete from public.payments where id = $1`, [card]);
+});
+
 test("Staff can do booking work, and the records name them", async () => {
   const request = staffContext.request;
   for (const name of [
@@ -462,6 +485,24 @@ test("Staff can do booking work, and the records name them", async () => {
     [HOUSE],
   );
   expect(block.rows).toEqual([{ created_by: staff.id }]);
+});
+
+test("the same payment or refund sent again is refused", async () => {
+  const count = async () =>
+    (
+      await db.query(
+        `select
+           (select count(*)::int from public.payments where booking_id = $1) as payments,
+           (select count(*)::int from public.refunds where booking_id = $1) as refunds`,
+        [bookingId],
+      )
+    ).rows[0];
+  const before = await count();
+  for (const name of ["recordPayment", "recordRefund"]) {
+    const response = await replay(staffContext.request, shared[name]);
+    expect(await response.text(), name).toContain("has just changed");
+  }
+  expect(await count()).toEqual(before);
 });
 
 test("a change of dates by Staff lands and is logged under them", async () => {

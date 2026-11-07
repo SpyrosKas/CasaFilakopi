@@ -1,17 +1,12 @@
 import Link from "next/link";
 import { AvailabilityCalendar } from "@/components/admin/calendars";
 import { Empty, PageHead, Panel } from "@/components/admin/ui";
-import {
-  buildMonth,
-  isMonthKey,
-  shiftMonth,
-  type NightKind,
-} from "@/lib/admin/calendar";
-import { formatMonth, formatStay } from "@/lib/admin/format";
+import { buildMonth, isMonthKey, type NightKind } from "@/lib/admin/calendar";
+import { formatStay } from "@/lib/admin/format";
 import { requireAdmin } from "@/lib/admin/session";
 import { loadBlocks, loadStayBook } from "@/lib/admin/stay-data";
 import { t } from "@/lib/admin/strings";
-import { athensDate } from "@/lib/domain/dates";
+import { athensDate, isValidIsoDate } from "@/lib/domain/dates";
 
 const c = t.calendar;
 
@@ -28,12 +23,15 @@ const LEGEND: NightKind[] = [
 export default async function CalendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string | string[] }>;
+  searchParams: Promise<{
+    month?: string | string[];
+    from?: string | string[];
+  }>;
 }) {
   const admin = await requireAdmin();
   const today = athensDate(new Date());
-  const asked = (await searchParams).month;
-  const month = isMonthKey(asked) ? asked : today.slice(0, 7);
+  const query = await searchParams;
+  const month = isMonthKey(query.month) ? query.month : today.slice(0, 7);
 
   const [{ stays }, blocks] = await Promise.all([
     loadStayBook(admin),
@@ -53,32 +51,13 @@ export default async function CalendarPage({
     <div className="stack">
       <PageHead title={c.title} intro={c.intro} />
 
-      <nav className="month-nav" aria-label={c.title}>
-        <Link
-          href={`/admin/calendar?month=${shiftMonth(month, -1)}`}
-          prefetch={false}
-          className="month-step"
-          aria-label={c.previous}
-        >
-          {c.previousShort}
-        </Link>
-        <span className="month-title">{formatMonth(month)}</span>
-        <Link
-          href={`/admin/calendar?month=${shiftMonth(month, 1)}`}
-          prefetch={false}
-          className="month-step"
-          aria-label={c.next}
-        >
-          {c.nextShort}
-        </Link>
-      </nav>
-
       <AvailabilityCalendar
-        key={month}
+        key={`${month}-${isValidIsoDate(query.from) ? query.from : ""}`}
         month={month}
         nights={nights}
         today={today}
         blocks={blockInfo}
+        firstNight={isValidIsoDate(query.from) ? query.from : null}
       />
 
       <ul className="legend">

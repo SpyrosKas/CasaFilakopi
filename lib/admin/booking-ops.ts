@@ -3,7 +3,7 @@ import type { ActionState } from "@/lib/admin/form-state";
 import { errorState } from "@/lib/admin/form-state";
 import { ADMIN_LANGUAGE, t } from "@/lib/admin/strings";
 import { createAdminClient } from "@/lib/db/admin";
-import { QuoteError } from "@/lib/domain/breakdown";
+import { buildPriceBreakdown, QuoteError } from "@/lib/domain/breakdown";
 import type {
   Cents,
   IsoDate,
@@ -12,11 +12,12 @@ import type {
 } from "@/lib/domain/contracts";
 import { checkNightsFree } from "@/lib/domain/availability";
 import { addDays } from "@/lib/domain/dates";
+import { findPromo } from "@/lib/domain/promos";
 import {
   createAvailabilityService,
   createPricingService,
 } from "@/lib/domain/services";
-import { parsePaymentRules } from "@/lib/domain/settings";
+import { parseBookingSettings, parsePaymentRules } from "@/lib/domain/settings";
 import { nightsWord } from "@/lib/admin/format";
 
 // Server helpers shared by the booking actions. Every price comes from
@@ -56,6 +57,85 @@ const lineLabel = (line: PriceBreakdown["lines"][number]): string => {
     : name;
 };
 
+/**
+ * A booking keeps the promo it was made with (D4), even if the code has since
+ * expired or run out. The stored code goes to the domain's own pricing with its
+ * limits lifted, so the price is worked out exactly as for a guest. A code that
+ * was deleted comes back rejected, and the caller warns about it.
+ */
+async function quoteWithOwnPromo(
+  client: ReturnType<typeof createAdminClient>,
+  stay: StayRequest,
+  code: string,
+  now: Date,
+): Promise<PriceBreakdown> {
+  const lastNight = addDays(stay.checkOut, -1);
+  const [room, seasons, overrides, fees, promos, settings] = await Promise.all([
+    client
+      .from("rooms")
+      .select(
+        "is_active, max_adults, max_children, base_price_cents, base_occupancy, extra_guest_fee_cents, cleaning_fee_cents",
+      )
+      .eq("id", stay.roomId)
+      .maybeSingle(),
+    client
+      .from("seasons")
+      .select("start_date, end_date, nightly_cents, weekend_cents")
+      .eq("room_id", stay.roomId)
+      .lte("start_date", lastNight)
+      .gte("end_date", stay.checkIn),
+    client
+      .from("rate_overrides")
+      .select("night, nightly_cents")
+      .eq("room_id", stay.roomId)
+      .gte("night", stay.checkIn)
+      .lte("night", lastNight),
+    client
+      .from("taxes_fees")
+      .select(
+        "name, kind, amount_cents, rate_basis_points, is_vat, valid_from, valid_to, is_active, sort_order",
+      )
+      .eq("is_active", true),
+    client
+      .from("promo_codes")
+      .select(
+        "code, kind, value, valid_from, valid_to, max_uses, used_count, room_ids, is_active",
+      ),
+    client
+      .from("settings")
+      .select("key, value")
+      .in("key", ["booking", "payment"]),
+  ]);
+  for (const result of [room, seasons, overrides, fees, promos, settings]) {
+    if (result.error) throw result.error;
+  }
+  if (!room.data?.is_active) throw new QuoteError("room_inactive");
+
+  const setting = (key: string) =>
+    settings.data?.find((row) => row.key === key)?.value;
+  const stored = findPromo(promos.data ?? [], code);
+
+  return buildPriceBreakdown({
+    stay,
+    room: room.data,
+    seasons: seasons.data ?? [],
+    overrides: overrides.data ?? [],
+    fees: fees.data ?? [],
+    weekendDays: parseBookingSettings(setting("booking")).weekendDays,
+    payment: parsePaymentRules(setting("payment")),
+    promoCode: code,
+    promo: stored && {
+      ...stored,
+      is_active: true,
+      valid_from: null,
+      valid_to: null,
+      max_uses: null,
+      room_ids: null,
+    },
+    now,
+  });
+}
+
 export type QuoteResult =
   | { ok: true; breakdown: PriceBreakdown; warnings: string[] }
   | { ok: false; message: string };
@@ -69,7 +149,8 @@ export type QuoteResult =
 export async function quoteForAdmin(
   stay: StayRequest,
   options: {
-    promoCode?: string;
+    /** The code stored on the booking being changed. */
+    ownPromoCode?: string;
     ownDatesAllowed: boolean;
     now?: Date;
   },
@@ -79,10 +160,9 @@ export async function quoteForAdmin(
 
   let breakdown: PriceBreakdown;
   try {
-    breakdown = await createPricingService(client).quote(
-      { stay, promoCode: options.promoCode },
-      now,
-    );
+    breakdown = options.ownPromoCode
+      ? await quoteWithOwnPromo(client, stay, options.ownPromoCode, now)
+      : await createPricingService(client).quote({ stay }, now);
   } catch (error) {
     if (error instanceof QuoteError) {
       return {

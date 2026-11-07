@@ -13,6 +13,7 @@ import { loadStayBook } from "@/lib/admin/stay-data";
 import {
   filterStays,
   matchesFilters,
+  NO_AMOUNT,
   STAY_TABS,
   tabOf,
   type StayFilters,
@@ -134,7 +135,13 @@ export default async function BookingsPage({
               label={b.filterMoney}
               name="money"
               defaultValue={filters.money ?? ""}
-              options={asOptions(t.stay.money)}
+              options={[
+                ...asOptions(t.stay.money),
+                // Staff never see amounts, so this could only mislead them.
+                ...(admin.role === "owner"
+                  ? [{ value: NO_AMOUNT, label: t.reports.noAmountFilter }]
+                  : []),
+              ]}
             />
           </div>
         </details>

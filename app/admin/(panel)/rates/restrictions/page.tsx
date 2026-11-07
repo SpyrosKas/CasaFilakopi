@@ -160,6 +160,7 @@ export default async function RestrictionsPage() {
           action={saveRestriction}
           submitLabel={r.restrictionAdd}
           pendingLabel={t.common.saving}
+          resetOnOk
         >
           <RuleFields rule={{}} />
         </ActionForm>

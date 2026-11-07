@@ -2,11 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import {
-  callAdminRpc,
-  callRecordingRpc,
-  assertAdminRole,
-} from "@/lib/admin/audit";
+import { callAdminRpc, callRecordingRpc } from "@/lib/admin/audit";
 import {
   dbErrorState,
   manualBreakdown,
@@ -28,6 +24,7 @@ import {
   changeDatesSchema,
   externalDetailsSchema,
   newBookingSchema,
+  notesSchema,
   paymentSchema,
   refundSchema,
   transitionSchema,
@@ -35,6 +32,7 @@ import {
 import { requireAdmin, type AdminContext } from "@/lib/admin/session";
 import { loadBooking, loadBookingMoney } from "@/lib/admin/stay-data";
 import {
+  balanceOf,
   cancellationOutcome,
   planRefund,
   summariseMoney,
@@ -179,7 +177,7 @@ async function priceChange(
       adults: booking.adults,
       children: booking.children,
     },
-    { promoCode: promoOf(booking.price_breakdown), ownDatesAllowed: true },
+    { ownPromoCode: promoOf(booking.price_breakdown), ownDatesAllowed: true },
   );
   if (!quote.ok) {
     return { ok: false as const, state: errorState(quote.message) };
@@ -247,6 +245,26 @@ export async function changeDates(
   redirect(`/admin/bookings/${value.id}`);
 }
 
+export async function saveNotes(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const admin = await requireAdmin();
+  const parsed = notesSchema.safeParse(formFields(formData));
+  if (!parsed.success) return fromZodError(parsed.error);
+
+  try {
+    await callAdminRpc(admin, "update_booking_notes", {
+      p_booking_id: parsed.data.id,
+      p_notes: parsed.data.notes,
+    });
+  } catch (error) {
+    return dbErrorState(error);
+  }
+  refresh();
+  return okState(t.detail.notesSaved);
+}
+
 export async function markStay(
   _previous: ActionState,
   formData: FormData,
@@ -297,10 +315,19 @@ export async function recordPayment(
   }
 
   const { payments, refunds } = await loadBookingMoney(admin, value.id);
-  const { paidCents } = summariseMoney(payments, refunds);
-  const settlesAll = paidCents + value.amount >= booking.total_cents;
+  const money = summariseMoney(payments, refunds);
+  // A second tab or a repeat tap saw other numbers, so it must not pay again.
+  if (money.receivedCents !== value.expectedReceived) {
+    return errorState(t.act.moneyMoved);
+  }
+  const balance = balanceOf(money, booking.total_cents);
+  if (value.amount > balance) return errorState(t.act.errors.overpayment);
   const kind =
-    payments.length > 0 ? "balance" : settlesAll ? "full" : "deposit";
+    payments.length > 0
+      ? "balance"
+      : value.amount === balance
+        ? "full"
+        : "deposit";
 
   try {
     await callRecordingRpc(admin, "record_payment", {
@@ -332,7 +359,12 @@ export async function recordRefund(
   if (!parsed.success) return fromZodError(parsed.error);
   const value = parsed.data;
 
-  const { payments } = await loadBookingMoney(admin, value.id);
+  const { payments, refunds } = await loadBookingMoney(admin, value.id);
+  if (
+    summariseMoney(payments, refunds).refundedCents !== value.expectedRefunded
+  ) {
+    return errorState(t.act.moneyMoved);
+  }
   const payment = payments.find((row) => row.id === value.paymentId);
   if (!payment) return errorState(t.act.errors.payment_not_found);
   if (payment.method === "card") return errorState(t.act.cardNotHere);
@@ -431,21 +463,9 @@ export async function saveExternalDetails(
   if (!parsed.success) return fromZodError(parsed.error);
   const value = parsed.data;
 
-  // The function writes every field, so what Staff cannot touch is sent back
-  // as stored. An amount in a Staff request is ignored, not trusted.
-  await assertAdminRole(admin);
-  let amount = value.amount;
-  if (admin.role !== "owner") {
-    const { data, error } = await createAdminClient()
-      .from("external_events")
-      .select("amount_cents")
-      .eq("id", value.id)
-      .maybeSingle();
-    if (error) return dbErrorState(error);
-    if (!data) return errorState(t.act.errors.event_not_found);
-    amount = data.amount_cents;
-  }
-
+  // Only the Owner's save touches the amount. In a Staff request it is ignored,
+  // and the function leaves what is stored, even mid-edit by the Owner.
+  const isOwner = admin.role === "owner";
   try {
     await callAdminRpc(admin, "update_external_event_details", {
       p_event_id: value.id,
@@ -454,7 +474,8 @@ export async function saveExternalDetails(
       p_guest_phone: value.phone ?? "",
       p_guest_notes: value.notes ?? "",
       // Null clears the amount. The generated type does not allow for that.
-      p_amount_cents: amount as number,
+      p_amount_cents: (isOwner ? value.amount : null) as number,
+      p_update_amount: isOwner,
     });
   } catch (error) {
     return dbErrorState(error);

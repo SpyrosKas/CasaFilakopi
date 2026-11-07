@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useActionState, useState, useTransition, type ReactNode } from "react";
 import {
   ActionButton,
   ActionForm,
+  CheckField,
   Field,
+  FieldError,
   FormMessage,
   SelectField,
 } from "@/components/admin/form";
@@ -14,13 +17,24 @@ import { clearDailyPrices, setDailyPrices } from "@/lib/admin/actions/rates";
 import {
   dayNumber,
   leadingBlanks,
+  shiftMonth,
   type CalendarBlock,
   type NightState,
 } from "@/lib/admin/calendar";
 import { idleState } from "@/lib/admin/form-state";
-import { formatDate, nightsWord } from "@/lib/admin/format";
+import {
+  formatDate,
+  formatEuro,
+  formatMonth,
+  nightsWord,
+} from "@/lib/admin/format";
 import { t } from "@/lib/admin/strings";
-import { addDays, daysBetween, eachNight } from "@/lib/domain/dates";
+import {
+  addDays,
+  daysBetween,
+  eachNight,
+  isValidIsoDate,
+} from "@/lib/domain/dates";
 
 const c = t.calendar;
 const r = t.rates;
@@ -62,25 +76,67 @@ const blockReasons = Object.entries(c.reasons).map(([value, label]) => ({
   label,
 }));
 
-/** Tap a first and last free night to close them. Tap anything else to open it. */
+export function MonthNav({
+  month,
+  hrefFor,
+  label,
+}: {
+  month: string;
+  hrefFor: (month: string) => string;
+  label: string;
+}) {
+  return (
+    <nav className="month-nav" aria-label={label}>
+      <Link
+        href={hrefFor(shiftMonth(month, -1))}
+        prefetch={false}
+        className="month-step"
+        aria-label={c.previous}
+      >
+        {c.previousShort}
+      </Link>
+      <span className="month-title">{formatMonth(month)}</span>
+      <Link
+        href={hrefFor(shiftMonth(month, 1))}
+        prefetch={false}
+        className="month-step"
+        aria-label={c.next}
+      >
+        {c.nextShort}
+      </Link>
+    </nav>
+  );
+}
+
+/**
+ * Tap a first and last free night to close them, moving between months in
+ * between, so a winter closure is one action. The first night travels in the
+ * address. Tap anything else to open it.
+ */
 export function AvailabilityCalendar({
   month,
   nights,
   today,
   blocks,
+  firstNight,
 }: {
   month: string;
   nights: NightState[];
   today: string;
   blocks: (CalendarBlock & { title: string })[];
+  firstNight: string | null;
 }) {
-  const [first, setFirst] = useState<string | null>(null);
+  const router = useRouter();
+  const [first, setFirst] = useState<string | null>(firstNight);
   const [last, setLast] = useState<string | null>(null);
   const [blockId, setBlockId] = useState<string | null>(null);
   const [problem, setProblem] = useState(false);
 
-  const isFree = (date: string) =>
-    nights.find((night) => night.date === date)?.kind === "free";
+  // Only this month is known here. The database has the last word on the rest.
+  const isFree = (date: string) => {
+    const night = nights.find((row) => row.date === date);
+    return !night || night.kind === "free";
+  };
 
   const reset = () => {
     setFirst(null);
@@ -106,8 +162,12 @@ export function AvailabilityCalendar({
   const block = blocks.find((row) => row.id === blockId);
   const end = last ?? first;
 
+  const hrefFor = (target: string) =>
+    `/admin/calendar?month=${target}${first && !last ? `&from=${first}` : ""}`;
+
   return (
     <>
+      <MonthNav month={month} hrefFor={hrefFor} label={c.title} />
       <p className="muted small" role="status">
         {problem
           ? c.notFree
@@ -177,7 +237,10 @@ export function AvailabilityCalendar({
             key={`${first}-${end}`}
             action={async (state, data) => {
               const result = await closeDates(state, data);
-              if (result.status === "ok") reset();
+              if (result.status === "ok") {
+                reset();
+                router.replace(`/admin/calendar?month=${month}`);
+              }
               return result;
             }}
             submitLabel={c.close}
@@ -223,6 +286,17 @@ export function AvailabilityCalendar({
   );
 }
 
+/** A function cannot pass from a server page, so this one lives here. */
+export function RatesMonthNav({ month }: { month: string }) {
+  return (
+    <MonthNav
+      month={month}
+      hrefFor={(target) => `/admin/rates?month=${target}`}
+      label={r.title}
+    />
+  );
+}
+
 export interface PriceDay {
   date: string;
   cents: number;
@@ -258,6 +332,12 @@ function WeekdayBoxes({
   );
 }
 
+/** Exact, and short enough for a square on a phone. */
+const priceText = (cents: number) =>
+  cents % 100 === 0
+    ? `€${cents / 100}`
+    : `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
+
 /** Hidden copies of the choices, so the second button sends the same days. */
 function ClearPrices({
   from,
@@ -279,11 +359,24 @@ function ClearPrices({
       className="stack"
       onSubmit={(event) => {
         event.preventDefault();
+        // Only worth asking once there is a range to name.
+        const needsAsking = isValidIsoDate(from) && isValidIsoDate(to);
+        if (
+          needsAsking &&
+          !window.confirm(r.clearConfirm(formatDate(from), formatDate(to)))
+        ) {
+          return;
+        }
         const data = new FormData(event.currentTarget);
         startTransition(() => formAction(data));
       }}
     >
       <FormMessage state={state} />
+      {Object.entries(state.fieldErrors ?? {}).map(([name, error]) => (
+        <p key={name} className="field-error">
+          {error}
+        </p>
+      ))}
       <input type="hidden" name="from" value={from} />
       <input type="hidden" name="to" value={to} />
       {weekdays.map((day) => (
@@ -340,13 +433,13 @@ export function RatesCalendar({
             ]
               .filter(Boolean)
               .join(" ")}
-            aria-label={`${formatDate(day.date)}: €${Math.round(day.cents / 100)}`}
+            aria-label={`${formatDate(day.date)}: ${formatEuro(day.cents)}`}
             aria-pressed={isPicked(day.date)}
             onClick={() => tap(day.date)}
           >
             <span className="cal-tag">{dayNumber(day.date)}</span>
             <span className={day.isOverride ? "price-set" : "price-normal"}>
-              €{Math.round(day.cents / 100)}
+              {priceText(day.cents)}
               {day.isOverride && "•"}
             </span>
           </button>
@@ -391,8 +484,10 @@ export function RatesCalendar({
                 )
               }
             />
+            <FieldError name="weekdays" />
           </fieldset>
           <Field label={r.price} name="price" inputMode="decimal" />
+          <CheckField label={r.confirmFree} name="confirmFree" />
         </ActionForm>
         <ClearPrices from={from} to={to} weekdays={weekdays} />
       </section>

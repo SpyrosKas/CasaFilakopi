@@ -51,6 +51,7 @@ export interface RefundRow {
   status: Enums["refund_status"];
   reason: string | null;
   created_at: string;
+  settled_at: string | null;
 }
 
 export interface MoneySummary {
@@ -86,6 +87,14 @@ export function summariseMoney(
   };
 }
 
+/**
+ * O1: a refund on a live booking is goodwill and creates no debt, so what is
+ * owed ignores refunds. Disputed money was paid and is with the bank, so it is
+ * not asked for twice (D8).
+ */
+export const balanceOf = (money: MoneySummary, totalCents: number): number =>
+  Math.max(totalCents - money.receivedCents - money.disputedCents, 0);
+
 export function moneyState(
   money: MoneySummary,
   totalCents: number,
@@ -94,7 +103,7 @@ export function moneyState(
   if (money.paidCents <= 0) {
     return money.refundedCents > 0 ? "refunded" : "unpaid";
   }
-  return money.paidCents >= totalCents ? "paid" : "part_paid";
+  return balanceOf(money, totalCents) === 0 ? "paid" : "part_paid";
 }
 
 const snapshotSchema = z.looseObject({
@@ -220,7 +229,7 @@ export interface Stay {
   moneyState: MoneyState;
   /** Still to pay. Always zero on a cancelled booking (D24). */
   balanceCents: number;
-  /** Cancelled bookings: what must still go back to the guest. */
+  /** Must still go back: after a cancellation, or paid above a new price. */
   toRefundCents: number;
   /** The nights this stay paid for. Empty for an import. */
   pricedNights: { night: string; cents: number }[];
@@ -256,9 +265,42 @@ export interface BookingInput {
   cancelled_at: string | null;
 }
 
-const nightsSchema = z.object({
+const pricedSchema = z.object({
   nights: z.array(z.object({ night: z.string(), cents: z.number().int() })),
+  lines: z
+    .array(z.object({ kind: z.string(), totalCents: z.number().int() }))
+    .default([]),
 });
+
+const DISCOUNTED_LINES = ["accommodation", "extra_guest", "cleaning"];
+
+/**
+ * What the guest really paid for each night (O3). A promo comes off the house
+ * lines together, so each night carries its share, with rounding kept so the
+ * nights add up exactly.
+ */
+function nightsAfterPromo({
+  nights,
+  lines,
+}: z.output<typeof pricedSchema>): { night: string; cents: number }[] {
+  const of = (rows: { totalCents: number }[]) =>
+    sumCents(rows.map((row) => row.totalCents));
+  const discount = -of(lines.filter((line) => line.kind === "discount"));
+  const base = of(lines.filter((line) => DISCOUNTED_LINES.includes(line.kind)));
+  const nightsTotal = sumCents(nights.map((row) => row.cents));
+  if (discount <= 0 || base <= 0 || nightsTotal <= 0) return nights;
+
+  const off = Math.round((discount * nightsTotal) / base);
+  let seen = 0;
+  let given = 0;
+  return nights.map(({ night, cents }) => {
+    seen += cents;
+    const target = Math.round((off * seen) / nightsTotal);
+    const share = target - given;
+    given = target;
+    return { night, cents: cents - share };
+  });
+}
 
 const OWES_BALANCE: BookingStatus[] = ["confirmed", "checked_in", "completed"];
 
@@ -280,7 +322,8 @@ export function stayFromBooking(
           paidCents: money.paidCents,
         })
       : null;
-  const priced = nightsSchema.safeParse(booking.price_breakdown);
+  const priced = pricedSchema.safeParse(booking.price_breakdown);
+  const isLive = OWES_BALANCE.includes(booking.status);
 
   return {
     kind: "booking",
@@ -305,11 +348,11 @@ export function stayFromBooking(
     enteredCents: null,
     money,
     moneyState: moneyState(money, booking.total_cents),
-    balanceCents: OWES_BALANCE.includes(booking.status)
-      ? Math.max(booking.total_cents - money.paidCents, 0)
-      : 0,
-    toRefundCents: outcome?.refundCents ?? 0,
-    pricedNights: priced.success ? priced.data.nights : [],
+    balanceCents: isLive ? balanceOf(money, booking.total_cents) : 0,
+    toRefundCents:
+      outcome?.refundCents ??
+      (isLive ? Math.max(money.paidCents - booking.total_cents, 0) : 0),
+    pricedNights: priced.success ? nightsAfterPromo(priced.data) : [],
     isConflicted: false,
     summary: null,
     createdAt: booking.created_at,
@@ -415,6 +458,12 @@ const COUNTS_AS_STAY: StayStatus[] = [
 export const isRealStay = (stay: Stay): boolean =>
   COUNTS_AS_STAY.includes(stay.status);
 
+/** A filter of its own: imports he has not given an amount for yet. */
+export const NO_AMOUNT = "no_amount";
+
+export const isMissingAmount = (stay: Stay): boolean =>
+  stay.kind === "external" && stay.enteredCents === null;
+
 export interface StayFilters {
   tab: StayTab;
   search: string;
@@ -437,7 +486,11 @@ export function matchesSearch(stay: Stay, search: string): boolean {
 export function matchesFilters(stay: Stay, filters: StayFilters): boolean {
   if (filters.status && stay.status !== filters.status) return false;
   if (filters.source && stay.source !== filters.source) return false;
-  if (filters.money && stay.moneyState !== filters.money) return false;
+  if (filters.money === NO_AMOUNT) {
+    if (!isMissingAmount(stay)) return false;
+  } else if (filters.money && stay.moneyState !== filters.money) {
+    return false;
+  }
   if (filters.from && stay.checkOut <= filters.from) return false;
   if (filters.to && stay.checkIn > filters.to) return false;
   return matchesSearch(stay, filters.search);
@@ -516,6 +569,11 @@ export function buildGuests(stays: Stay[]): GuestRecord[] {
     .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
 }
 
+/** Money on a booking that never became a stay. */
+export const holdsMoneyUnconfirmed = (stay: Stay): boolean =>
+  (stay.status === "expired" || stay.status === "pending_payment") &&
+  stay.money.paidCents > 0;
+
 /** What the day looks like. An unmarked arrival today is listed as an arrival. */
 export function dayPlan(stays: Stay[], today: string) {
   const real = stays.filter(isRealStay);
@@ -535,5 +593,8 @@ export function dayPlan(stays: Stay[], today: string) {
       .sort(byArrival)
       .slice(0, 5),
     balances: real.filter((stay) => stay.balanceCents > 0).sort(byArrival),
+    toGiveBack: stays.filter((stay) => stay.toRefundCents > 0).sort(byArrival),
+    // The webhook can leave money on a booking that never completed (D7).
+    moneyHeld: stays.filter(holdsMoneyUnconfirmed).sort(byArrival),
   };
 }
