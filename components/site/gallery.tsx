@@ -7,7 +7,12 @@ import { LineIcon } from "./line-icon";
 import { Photo } from "./photo";
 import { useSnapTrack } from "./snap-track";
 
-export type GalleryPhoto = { src: string; alt: string };
+export type GalleryPhoto = {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+};
 
 function ArrowButtons({
   onPrevious,
@@ -79,8 +84,7 @@ function Lightbox({
           {photos.map((photo, i) => (
             <li key={photo.src}>
               <Photo
-                src={photo.src}
-                alt={photo.alt}
+                {...photo}
                 sizes="100vw"
                 loading={Math.abs(i - startIndex) <= 1 ? "eager" : "lazy"}
               />
@@ -158,7 +162,7 @@ export function Gallery({
               tabIndex={i === index ? 0 : -1}
               onClick={() => setOpenAt(i)}
             >
-              <Photo src={photo.src} alt="" sizes={sizes} />
+              <Photo {...photo} alt="" sizes={sizes} />
             </button>
           </li>
         ))}
@@ -206,7 +210,7 @@ export function GalleryGrid({
             onClick={() => setOpenAt(index)}
           >
             <Photo
-              src={photo.src}
+              {...photo}
               alt=""
               sizes="(min-width: 1024px) 300px, (min-width: 600px) 33vw, 50vw"
             />

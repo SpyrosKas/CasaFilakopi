@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
-import { heroImages } from "@/content/house";
 import { PageHero } from "./hero";
+
+/** Part of the code, so this screen needs neither the database nor Storage. */
+const ERROR_PHOTO = "/error-hero.webp";
 
 /** Shared body of the 404 and error pages. */
 export function ErrorScreen({
@@ -14,7 +16,7 @@ export function ErrorScreen({
 }) {
   return (
     <>
-      <PageHero image={heroImages.page} title={title} />
+      <PageHero image={ERROR_PHOTO} title={title} />
       <section className="section">
         <div className="wrap page-content">
           <p>{body}</p>

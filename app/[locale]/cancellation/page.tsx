@@ -1,17 +1,14 @@
 import { setRequestLocale } from "next-intl/server";
-import { use } from "react";
-import {
-  PlaceholderPage,
-  placeholderMetadata,
-} from "@/components/site/placeholder-page";
+import { TextPage, textPageMetadata } from "@/components/site/placeholder-page";
 
 type Props = { params: Promise<{ locale: string }> };
 
 export function generateMetadata({ params }: Props) {
-  return placeholderMetadata(params, "cancellation");
+  return textPageMetadata(params, "cancellation");
 }
 
-export default function CancellationPage({ params }: Props) {
-  setRequestLocale(use(params).locale);
-  return <PlaceholderPage page="cancellation" />;
+export default async function CancellationPage({ params }: Props) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+  return <TextPage slug="cancellation" locale={locale} />;
 }

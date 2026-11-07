@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
 
 /** The photo behind a hero: the first thing to load, and decoration only. */
-function HeroPhoto({ image }: { image: string }) {
+function HeroPhoto({ image }: { image?: string }) {
+  if (!image) return null;
   return (
     <Image
       src={image}
@@ -26,7 +27,7 @@ export function Hero({
   action,
   sky = false,
 }: {
-  image: string;
+  image?: string;
   welcome?: string;
   title: string;
   action: ReactNode;
@@ -61,7 +62,7 @@ export function HeroReserveButton() {
 }
 
 /** Shorter hero for the new pages. */
-export function PageHero({ image, title }: { image: string; title: string }) {
+export function PageHero({ image, title }: { image?: string; title: string }) {
   return (
     <section className="site-hero page-hero">
       <HeroPhoto image={image} />

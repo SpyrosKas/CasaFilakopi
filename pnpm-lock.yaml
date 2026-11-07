@@ -41,6 +41,9 @@ importers:
       server-only:
         specifier: ^0.0.1
         version: 0.0.1
+      sharp:
+        specifier: ^0.35.5
+        version: 0.35.5(@types/node@24.19.2)
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -78,9 +81,6 @@ importers:
       prettier:
         specifier: ^3.9.10
         version: 3.9.10
-      sharp:
-        specifier: ^0.35.5
-        version: 0.35.5(@types/node@24.19.2)
       tsx:
         specifier: 4.23.15
         version: 4.23.15

@@ -3,9 +3,48 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
+/** Photos come from the public media bucket, and from nowhere else (T4.20). */
+function mediaImagePattern() {
+  const value = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!value) return [];
+  const { protocol, hostname, port } = new URL(value);
+  return [
+    {
+      protocol: protocol.replace(":", "") as "http" | "https",
+      hostname,
+      port,
+      pathname: "/storage/v1/object/public/media/**",
+    },
+  ];
+}
+
+const usesLocalSupabase = /^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+);
+
 const nextConfig: NextConfig = {
   // Keeps the app portable to any Docker host (T1.12).
   output: "standalone",
+  // A second dev server for the database-failure test needs its own folder.
+  ...(process.env.CMS_OFFLINE_DIST
+    ? {
+        distDir: process.env.CMS_OFFLINE_DIST,
+        typescript: { tsconfigPath: "tsconfig.offline.json" },
+      }
+    : {}),
+  // Supabase image transforms need a paid plan, so the Next image optimiser
+  // does the resizing. One format and quality keeps the transformations count
+  // low, and an uploaded file never changes under its name, so a long cache
+  // is safe: a replaced photo gets a new path.
+  images: {
+    remotePatterns: mediaImagePattern(),
+    formats: ["image/webp"],
+    qualities: [75],
+    minimumCacheTTL: 2678400,
+    // The optimiser refuses local addresses, which is where Supabase runs in
+    // development. Hosted projects never set this.
+    dangerouslyAllowLocalIP: usesLocalSupabase,
+  },
   // proxy.ts skips dotted URLs and anything that merely starts with api, admin
   // or _next, so /old.html or /apiary reach [locale] with a bogus locale, whose
   // 404 has no layout and renders blank. This sends them to the styled 404.

@@ -1,5 +1,5 @@
-// Photo layout of the site. Interim until T4.19 moves images to the database;
-// the words live in messages/*.json.
+// Photo layout of the site as first imported (lib/cms/defaults.ts). Yorgos
+// changes photos in Admin; this is only the import and the database fallback.
 
 const photo = (file: string) => `/img/tinified/${file}`;
 
