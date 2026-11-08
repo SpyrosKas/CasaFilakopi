@@ -105,4 +105,14 @@ export interface SitePhoto {
   width: number;
   height: number;
   alt: string;
+  /** CSS object-position for the spot Yorgos chose, or none for the centre. */
+  focus?: string;
+}
+
+/** The stored focus point as CSS, or undefined for the centre. */
+export function focusPosition(
+  x: number | null | undefined,
+  y: number | null | undefined,
+): string | undefined {
+  return x == null || y == null ? undefined : `${x}% ${y}%`;
 }

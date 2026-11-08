@@ -33,6 +33,7 @@ export default async function GalleryPage({ params }: Props) {
     <>
       <PageHero
         image={page.photo("page.hero")?.src}
+        focus={page.photo("page.hero")?.focus}
         title={page.text("hero", "title")}
       />
       <section className="section">

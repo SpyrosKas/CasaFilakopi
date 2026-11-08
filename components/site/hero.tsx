@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
 
 /** The photo behind a hero: the first thing to load, and decoration only. */
-function HeroPhoto({ image }: { image?: string }) {
+function HeroPhoto({ image, focus }: { image?: string; focus?: string }) {
   if (!image) return null;
   return (
     <Image
@@ -14,6 +14,7 @@ function HeroPhoto({ image }: { image?: string }) {
       preload
       sizes="100vw"
       className="site-hero__photo"
+      style={focus ? { objectPosition: focus } : undefined}
       data-backdrop=""
     />
   );
@@ -22,12 +23,15 @@ function HeroPhoto({ image }: { image?: string }) {
 /** Full-screen hero of Home, The Host and Directions. */
 export function Hero({
   image,
+  focus,
   welcome,
   title,
   action,
   sky = false,
 }: {
   image?: string;
+  /** Ignored with `sky`, whose layout places the photo itself. */
+  focus?: string;
   welcome?: string;
   title: string;
   action: ReactNode;
@@ -36,7 +40,7 @@ export function Hero({
 }) {
   return (
     <section className={`site-hero${sky ? " site-hero--sky" : ""}`}>
-      <HeroPhoto image={image} />
+      <HeroPhoto image={image} focus={sky ? undefined : focus} />
       <div className="site-hero-inner" data-reveal-load="fade-up">
         <div className="site-hero__panel">
           <h1>
@@ -62,10 +66,18 @@ export function HeroReserveButton() {
 }
 
 /** Shorter hero for the new pages. */
-export function PageHero({ image, title }: { image?: string; title: string }) {
+export function PageHero({
+  image,
+  focus,
+  title,
+}: {
+  image?: string;
+  focus?: string;
+  title: string;
+}) {
   return (
     <section className="site-hero page-hero">
-      <HeroPhoto image={image} />
+      <HeroPhoto image={image} focus={focus} />
       <div className="site-hero-inner" data-reveal-load="fade-up">
         <div className="site-hero__panel">
           <h1>

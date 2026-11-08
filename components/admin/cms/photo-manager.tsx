@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { ConfirmDialog } from "@/components/admin/cms/confirm-dialog";
+import { FocusEditor } from "@/components/admin/cms/focus-editor";
 import { useUnsavedWarning } from "@/components/admin/cms/use-unsaved-warning";
 import {
   deleteEverywhere,
@@ -399,6 +400,12 @@ export function PhotoManager({
                   onSaved={(result) => apply(result)}
                 />
               )}
+              <FocusEditor
+                key={`${item.mediaId}|${item.focus?.x}|${item.focus?.y}`}
+                item={item}
+                collection={def.id}
+                onSaved={(result) => apply(result)}
+              />
               <div className="cms-photo-actions">
                 {total > 1 && (
                   <>
