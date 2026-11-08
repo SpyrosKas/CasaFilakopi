@@ -14,12 +14,15 @@ export type DatabaseJob = (typeof DATABASE_JOBS)[number];
 /** /api/cron/health writes one of these an hour, whatever else happens. */
 export const HEARTBEAT_JOB = "job_health";
 
-/** A site job that also writes a row on every run. */
-const SITE_JOB = "scheduled_emails";
+/** Site jobs that also write a row on every run. */
+const SITE_JOBS = ["scheduled_emails", "cms_cleanup"] as const;
 
-export type WatchedJob = DatabaseJob | typeof SITE_JOB;
+export type WatchedJob = DatabaseJob | (typeof SITE_JOBS)[number];
 
-export const WATCHED_JOBS: readonly WatchedJob[] = [...DATABASE_JOBS, SITE_JOB];
+export const WATCHED_JOBS: readonly WatchedJob[] = [
+  ...DATABASE_JOBS,
+  ...SITE_JOBS,
+];
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -30,6 +33,7 @@ const MAX_AGE_MS: Record<WatchedJob, number> = {
   purge_admin_attempts: 30 * HOUR_MS,
   apply_retention: 30 * HOUR_MS,
   scheduled_emails: 3 * HOUR_MS,
+  cms_cleanup: 30 * HOUR_MS,
 };
 
 /** The site's jobs count as silent after this, allowing for one missed run. */

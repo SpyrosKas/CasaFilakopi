@@ -135,6 +135,8 @@ export const opsEn = {
       purge_admin_attempts: "Clearing old sign-in attempts",
       apply_retention: "Removing old guest data",
       scheduled_emails: "Sending scheduled emails",
+      cms_cleanup: "Clearing unfinished photo uploads",
+      channel_sync: "Checking the Airbnb and Booking.com calendars",
     },
     stale: (label: string) =>
       `"${label}" has not run for longer than it should. Tell whoever looks after the site.`,

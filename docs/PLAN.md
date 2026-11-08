@@ -377,8 +377,8 @@ Security and tooling:
 **Track OPS**
 - [x] T5.8 Editable email templates, remaining emails (`EML-02`, `EML-03`, `EML-06`, `EML-09`, `ADM-27`)
 - [x] T5.8a Scheduled messages: Yorgos sets rules like "7 days before arrival" or "1 day after check-out", per language, on/off, plus one-off sends at a chosen date on a single booking
-- [ ] T5.8b Automatic guest emails verified end to end: booking confirmation, payment confirmation, reminders, and invoice/receipt once D4 is answered
-- [ ] T5.9 All scheduled jobs with logging and alerts (`JOB-01`, `JOB-04`, `JOB-07`, `JOB-09`)
+- [ ] T5.8b Automatic guest emails verified end to end: booking confirmation, payment confirmation, reminders, and invoice/receipt once D4 is answered. 2026-11-08: confirmation, receipt and host notice delivered on staging. The pre-arrival email for CF-2026-00013 is due on staging 2026-11-13 09:00 Athens; thank-you is off by default; balance reminders apply in Deposit mode only and are covered by `tests/db/email.test.ts`
+- [ ] T5.9 All scheduled jobs with logging and alerts (`JOB-01`, `JOB-04`, `JOB-07`, `JOB-09`). 2026-11-08: all 10 jobs on staging checked. Found the upload cleanup only accepted GET while pg_net sends POST, so it never ran; fixed, and it now logs every run and is watched by the health job. Calendar sync now logs runs that did work and alerts after three crashes in a row. To tick: a `cms_cleanup` success row on staging after 03:37 UTC
 - [x] T5.10 Guests, GDPR export/anonymise, retention (`ADM-20`, `CMP-01`, `CMP-02`, `JOB-08`). Anonymise must cover `bookings.guest_*` and `special_requests`, `email_logs`, `contact_messages`, `external_events.guest_*`, `stripe_events.payload`
 - [x] T5.11 Reports, user management, languages (`ADM-23`, `ADM-29`, `ADM-30`)
 - [x] T5.12 SEO: sitemap, hreflang, schema.org (`WEB-09`); analytics after consent (`WEB-13`); registry number (`WEB-15`, `CMP-05`)
@@ -400,6 +400,8 @@ Security and tooling:
 - [x] T6.13 Checkout country dropdown (2026-11-08): countries in the guest's language, picking one fills the phone dialling code, still editable; the booking keeps the English country name
 - [x] T6.14 Admin menu in groups (2026-11-08): Guests and money, Prices and stays, Website, Setup; staff see only their links. Admin e2e (mobile, Greek, auth, screens: 77) pass
 - [x] T6.15 Dependabot alert #5: jQuery 3.2.1 in the legacy site on `master` (`js/jquery-3.2.1.min.js`), fixed in 3.4.0. YOU decided 2026-11-08: leave it, the legacy site passes no visitor input to jQuery, and it goes away at T7.5/T7.7
+- [x] T6.16 Admin speed (2026-11-08): each click waited for about five trips to Supabase one after another before the page could start. The proxy now checks the session token locally against the project's signing key (`getClaims`, ES256), and the page asks the auth server, the profile and `current_admin_role` at once, keeping every check in the same order. Menu taps show a thin progress bar after 120 ms (`useLinkStatus`). A page-level `loading.tsx` was tried and dropped: it swapped out the photo uploader mid-upload (cms e2e race tests). Admin and CMS e2e pass
+- [x] T6.17 Go-live checklist written: [go-live.md](go-live.md), from the final OK to handover, with rollback
 
 - [ ] T6.9 HOST sets real starting values for payment and cancellation rules in Admin
 - [ ] T6.10 HOST test, unaided: change a cancellation rule, upload, delete and reorder photos, from a phone

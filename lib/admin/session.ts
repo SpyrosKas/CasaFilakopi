@@ -74,17 +74,12 @@ export async function clearActive(): Promise<void> {
 export const resolveAdminSession = cache(async (): Promise<AdminSession> => {
   const supabase = await createAdminSessionClient();
 
-  // Only the token is read here, and getUser checks it on the next line.
+  // Only the token is read here. getUser checks it below, before any of it
+  // is trusted.
   const {
     data: { session },
   } = await supabase.auth.getSession();
   if (!session) return { state: "anonymous", expired: false };
-
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser(session.access_token);
-  if (error || !user) return { state: "anonymous", expired: false };
 
   const claims = readClaims(session.access_token);
   const store = await cookies();
@@ -101,13 +96,30 @@ export const resolveAdminSession = cache(async (): Promise<AdminSession> => {
   });
   if (activity === "expired") return { state: "anonymous", expired: true };
 
-  // admin_profiles has a self-read policy, so this works before TOTP is done.
-  const { data: profile } = await supabase
-    .from("admin_profiles")
-    .select("role, display_name")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (!profile) return { state: "not_admin", supabase };
+  // Three independent questions, asked at once rather than one after another:
+  // one trip instead of three on every click. Each answer is still checked
+  // below in the same order, and none is used until getUser has passed.
+  // admin_profiles has a self-read policy, so it works before TOTP is done.
+  const [userResult, profileResult, roleResult] = await Promise.all([
+    supabase.auth.getUser(session.access_token),
+    supabase
+      .from("admin_profiles")
+      .select("id, role, display_name")
+      .eq("id", claims.userId ?? "")
+      .maybeSingle(),
+    supabase.rpc("current_admin_role"),
+  ]);
+
+  const {
+    data: { user },
+    error,
+  } = userResult;
+  if (error || !user) return { state: "anonymous", expired: false };
+
+  const profile = profileResult.data;
+  if (!profile || profile.id !== user.id) {
+    return { state: "not_admin", supabase };
+  }
 
   const totp = (user.factors ?? []).find(
     (factor) => factor.factor_type === "totp" && factor.status === "verified",
@@ -133,8 +145,7 @@ export const resolveAdminSession = cache(async (): Promise<AdminSession> => {
   // Only the database decides. current_admin_role() is null for anyone with a
   // verified factor and no aal2, and for an Owner without aal2, so a forged or
   // stale state above cannot pass this.
-  const { data: role, error: roleError } =
-    await supabase.rpc("current_admin_role");
+  const { data: role, error: roleError } = roleResult;
   if (roleError || role !== profile.role) {
     return { state: "not_admin", supabase };
   }

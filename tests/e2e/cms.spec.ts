@@ -1170,6 +1170,11 @@ test.describe("who may use all this", () => {
     });
     expect(scheduler.status()).toBe(200);
     expect(await scheduler.json()).toEqual({ removed: 0 });
+    // The database scheduler (pg_net) sends POST.
+    const posted = await request.post("/api/cron/cms", {
+      headers: { authorization: "Bearer cms-e2e-cron" },
+    });
+    expect(posted.status()).toBe(200);
   });
 
   test("Staff cannot open the screens", async () => {

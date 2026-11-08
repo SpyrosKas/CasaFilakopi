@@ -61,9 +61,12 @@ export async function adminProxy(request: NextRequest): Promise<NextResponse> {
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_ADMIN_PATHS.includes(path);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Checks the token's signature locally against the project's published key,
+  // so a click costs no trip to the auth server here. The page's own
+  // resolveAdminSession() still asks the auth server, which catches a removed
+  // or signed-out account.
+  const { data: verified } = await supabase.auth.getClaims();
+  const user = verified?.claims.sub ? verified.claims : null;
 
   const redirectToLogin = (expired: boolean) => {
     const url = request.nextUrl.clone();

@@ -248,10 +248,11 @@ describe("summariseJobs", () => {
           run("complete_finished_bookings", 4),
           run("apply_retention", 31),
           run("scheduled_emails", 2),
+          run("cms_cleanup", 31),
         ],
         now,
       ).stale,
-    ).toEqual(["release_expired_holds", "apply_retention"]);
+    ).toEqual(["release_expired_holds", "apply_retention", "cms_cleanup"]);
   });
 });
 

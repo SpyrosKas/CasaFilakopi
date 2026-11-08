@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useAdminI18n } from "@/components/admin/language-provider";
 import { LanguageSwitch } from "@/components/admin/language-switch";
+import { LinkPending } from "@/components/admin/link-pending";
 import { useHydrated } from "@/components/admin/use-hydrated";
 import { logout } from "@/lib/admin/actions/auth";
 import type { AdminStrings } from "@/lib/admin/strings";
@@ -88,6 +89,7 @@ export function AdminNav({ isOwner }: { isOwner: boolean }) {
     <nav className="tabbar" aria-label={t.nav.label} data-pinned>
       <Link href="/admin" className="tabbar-brand" prefetch={false}>
         {t.common.appName}
+        <LinkPending />
       </Link>
       <div id="admin-menu" className={open ? "menu menu-open" : "menu"}>
         <ul>
@@ -106,6 +108,7 @@ export function AdminNav({ isOwner }: { isOwner: boolean }) {
                       onClick={() => setOpen(false)}
                     >
                       {t.nav[link.key]}
+                      <LinkPending />
                     </Link>
                   </li>
                 ))}
@@ -137,6 +140,7 @@ export function AdminNav({ isOwner }: { isOwner: boolean }) {
               onClick={() => setOpen(false)}
             >
               {t.nav[link.key]}
+              <LinkPending />
             </Link>
           </li>
         ))}

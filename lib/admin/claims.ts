@@ -2,6 +2,8 @@
 // This does not verify anything: call getUser with the token first.
 
 export interface AdminClaims {
+  /** The user id (`sub`). Trust it only after getUser has passed. */
+  userId: string | null;
   sessionId: string | null;
   aal: string | null;
   /** Sign-in methods used in this session. */
@@ -11,6 +13,7 @@ export interface AdminClaims {
 }
 
 interface RawClaims {
+  sub?: unknown;
   session_id?: unknown;
   aal?: unknown;
   amr?: unknown;
@@ -33,6 +36,7 @@ export function readClaims(accessToken: string): AdminClaims {
     : [];
 
   return {
+    userId: typeof raw.sub === "string" ? raw.sub : null,
     sessionId: typeof raw.session_id === "string" ? raw.session_id : null,
     aal: typeof raw.aal === "string" ? raw.aal : null,
     methods: entries.map((e) => e.method),

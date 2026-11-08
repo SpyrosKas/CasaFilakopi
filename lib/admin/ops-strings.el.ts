@@ -137,6 +137,8 @@ export const opsEl: Words<typeof opsEn> = {
       purge_admin_attempts: "Καθαρισμός παλιών προσπαθειών σύνδεσης",
       apply_retention: "Διαγραφή παλιών στοιχείων επισκεπτών",
       scheduled_emails: "Αποστολή προγραμματισμένων email",
+      cms_cleanup: "Καθαρισμός ημιτελών μεταφορτώσεων φωτογραφιών",
+      channel_sync: "Έλεγχος ημερολογίων Airbnb και Booking.com",
     },
     failed: (label: string, when: string) =>
       `Το «${label}» απέτυχε στην τελευταία εκτέλεση (${when}). Ενημερώστε όποιον φροντίζει την ιστοσελίδα.`,

@@ -196,6 +196,7 @@ describe("token claims", () => {
   it("reads the level, session and first sign-in time", () => {
     const claims = readClaims(
       token({
+        sub: "user-1",
         session_id: SESSION,
         aal: "aal2",
         amr: [
@@ -205,6 +206,7 @@ describe("token claims", () => {
       }),
     );
     expect(claims).toEqual({
+      userId: "user-1",
       sessionId: SESSION,
       aal: "aal2",
       methods: ["totp", "password"],
@@ -214,6 +216,7 @@ describe("token claims", () => {
 
   it("returns nothing usable for a bad token", () => {
     expect(readClaims("not-a-token")).toEqual({
+      userId: null,
       sessionId: null,
       aal: null,
       methods: [],
