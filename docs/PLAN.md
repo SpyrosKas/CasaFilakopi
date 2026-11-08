@@ -388,11 +388,11 @@ Security and tooling:
 ### Phase 6: Hardening (QA, LEAD)
 
 - [x] T6.1 Playwright E2E: booking, contact, manual booking, block, cancel with refund, sync conflict (`QA-05`)
-- [ ] T6.2 Lighthouse 90+ and WCAG 2.1 AA in CI (`WEB-01`, `WEB-14`, `QA-07`)
+- [x] T6.2 Lighthouse 90+ and WCAG 2.1 AA in CI (`WEB-01`, `WEB-14`, `QA-07`) (2026-11-08: Lighthouse runs in CI on a production-style build; accessibility, best practices and SEO 100 on every page; performance 91–96, Greek Home 89, as a warning. axe WCAG 2.1 AA was already in test:prod)
 - [x] T6.3 Security headers, CSP, Zod, rate limits (`PLT-05`)
-- [ ] T6.4 Full `/security-review`; independent review of payment and RLS paths
+- [x] T6.4 Full `/security-review`; independent review of payment and RLS paths (2026-11-08: webhook signature, idempotency and amount checks; origin checks and rate limits; guest tokens hashed with expiry; every Admin action checks the role; with the public key on staging, only 10 public-content tables answer and no draft, booking, guest, payment, email, invoice or audit row is reachable; invoice files private; no keys in git history. One fix: migration 19 hides `media.created_by` from the public (local and CI; staging after YOU approve the push). Low, by design: the return page gives the guest link to whoever holds the Stripe session id)
 - [ ] T6.5 Sentry, uptime, structured logs (`PLT-06`, `PLT-07`)
-- [ ] T6.6 Backup and tested restore on staging (`SUP-10`)
+- [x] T6.6 Backup and tested restore on staging (`SUP-10`) (2026-11-08: `scripts/backup.sh` copies the staging database and all Storage files read-only; restored into local Supabase, 47 tables and 819 rows equal to staging, the site ran on it. Steps in the runbook. Supabase's own daily-backup restore needs Pro, so it is rehearsed at T7.1)
 - [x] T6.7 README, runbook, ER diagram, host guide in Greek and English (`DOC-01` to `DOC-04`)
 - [x] T6.8 Late-payment and double-webhook drills
 - [x] T6.11 Calendar feedback (2026-11-07): past dates faded, price per night on each free date, general minimum stay in Admin → Booking settings next to the maximum, and a clear message on a too-short or too-long stay, in the calendar and from the server
@@ -408,7 +408,7 @@ Security and tooling:
 
 ### Phase 7: Launch (YOU, HOST, LEAD)
 
-- [ ] T7.1 A10, A11: Stripe live, Supabase production, Vercel Pro
+- [ ] T7.1 A10, A11: Stripe live, Supabase production, Vercel Pro; rehearse one dashboard restore of a daily backup before real bookings
 - [ ] T7.2 Production migrations, seed real rates and content
 - [ ] T7.3 Import existing future bookings from OTAs before opening sales
 - [ ] T7.4 One real low-value booking, refund it

@@ -33,7 +33,7 @@ Production runs on Supabase Pro, which keeps daily backups. Staging on the free 
 
 The database holds everything except the files in Storage. Photos in `media` can be re-imported with `pnpm migrate:media`, but anything Yorgos uploaded later cannot, and invoice PDFs in `invoices` are tax records. Daily backups do not include Storage objects, so copy the `invoices` bucket regularly.
 
-**To restore** (Not yet rehearsed):
+**To restore from Supabase's daily backup** (Not yet rehearsed: staging has no daily backups, so this is tried on production before launch, T7.1):
 
 1. Stop new bookings first: pause the project's web deployment in Vercel, or show maintenance, so nothing is written on top.
 2. Supabase dashboard, Database, Backups: restore the chosen day. This replaces the whole database and takes the project offline for a while.
@@ -42,6 +42,29 @@ The database holds everything except the files in Storage. Photos in `media` can
 5. Run each channel sync once from Channel sync, so imports catch up.
 6. Check Home for alerts, and compare the next 90 days of bookings with Airbnb and Booking.com by eye.
 7. Reopen the site.
+
+### Our own copy (rehearsed on staging, 2026-11-08)
+
+Supabase's daily backups cover the database only, and staging has none. Our own copy covers the database and every Storage file, and works on any plan:
+
+```bash
+scripts/backup.sh <project-ref> <private-folder>
+```
+
+It only reads from the project. On staging it took under a minute and wrote `schema.sql`, `data.sql` and 84 files (67 photos, 17 invoice PDFs). Keep the folder private: it holds guest data and tax records.
+
+**To restore our copy into a fresh database** (rehearsed into local Supabase, 2026-11-08: 47 tables, 819 rows, every count equal to staging; the site ran on it with the right taken nights, prices and photos):
+
+1. Create the database from the code: on a new project, `supabase db push`; locally, `supabase db reset --no-seed`.
+2. Migrations insert a default row in `settings` and `audit_log`, and create the Storage buckets. Clear them, or the copy of those tables is refused as a duplicate and silently missing:
+   ```sql
+   set session_replication_role = replica;
+   truncate public.settings, public.audit_log;
+   delete from storage.buckets;
+   ```
+3. Load `data.sql` with `psql`. Two errors about `buckets_vectors` and `vector_indexes` are expected: Supabase internals we do not use.
+4. Upload the files: `supabase storage cp -r <folder>/files/<bucket>/<bucket> ss:/// --experimental`, with `--remote=<ref>` for a hosted project.
+5. Compare row counts with the source, then follow steps 3 to 7 above (Stripe events, channel sync, alerts, reopen).
 
 An anonymised guest can come back with a restore. Afterwards re-run `select public.anonymise_guest(id, null)` for anyone who asked to be removed since that backup. Keep that list somewhere outside the database: the `anonymise` entries in `audit_log` give the guest ids, and they are in the backup only up to its date.
 
