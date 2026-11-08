@@ -179,6 +179,18 @@ describe("anonymous visitor", () => {
     expect(JSON.stringify(rows)).toContain("live");
   });
 
+  it("reads a photo's path and size, never who uploaded it", async () => {
+    await expect(
+      anon((c) => c.query(`select created_by from public.media limit 1`)),
+    ).rejects.toThrow(DENIED);
+    await expect(
+      anon((c) => c.query(`select * from public.media limit 1`)),
+    ).rejects.toThrow(DENIED);
+    await anon((c) =>
+      c.query(`select id, path, width, height, alt from public.media limit 1`),
+    );
+  });
+
   it("sees only public settings", async () => {
     const { rows } = await anon((c) =>
       c.query(`select key from public.settings`),
