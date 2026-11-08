@@ -395,57 +395,6 @@ test.describe("photos", () => {
     await visitorPage.close();
   });
 
-  test("framing keeps the chosen spot in view, saved and public", async () => {
-    await page.goto(ROOM_PHOTOS);
-    const first = (await mediaInSection())[0];
-    const framing = page.locator(".cms-photo").first().locator(".cms-focus");
-    await framing.locator("summary").click();
-    const picker = framing.getByRole("button", {
-      name: /Choose the spot to keep in view/,
-    });
-    const box = (await picker.boundingBox())!;
-    await picker.click({
-      position: { x: box.width * 0.2, y: box.height * 0.8 },
-    });
-    // The keyboard moves it too, in steps of 5.
-    await picker.press("ArrowRight");
-    await framing.getByRole("button", { name: "Save framing" }).click();
-    await expectNotice("Framing saved.");
-
-    const stored = async () =>
-      (
-        await db.query<{ focus_x: number | null; focus_y: number | null }>(
-          `select focus_x, focus_y from public.media where id = $1`,
-          [first.id],
-        )
-      ).rows[0];
-    const { focus_x: x, focus_y: y } = await stored();
-    expect(x).toBeGreaterThanOrEqual(22);
-    expect(x).toBeLessThanOrEqual(28);
-    expect(y).toBeGreaterThanOrEqual(77);
-    expect(y).toBeLessThanOrEqual(83);
-
-    const visitorPage = await visitor.newPage();
-    await visitorPage.goto(PUBLIC_EN);
-    await expect(visitorPage.locator(".gallery__track img").first()).toHaveCSS(
-      "object-position",
-      `${x}% ${y}%`,
-    );
-
-    const again = page.locator(".cms-photo").first().locator(".cms-focus");
-    await again.locator("summary").click();
-    await again.getByRole("button", { name: "Back to centre" }).click();
-    await expect
-      .poll(stored, { timeout: 30_000 })
-      .toEqual({ focus_x: null, focus_y: null });
-    await visitorPage.reload();
-    await expect(visitorPage.locator(".gallery__track img").first()).toHaveCSS(
-      "object-position",
-      "50% 50%",
-    );
-    await visitorPage.close();
-  });
-
   test("the keyboard reaches and works the move buttons", async () => {
     await page.goto(ROOM_PHOTOS);
     const before = await mediaInSection();

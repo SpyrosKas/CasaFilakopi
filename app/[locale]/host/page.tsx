@@ -24,7 +24,6 @@ export default async function HostPage({ params }: Props) {
     <>
       <Hero
         image={page.photo("host.hero")?.src}
-        focus={page.photo("host.hero")?.focus}
         title={page.text("hero", "title")}
         action={<HeroReserveButton />}
       />

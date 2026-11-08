@@ -81,8 +81,6 @@ export interface PhotoItem {
   width: number;
   height: number;
   alt: { en: string; el: string };
-  /** Percent from the left and top, or null for the centre. */
-  focus: { x: number; y: number } | null;
   /** Other places this photo appears. */
   usedElsewhere: string[];
   /** True when it is the only photo of a place that must have one. */
@@ -95,8 +93,6 @@ interface MediaRow {
   width: number | null;
   height: number | null;
   alt: unknown;
-  focus_x: number | null;
-  focus_y: number | null;
 }
 
 const altOf = (value: unknown) => {
@@ -145,7 +141,7 @@ export async function loadCollection(
 ): Promise<PhotoItem[]> {
   const { data, error } = await admin.supabase
     .from("media_placements")
-    .select("media(id, path, width, height, alt, focus_x, focus_y)")
+    .select("media(id, path, width, height, alt)")
     .eq("collection", collection)
     .order("sort_order");
   if (error) throw error;
@@ -169,10 +165,6 @@ function toItem(
     width: row.width ?? 1600,
     height: row.height ?? 1067,
     alt: altOf(row.alt),
-    focus:
-      row.focus_x == null || row.focus_y == null
-        ? null
-        : { x: row.focus_x, y: row.focus_y },
     ...usage,
   };
 }
@@ -219,9 +211,7 @@ export async function loadPhotoOverview(admin: AdminContext) {
 function unusedQuery(admin: AdminContext) {
   return admin.supabase
     .from("media")
-    .select(
-      "id, path, width, height, alt, focus_x, focus_y, media_placements!left(id)",
-    )
+    .select("id, path, width, height, alt, media_placements!left(id)")
     .eq("bucket", "media")
     .is("media_placements", null)
     .order("created_at", { ascending: false });

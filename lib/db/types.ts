@@ -481,14 +481,14 @@ isOneToOne: false
                   ]
                 },"media": {
                   Row: {
-                    "alt": NonNullable<Json>,"bucket": string,"created_at": string,"created_by": string | null,"focus_x": number | null,"focus_y": number | null,"height": number | null,"id": string,"mime_type": string,"path": string,"size_bytes": number | null,"updated_at": string,"width": number | null
+                    "alt": NonNullable<Json>,"bucket": string,"created_at": string,"created_by": string | null,"height": number | null,"id": string,"mime_type": string,"path": string,"size_bytes": number | null,"updated_at": string,"width": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "alt"?: NonNullable<Json>,"bucket"?: string,"created_at"?: string,"created_by"?: string | null,"focus_x"?: number | null,"focus_y"?: number | null,"height"?: number | null,"id"?: string,"mime_type": string,"path": string,"size_bytes"?: number | null,"updated_at"?: string,"width"?: number | null
+                    "alt"?: NonNullable<Json>,"bucket"?: string,"created_at"?: string,"created_by"?: string | null,"height"?: number | null,"id"?: string,"mime_type": string,"path": string,"size_bytes"?: number | null,"updated_at"?: string,"width"?: number | null
                   }
                   Update: {
-                    "alt"?: NonNullable<Json>,"bucket"?: string,"created_at"?: string,"created_by"?: string | null,"focus_x"?: number | null,"focus_y"?: number | null,"height"?: number | null,"id"?: string,"mime_type"?: string,"path"?: string,"size_bytes"?: number | null,"updated_at"?: string,"width"?: number | null
+                    "alt"?: NonNullable<Json>,"bucket"?: string,"created_at"?: string,"created_by"?: string | null,"height"?: number | null,"id"?: string,"mime_type"?: string,"path"?: string,"size_bytes"?: number | null,"updated_at"?: string,"width"?: number | null
                   }
                   Relationships: [
                     

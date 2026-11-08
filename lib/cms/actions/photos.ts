@@ -16,7 +16,6 @@ import { collectionName, findCollection } from "@/lib/cms/registry";
 import { refreshPublicPages } from "@/lib/cms/refresh";
 import {
   altSchema,
-  focusSchema,
   deleteSchema,
   finishUploadSchema,
   placementSchema,
@@ -424,35 +423,6 @@ export async function saveAlt(input: unknown): Promise<PhotoResult> {
     ]);
     refreshAdmin();
     return await sectionResult(admin, collection, t.photos.altSaved);
-  } catch {
-    return failed();
-  }
-}
-
-/** The spot every frame keeps in view. Null puts it back in the centre. */
-export async function saveFocus(input: unknown): Promise<PhotoResult> {
-  const { cms: t } = await adminI18n();
-  const failed = failure(t);
-
-  const admin = await requireOwner();
-  const parsed = focusSchema.safeParse(input);
-  if (!parsed.success) return failed();
-  const { collection, mediaId, focus } = parsed.data;
-
-  try {
-    const { error } = await admin.supabase
-      .from("media")
-      .update({ focus_x: focus?.x ?? null, focus_y: focus?.y ?? null })
-      .eq("id", mediaId);
-    if (error) throw error;
-
-    const places = await placesUsing(admin, mediaId);
-    refreshPublicPages([
-      ...pagesOf(await collectionsOf(admin, mediaId)),
-      ...(places.length ? ["home"] : []),
-    ]);
-    refreshAdmin();
-    return await sectionResult(admin, collection, t.photos.focusSaved);
   } catch {
     return failed();
   }

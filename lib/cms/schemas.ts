@@ -163,18 +163,6 @@ export const altSchema = z.object({
     .transform((value) => sanitizeLine(value).trim()),
 });
 
-/** A focus point, or null to go back to the centre. */
-export const focusSchema = z.object({
-  collection: collectionSchema,
-  mediaId: z.uuid(),
-  focus: z
-    .object({
-      x: z.number().int().min(0).max(100),
-      y: z.number().int().min(0).max(100),
-    })
-    .nullable(),
-});
-
 export const placementSchema = z.object({
   collection: collectionSchema,
   mediaId: z.uuid(),

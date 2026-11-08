@@ -28,7 +28,6 @@ export async function ReserveBand() {
             alt=""
             fill
             sizes="(min-width: 900px) 56vw, 100vw"
-            style={photo.focus ? { objectPosition: photo.focus } : undefined}
           />
         )}
       </div>

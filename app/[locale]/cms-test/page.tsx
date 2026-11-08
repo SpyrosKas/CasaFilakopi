@@ -32,7 +32,6 @@ export default async function CmsTestPage({ params }: Props) {
     <>
       <PageHero
         image={page.photo("test.hero")?.src}
-        focus={page.photo("test.hero")?.focus}
         title={page.text("hero", "title")}
       />
       <section className="section house-section house-tinted">

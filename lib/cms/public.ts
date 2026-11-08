@@ -23,7 +23,6 @@ import type {
   PageDef,
   SitePhoto,
 } from "@/lib/cms/types";
-import { focusPosition } from "@/lib/cms/types";
 import type { Database } from "@/lib/db/types";
 import { getPublicEnv } from "@/lib/env";
 import {
@@ -115,9 +114,7 @@ async function readPhotos(
 ): Promise<Record<string, SitePhoto[]>> {
   const { data, error } = await client
     .from("media_placements")
-    .select(
-      "collection, sort_order, media(path, width, height, alt, focus_x, focus_y)",
-    )
+    .select("collection, sort_order, media(path, width, height, alt)")
     .in("collection", collections)
     .order("sort_order");
   if (error) throw error;
@@ -131,7 +128,6 @@ async function readPhotos(
       width: row.media.width ?? 1600,
       height: row.media.height ?? 1067,
       alt: alt[lang] ?? "",
-      focus: focusPosition(row.media.focus_x, row.media.focus_y),
     });
   }
   return photos;
@@ -531,7 +527,7 @@ export const loadPlaces = cache(
       const query = client
         .from("places")
         .select(
-          "id, name, description, status, media(path, width, height, alt, focus_x, focus_y)",
+          "id, name, description, status, media(path, width, height, alt)",
         )
         .order("sort_order");
       const { data, error } = await (preview
@@ -549,7 +545,6 @@ export const loadPlaces = cache(
                 width: row.media.width ?? 1600,
                 height: row.media.height ?? 1067,
                 alt: localized(row.media.alt, lang),
-                focus: focusPosition(row.media.focus_x, row.media.focus_y),
               }
             : null,
         }))
