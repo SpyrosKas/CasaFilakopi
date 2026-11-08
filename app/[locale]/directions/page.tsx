@@ -29,6 +29,7 @@ export default async function DirectionsPage({ params }: Props) {
     <>
       <Hero
         image={page.photo("directions.hero")?.src}
+        focus={page.photo("directions.hero")?.focus}
         welcome={page.text("hero", "welcome")}
         title={tCommon("siteName")}
         action={<HeroReserveButton />}

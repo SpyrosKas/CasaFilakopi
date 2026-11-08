@@ -37,7 +37,11 @@ export default async function CancelledPage({ params, searchParams }: Props) {
 
   return (
     <>
-      <PageHero image={hero.photo("page.hero")?.src} title={t("title")} />
+      <PageHero
+        image={hero.photo("page.hero")?.src}
+        focus={hero.photo("page.hero")?.focus}
+        title={t("title")}
+      />
       <section className="section">
         <div className="wrap book-page">
           <BookingMessages>

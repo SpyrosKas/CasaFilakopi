@@ -187,8 +187,17 @@ describe("anonymous visitor", () => {
       anon((c) => c.query(`select * from public.media limit 1`)),
     ).rejects.toThrow(DENIED);
     await anon((c) =>
-      c.query(`select id, path, width, height, alt from public.media limit 1`),
+      c.query(
+        `select id, path, width, height, alt, focus_x, focus_y from public.media limit 1`,
+      ),
     );
+  });
+
+  it("cannot change a photo's framing", async () => {
+    const { rowCount } = await anon((c) =>
+      c.query(`update public.media set focus_x = 10, focus_y = 10`),
+    ).catch(() => ({ rowCount: 0 }));
+    expect(rowCount ?? 0).toBe(0);
   });
 
   it("sees only public settings", async () => {

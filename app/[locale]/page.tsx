@@ -45,6 +45,7 @@ export default async function HomePage({ params }: Props) {
       <LodgingJsonLd locale={locale} />
       <Hero
         image={page.photo("home.hero")?.src}
+        focus={page.photo("home.hero")?.focus}
         welcome={page.text("hero", "welcome")}
         title={tCommon("siteName")}
         sky
