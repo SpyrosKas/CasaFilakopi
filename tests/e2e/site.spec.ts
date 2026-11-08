@@ -212,6 +212,36 @@ test.describe("cookie consent", () => {
     expect(elsewhere).toEqual([]);
   });
 
+  test.describe("before any script runs", () => {
+    test.use({ javaScriptEnabled: false });
+
+    test("a first visit gets the banner with the page itself", async ({
+      page,
+    }) => {
+      await page.goto("/en");
+      await expect(
+        page.getByRole("region", { name: "Cookie choices" }),
+      ).toBeVisible();
+    });
+  });
+
+  test("a returning visitor never sees the banner flash", async ({ page }) => {
+    await skipCookieBanner(page);
+    await page.goto("/en", { waitUntil: "commit" });
+    await page.waitForSelector("html[data-consent='decided']", {
+      state: "attached",
+    });
+    await expect(
+      page.getByRole("region", { name: "Cookie choices" }),
+    ).toBeHidden();
+    // Reopening works once the page's script is running.
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: "Cookie settings" }).click();
+    await expect(
+      page.getByRole("region", { name: "Cookie choices" }),
+    ).toBeVisible();
+  });
+
   test("declining is as easy as accepting", async ({ page }) => {
     await page.goto("/en");
     const decline = page.getByRole("button", { name: "Decline" });

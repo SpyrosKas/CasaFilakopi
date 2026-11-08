@@ -1900,3 +1900,8 @@ html[data-reveal-active] [data-reveal] {
     transition: none;
   }
 }
+
+/* A returning visitor has chosen: the server-rendered banner stays hidden. */
+html[data-consent="decided"] .cookie-banner {
+  display: none;
+}

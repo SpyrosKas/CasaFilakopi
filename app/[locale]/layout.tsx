@@ -11,6 +11,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { preload } from "react-dom";
 import { BookBar } from "@/components/site/book-bar";
+import { ConsentMark } from "@/components/site/consent-mark";
 import { CookieBanner } from "@/components/site/cookie-banner";
 import { PreviewBanner } from "@/components/site/preview-banner";
 import { RevealObserver } from "@/components/site/reveal-observer";
@@ -78,8 +79,10 @@ export default async function LocaleLayout({
   const previewing = await isPreviewing();
 
   return (
-    <html lang={locale}>
+    // The consent mark sets data-consent on html before React hydrates.
+    <html lang={locale} suppressHydrationWarning>
       <body>
+        <ConsentMark />
         <NextIntlClientProvider messages={clientMessages}>
           <a className="skip-link" href="#main">
             {t("skipToContent")}

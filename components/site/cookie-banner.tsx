@@ -1,12 +1,21 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useSyncExternalStore } from "react";
 import { Link } from "@/i18n/navigation";
 import { decideConsent, openConsentBanner, useConsent } from "./consent-store";
+
+const noSubscribe = () => () => {};
 
 export function CookieBanner() {
   const t = useTranslations("Consent");
   const { bannerOpen } = useConsent();
+  // The banner arrives with the HTML; its buttons work once the script has.
+  const ready = useSyncExternalStore(
+    noSubscribe,
+    () => true,
+    () => false,
+  );
   if (!bannerOpen) return null;
 
   return (
@@ -20,6 +29,7 @@ export function CookieBanner() {
           <button
             type="button"
             className="btn btn-primary"
+            disabled={!ready}
             onClick={() => decideConsent("declined")}
           >
             {t("decline")}
@@ -27,6 +37,7 @@ export function CookieBanner() {
           <button
             type="button"
             className="btn btn-primary"
+            disabled={!ready}
             onClick={() => decideConsent("accepted")}
           >
             {t("accept")}

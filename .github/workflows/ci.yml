@@ -57,6 +57,27 @@ jobs:
       - run: pnpm test:static
       - run: pnpm test:pay
       - run: pnpm test:prod
+      # QA-07: a production-style build, scored by Lighthouse. Accessibility,
+      # best practices and SEO must reach 90; performance only warns, because
+      # a shared runner's speed varies from run to run.
+      - name: Lighthouse
+        env:
+          PORT: "3011"
+          NEXT_PUBLIC_SITE_URL: http://localhost:3011
+          NEXT_PUBLIC_INDEXABLE: "true"
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
+          TURNSTILE_SECRET_KEY: 1x0000000000000000000000000000000AA
+        run: |
+          pnpm build
+          pnpm exec next start -p 3011 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3011/en && break; sleep 2; done
+          pnpm lighthouse
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse
+          path: .lighthouseci/
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

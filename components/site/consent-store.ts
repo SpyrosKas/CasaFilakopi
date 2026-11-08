@@ -2,14 +2,14 @@
 
 import { useSyncExternalStore } from "react";
 import {
+  CONSENT_MAX_AGE_MS,
   CONSENT_STORAGE_KEY,
   COOKIE_POLICY_VERSION,
   type ConsentChoice,
   type StoredConsent,
 } from "@/content/consent";
 
-// Ask again after six months, as most EU regulators advise.
-const MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
+const MAX_AGE_MS = CONSENT_MAX_AGE_MS;
 
 type ConsentState = {
   /** null until the visitor decides, and always null during server render. */
@@ -17,7 +17,16 @@ type ConsentState = {
   bannerOpen: boolean;
 };
 
-const SERVER_STATE: ConsentState = { choice: null, bannerOpen: false };
+// The banner is in the server HTML, so a first visit sees it without waiting
+// for JavaScript. A returning visitor's browser hides it before the first
+// paint: see ConsentMark, which sets html[data-consent].
+const SERVER_STATE: ConsentState = { choice: null, bannerOpen: true };
+
+/** Keeps the html mark in step, so CSS never hides an open banner. */
+function markDecided(bannerOpen: boolean) {
+  if (bannerOpen) delete document.documentElement.dataset.consent;
+  else document.documentElement.dataset.consent = "decided";
+}
 
 let state: ConsentState | null = null;
 let stored: StoredConsent | null = null;
@@ -64,6 +73,7 @@ function subscribe(listener: () => void) {
 
 function update(next: ConsentState) {
   state = next;
+  markDecided(next.bannerOpen);
   listeners.forEach((listener) => listener());
 }
 
