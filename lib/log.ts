@@ -141,6 +141,34 @@ async function sendToSentry(
   }
 }
 
+/** True when SENTRY_DSN is set to an EU project, so errors are sent. */
+export function sentryEnabled(): boolean {
+  return parseSentryDsn(process.env.SENTRY_DSN) !== null;
+}
+
+/**
+ * Sends one harmless test event and says whether Sentry accepted it. For the
+ * Owner's "Send a test alert" button, so a new DSN can be checked at once.
+ */
+export async function sendSentryTest(): Promise<boolean> {
+  const dsn = parseSentryDsn(process.env.SENTRY_DSN);
+  if (!dsn) return false;
+  try {
+    const response = await fetch(dsn.url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-sentry-envelope",
+        "x-sentry-auth": `Sentry sentry_version=7, sentry_key=${dsn.key}, sentry_client=casa-filakopi/1`,
+      },
+      body: sentryEnvelope("sentry.test_alert", "TestAlert", {}, new Date()),
+      signal: AbortSignal.timeout(5000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Await it in a route, or a serverless function may stop before it is sent. */
 export async function logError(
   event: string,

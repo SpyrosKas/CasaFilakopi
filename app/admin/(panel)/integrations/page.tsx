@@ -6,10 +6,12 @@ import {
   SyncButton,
 } from "@/components/admin/integrations/feed-card";
 import { GeneralForm } from "@/components/admin/integrations/general-form";
+import { MonitoringCard } from "@/components/admin/integrations/monitoring-card";
 import { SyncLog } from "@/components/admin/integrations/sync-log";
 import { requireOwner } from "@/lib/admin/session";
 import { loadHouse } from "@/lib/admin/settings-data";
 import { loadIntegrations } from "@/lib/channels/data";
+import { sentryEnabled } from "@/lib/log";
 
 // Sync now runs inside this page's server action.
 export const maxDuration = 60;
@@ -50,6 +52,7 @@ export default async function IntegrationsPage() {
       )}
       <ExportLinks roomId={data.roomId} createdAt={data.exportCreatedAt} />
       <SyncLog rows={data.log} />
+      <MonitoringCard enabled={sentryEnabled()} />
     </div>
   );
 }

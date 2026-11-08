@@ -10,6 +10,15 @@ export const channelsEn = {
   title: "Channel sync",
   intro:
     "Keeps Airbnb, Booking.com and this website showing the same taken dates, so the house is not sold twice.",
+  monitoring: {
+    heading: "Error alerts",
+    on: "On. If something breaks on the site, the error is reported to Sentry.",
+    off: "Off. Errors are only written to the site's logs. Whoever looks after the site can turn this on.",
+    test: "Send a test alert",
+    sending: "Sending…",
+    sent: 'Sent. A "sentry.test_alert" issue appears in Sentry within a minute.',
+    failed: "Sentry did not accept the test. Check the setting and try again.",
+  },
   limitation: {
     heading: "This is close to live, not instant",
     body: "Calendars update every few minutes on our side, and Airbnb and Booking.com can take a few hours on theirs. If two guests book in that gap, the house can still be sold twice. Warnings appear on this screen and on the home page. Email warnings start once sending email has been connected, so check here for now.",

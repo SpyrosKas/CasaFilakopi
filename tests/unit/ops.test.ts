@@ -12,6 +12,8 @@ import {
   logInfo,
   maskText,
   parseSentryDsn,
+  sendSentryTest,
+  sentryEnabled,
   safeFields,
   sentryEnvelope,
 } from "@/lib/log";
@@ -484,5 +486,41 @@ describe("public Content-Security-Policy", () => {
     expect(policy).not.toContain("unsafe-eval");
     expect(policy).not.toContain("ws:");
     expect(publicContentSecurityPolicy(true)).toContain("unsafe-eval");
+  });
+});
+
+describe("the Sentry test alert", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("is off, and sends nothing, without an EU DSN", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("SENTRY_DSN", "https://abc@o1.ingest.us.sentry.io/123");
+    expect(sentryEnabled()).toBe(false);
+    expect(await sendSentryTest()).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("says whether Sentry accepted the event", async () => {
+    vi.stubEnv("SENTRY_DSN", "https://abc@o1.ingest.de.sentry.io/123");
+    expect(sentryEnabled()).toBe(true);
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await sendSentryTest()).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://o1.ingest.de.sentry.io/api/123/envelope/");
+    expect(String(init.body)).toContain("sentry.test_alert");
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 403 })),
+    );
+    expect(await sendSentryTest()).toBe(false);
   });
 });

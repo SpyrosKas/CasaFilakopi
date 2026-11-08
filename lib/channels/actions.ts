@@ -14,6 +14,7 @@ import { requireOwner, type AdminContext } from "@/lib/admin/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { athensDate } from "@/lib/domain/dates";
 import { getPublicEnv } from "@/lib/env";
+import { sendSentryTest } from "@/lib/log";
 import { createExportToken, exportFileName, hashExportToken } from "./export";
 import { defaultProvider } from "./providers";
 import {
@@ -304,4 +305,13 @@ export async function regenerateExport(
       url: `${site}/api/ical/${exportFileName(channel, token)}`,
     })),
   };
+}
+
+/** The Owner's check that error alerts reach Sentry. Sends no guest data. */
+export async function sendTestAlert(): Promise<ActionState> {
+  const { channels: s } = await adminI18n();
+  await requireOwner();
+  return (await sendSentryTest())
+    ? okState(s.monitoring.sent)
+    : errorState(s.monitoring.failed);
 }
