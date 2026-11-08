@@ -3,7 +3,7 @@
 Spec: [requirements.md](requirements.md) (v2). IDs like `BKG-09` refer to it.
 Working branch: `dev-booking`. `master` stays the live static site until cutover.
 
-**Status:** Every track built, reviewed, merged. CI fully green on `integration` (7def1e9). Staging database at migration 18. Local `dev-booking` is held back from origin until YOU run the staging imports, because the code then expects photos and text in Supabase. Order: imports, push, Google Workspace, Resend, Stripe test mode, Vault secrets, real Airbnb and Booking.com feeds.
+**Status (2026-11-08):** Staging runs on `dev-booking` with imports, Stripe test mode (a 4242 booking confirmed), Turnstile, Resend from `mail.miloscasa.com`, Vault cron secrets, and `host@miloscasa.com` as a Google Workspace mailbox (D22: MX `smtp.google.com`, SPF `_spf.google.com`, DKIM `google._domainkey`, DMARC `p=none`). Next: real Airbnb and Booking.com feeds, Yorgos's real prices and rules, backup rehearsal, launch.
 **Tick rule:** a task is ticked only after it is done and verified (tests pass or result seen). Blocked items get `[!]` plus a note. Every decision goes in the Decisions log.
 
 Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **HOST** (Yorgos), **ACC** (accountant), **LEAD** (main Claude session), **WEB / ENGINE / ADMIN / MAIL / PAY / CMS / CHN / INV / QA** (worker agents).
@@ -61,7 +61,7 @@ Legend: `[ ]` to do, `[x]` done, `[!]` blocked. Owner tags: **YOU** (Spyros), **
 | D19 | Airbnb and Booking.com bookings | Decided | Shown in Admin with their source. iCal gives dates, so Yorgos adds guest contacts and the amount by hand, and they then count in reports. A channel manager such as Beds24 stays an option for later |
 | D20 | Accountant timing | Decided | Accountant answers once everything is finished. Documents stay provisional until then, and that step remains a launch blocker for real invoices |
 | D21 | Export format | Decided | Real Excel file (.xlsx) replaces CSV, after the owner tested Excel on a Mac |
-| D22 | Guest mailbox | Decided | `host@miloscasa.com` becomes a real Google Workspace mailbox, replacing Namecheap forwarding, so Yorgos replies from that address. DNS stays in Namecheap. Resend sends from `mail.miloscasa.com` |
+| D22 | Guest mailbox | Done 2026-11-08 | `host@miloscasa.com` becomes a real Google Workspace mailbox, replacing Namecheap forwarding, so Yorgos replies from that address. DNS stays in Namecheap. Resend sends from `mail.miloscasa.com` |
 | D23 | Working alone | Decided 2026-11-07 | LEAD may merge reviewed work, push to `dev-booking` and apply migrations to staging during the 6-hour block. `master`, live site and DNS stay untouched |
 | D24 | Late cancellation on a deposit | Decided | Yorgos keeps the deposit and the shortfall is not chased. `stillOwedCents` is not shown to guests or collected |
 | D25 | Admin language | Decided | Greek by default with an EN/EL switch. Greek text reviewed by HOST |
