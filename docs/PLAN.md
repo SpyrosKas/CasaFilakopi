@@ -155,7 +155,7 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 | A4 | Domain and DNS access | Wave 1 | YOU/HOST | [x] |
 | A5 | Resend | Wave 1 | YOU | [x] |
 | A6 | Stripe test mode | Wave 2 | YOU | [x] |
-| A7 | Cloudflare Turnstile | Wave 2 | YOU | [ ] |
+| A7 | Cloudflare Turnstile | Wave 2 | YOU | [x] |
 | A8 | Sentry | Phase 6 | YOU | [ ] |
 | A9 | OTA iCal URLs | Wave 2 | HOST | [ ] |
 | A10 | Stripe live activation | Phase 7 | HOST | [ ] |
@@ -358,7 +358,7 @@ Security and tooling:
 - [x] T4.29 Export feed, token, no loops (`CHN-10` to `CHN-12`)
 - [x] T4.30 Conflicts, sync logs, alerts, limitation notice (`CHN-13` to `CHN-16`)
 - [ ] T4.31 Fixture-feed tests, then A9 real-feed test (`QA-04`). Fixture tests done; real feeds outstanding, and they decide whether exporting holds can ever be on
-- [ ] T4.32 Schedule the jobs: `pg_cron` with `pg_net` every 5 minutes calling `/api/cron/*`, secrets in Vault per environment, `CRON_SECRET` in Vercel. Migration 14 done; site jobs wait for Vault secrets and `CRON_SECRET` per environment (D9 decided)
+- [x] T4.32 Schedule the jobs: `pg_cron` with `pg_net` every 5 minutes calling `/api/cron/*`, secrets in Vault per environment, `CRON_SECRET` in Vercel. Migration 14 done; staging Vault secrets and `CRON_SECRET` set 2026-11-08, all 10 jobs scheduled and 44 of 44 calls in 30 minutes returned 200. Production repeats this at T7.2 (D9 decided)
 
 **Gate 4:** full test-card booking on staging, blocked dates show on the public site, an Airbnb test block arrives in our calendar and ours arrives in Airbnb.
 
@@ -399,7 +399,7 @@ Security and tooling:
 - [x] T6.12 Speed (2026-11-08): Vercel functions pinned to `dub1` next to Supabase `eu-west-1` (`vercel.json`); fewer sequential database trips in the calendar and quote; the return page asks every second for the first 15 s. Staging: calendar data 1.7–3.8 s → ~0.5 s, quote ~1.5 s → ~0.22 s, booking page 1.5–3 s → ~0.4 s. Home LCP on staging is the hero at ~1 s; the Next "LCP image" warnings in the test logs come from the tests scrolling, so no change there
 - [x] T6.13 Checkout country dropdown (2026-11-08): countries in the guest's language, picking one fills the phone dialling code, still editable; the booking keeps the English country name
 - [x] T6.14 Admin menu in groups (2026-11-08): Guests and money, Prices and stays, Website, Setup; staff see only their links. Admin e2e (mobile, Greek, auth, screens: 77) pass
-- [ ] T6.15 Dependabot alert #5: jQuery 3.2.1 in the legacy site on `master` (`js/jquery-3.2.1.min.js`), fixed in 3.4.0. Needs YOU to approve touching `master`, or it goes away at T7.5/T7.7
+- [x] T6.15 Dependabot alert #5: jQuery 3.2.1 in the legacy site on `master` (`js/jquery-3.2.1.min.js`), fixed in 3.4.0. YOU decided 2026-11-08: leave it, the legacy site passes no visitor input to jQuery, and it goes away at T7.5/T7.7
 
 - [ ] T6.9 HOST sets real starting values for payment and cancellation rules in Admin
 - [ ] T6.10 HOST test, unaided: change a cancellation rule, upload, delete and reorder photos, from a phone
