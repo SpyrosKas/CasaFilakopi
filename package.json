@@ -14,6 +14,7 @@
     "test:db": "vitest run -c vitest.db.config.ts",
     "db:types": "supabase gen types typescript --local > lib/db/types.ts",
     "test:e2e": "playwright test",
+    "test:stripe": "vitest run -c vitest.stripe.config.ts",
     "test:pay": "playwright test -c tests/pay-e2e/playwright.config.ts",
     "test:static": "playwright test -c playwright.static.config.ts",
     "test:prod": "playwright test -c playwright.prod.config.ts",

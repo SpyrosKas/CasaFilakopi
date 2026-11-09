@@ -156,7 +156,7 @@ Rule: **never paste a secret into this chat.** Keys go in `.env.local` (gitignor
 | A5 | Resend | Wave 1 | YOU | [x] |
 | A6 | Stripe test mode | Wave 2 | YOU | [x] |
 | A7 | Cloudflare Turnstile | Wave 2 | YOU | [x] |
-| A8 | Sentry | Phase 6 | YOU | [ ] |
+| A8 | Sentry | Phase 6 | YOU | [x] staging DSN set; test alert from Admin reached Sentry 2026-11-09 |
 | A9 | OTA iCal URLs | Wave 2 | HOST | [ ] |
 | A10 | Stripe live activation | Phase 7 | HOST | [ ] |
 | A11 | Supabase production (Pro) | Phase 7 | YOU | [ ] |
@@ -327,7 +327,7 @@ Security and tooling:
 - [x] T4.8 Confirmation page and emails (`EML-02`, `EML-03`)
 - [x] T4.9 Guest token page: view, pay balance, cancel, message (`BKG-15`, `SUP-15`, `CNT-06`)
 - [x] T4.10 Balance links and reminders (`PAY-03`, `JOB-03`)
-- [ ] T4.11 Integration tests with Stripe CLI (`QA-04`)
+- [ ] T4.11 Integration tests with Stripe CLI (`QA-04`). Written 2026-11-09: `pnpm test:stripe`, 7 tests (paid booking, repeat event, tampered body, expiry, Admin refund, dashboard refund, dispute). Needs its own Stripe sandbox, since the staging sandbox would get the events; key in Keychain item `casa-filakopi-stripe-sandbox`. Tick after the first green run
 
 **Track ADMIN-OPS** (owns `app/admin/bookings`, `app/admin/calendar`)
 - [x] T4.12 Dashboard (`ADM-05`)
